@@ -5,7 +5,7 @@ import Foundation
 /// Each case corresponds to a specific failure point in the
 /// input → render → output pipeline. Conforms to `LocalizedError`
 /// for human-readable error descriptions.
-public enum PipelineError: Error, LocalizedError, Sendable {
+public enum PipelineError: Error, LocalizedError, Sendable, Equatable {
     /// The source URL does not contain valid image data
     case invalidSource
 
