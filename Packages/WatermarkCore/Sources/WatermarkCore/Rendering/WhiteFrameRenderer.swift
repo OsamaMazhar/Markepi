@@ -4,6 +4,7 @@ import Foundation
 import UIKit
 #elseif canImport(AppKit)
 import AppKit
+import CoreText
 #endif
 
 /// Renders a white frame border with device metadata text as a CIImage
@@ -147,10 +148,13 @@ public struct WhiteFrameRenderer {
             width: baseExtent.width * scale,
             height: baseExtent.height * scale
         )
-        // Flip the coordinate system: Core Graphics uses top-left origin,
-        // but our drawing logic expects bottom-left (CIImage convention).
-        // Since we're drawing a symmetric frame (border on all 4 sides),
-        // the frame is visually identical regardless of Y-axis direction.
+
+        // Flip the coordinate system: CGContext uses bottom-left origin by
+        // default, but our drawFrame logic expects top-left (matching UIKit).
+        // Flip so text positioning matches iOS behavior.
+        cgContext.translateBy(x: 0, y: scaledExtent.height)
+        cgContext.scaleBy(x: 1.0, y: -1.0)
+
         drawFrame(
             cgContext: cgContext,
             baseExtent: scaledExtent,
@@ -189,10 +193,10 @@ public struct WhiteFrameRenderer {
         // 3. Render metadata attribution text centered on bottom frame
         if let text = attributionText, frameWidth > 0 {
             let fontSize = frameWidth * config.textFontSizeRatio
-            let font = platformFont(ofSize: fontSize, weight: .medium)
             let textColor = platformColor(from: config.textColor)
+
             let attributes: [NSAttributedString.Key: Any] = [
-                .font: font,
+                .font: platformFont(ofSize: fontSize, weight: .medium),
                 .foregroundColor: textColor,
             ]
 
@@ -206,14 +210,23 @@ public struct WhiteFrameRenderer {
             // Center horizontally on bottom frame portion
             let textX = (baseExtent.width - textSize.width) / 2
             let textY = baseExtent.height - (frameWidth / 2) - (textSize.height / 2)
+
+            #if canImport(UIKit)
+            // On iOS, draw using NSAttributedString into UIGraphicsImageRenderer context
             let textRect = CGRect(
                 x: textX,
                 y: textY,
                 width: textSize.width,
                 height: textSize.height
             )
-
             attributed.draw(in: textRect)
+            #else
+            // On macOS, use Core Text to draw directly into the CGContext
+            // (NSAttributedString.draw(in:) requires NSGraphicsContext, not CGContext)
+            let line = CTLineCreateWithAttributedString(attributed)
+            cgContext.textPosition = CGPoint(x: textX, y: textY)
+            CTLineDraw(line, cgContext)
+            #endif
         }
     }
 

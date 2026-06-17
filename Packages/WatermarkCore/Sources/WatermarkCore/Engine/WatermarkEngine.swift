@@ -103,15 +103,31 @@ public actor WatermarkEngine {
     ) throws -> CIImage {
         // Safety net: normalize orientation before positioning (Pitfall 3)
         let normalized = OrientationNormalizer.normalize(base)
-        let extent = normalized.extent
 
-        var layers: [(CIImage, CGPoint)] = []
+        var composited = normalized
 
         // White frame rendering (composited below all watermark layers)
-        // RED: metadata is passed through but frame is NOT yet rendered.
-        // Tests expect white border + metadata text — they will fail until
-        // GREEN implementation adds WhiteFrameRenderer compositing here.
-        // Framed base will be applied to the compositing chain.
+        // Frame border + metadata text rendered via UIGraphicsImageRenderer → CIImage.
+        // Frame is CISourceOverCompositing'd onto base; watermarks are then
+        // composited on top of the frame-bearing image (D-04: frame below watermarks).
+        if let frameConfig = config.whiteFrame, frameConfig.isEnabled {
+            let frameCIImage = try WhiteFrameRenderer.render(
+                config: frameConfig,
+                baseExtent: composited.extent,
+                metadata: metadata,
+                scale: 1.0
+            )
+
+            // Composite frame onto base — frame borders cover edges,
+            // transparent center shows original image through
+            let frameFilter = CIFilter.sourceOverCompositing()
+            frameFilter.inputImage = frameCIImage
+            frameFilter.backgroundImage = composited
+            composited = frameFilter.outputImage ?? composited
+        }
+
+        var layers: [(CIImage, CGPoint)] = []
+        let extent = composited.extent
 
         // Build layers in order: bottom layer first, top layer last (D-01)
         for watermark in config.watermarks {
@@ -142,7 +158,7 @@ public actor WatermarkEngine {
             layers.append((scaled, position))
         }
 
-        // Composite all layers onto base via CISourceOverCompositing
-        return WatermarkRenderer.composite(layers: layers, onto: normalized)
+        // Composite all layers onto base (with frame if enabled) via CISourceOverCompositing
+        return WatermarkRenderer.composite(layers: layers, onto: composited)
     }
 }
