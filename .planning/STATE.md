@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 1 context gathered
-last_updated: "2026-06-17T17:39:08.998Z"
+last_updated: "2026-06-17T17:46:30.848Z"
 last_activity: 2026-06-17
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
-  percent: 0
+  completed_plans: 2
+  percent: 67
 ---
 
 # Project State
@@ -26,18 +26,18 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 ## Current Position
 
 Phase: 01 (core-engine-photo-pipeline) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-06-17
 
-Progress: [███░░░░░░░] 33%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0
-- Average duration: N/A
+- Total plans completed: 2
+- Average duration: ~7 min
 - Total execution time: 0 hours
 
 **By Phase:**
@@ -48,10 +48,12 @@ Progress: [███░░░░░░░] 33%
 
 **Recent Trend:**
 
-- N/A (no plans executed yet)
+- Plan 01-01: 8min (3 tasks, 27 files)
+- Plan 01-02: 5min (2 tasks, 8 files)
 
 *Updated after each plan completion*
 | Phase 01-core-engine-photo-pipeline P01 | 8min | 3 tasks | 27 files |
+| Phase 01-core-engine-photo-pipeline P02 | 5min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -60,9 +62,10 @@ Progress: [███░░░░░░░] 33%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
--
-
-- [Phase ?]: Swift 6 Sendable: @unchecked Sendable for MediaMetadata, String keys for CFString dicts
+- [Phase 1]: Opacity approach: CIFilter.colorMatrix aVector for alpha modulation instead of pre-compositing
+- [Phase 1]: Scale validation range 0.01–0.90: prevents memory exhaustion from extreme CIImage extents (T-02-02)
+- [Phase 1]: Padding property on WatermarkConfiguration (not a separate type): single source of truth for PositionCalculator
+- [Phase 1]: Swift 6 Sendable: @unchecked Sendable for MediaMetadata, String keys for CFString dicts
 
 ### Pending Todos
 
@@ -82,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T17:39:05.806Z
-Stopped at: Phase 1 context gathered
+Last session: 2026-06-17T17:45:44Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None

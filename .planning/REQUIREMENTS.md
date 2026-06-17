@@ -16,8 +16,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Watermark (WMRK)
 
 - [x] **WMRK-01**: User can add custom text watermarks with font, size, color, and opacity controls
-- [ ] **WMRK-02**: User can import and overlay image/logo watermarks with resize and opacity controls
-- [ ] **WMRK-03**: User can place watermarks in 8 preset positions (4 corners, 4 edges, center)
+- [x] **WMRK-02**: User can import and overlay image/logo watermarks with resize and opacity controls
+- [x] **WMRK-03**: User can place watermarks in 8 preset positions (4 corners, 4 edges, center)
 - [ ] **WMRK-04**: User can see a real-time preview of the watermarked result before sharing
 
 ### White Frame (FRME)
@@ -76,8 +76,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | MEDI-02 | Phase 3 | Pending |
 | MEDI-03 | Phase 4 | Pending |
 | WMRK-01 | Phase 1 | Complete |
-| WMRK-02 | Phase 1 | Pending |
-| WMRK-03 | Phase 1 | Pending |
+| WMRK-02 | Phase 1 | Complete |
+| WMRK-03 | Phase 1 | Complete |
 | WMRK-04 | Phase 2 | Pending |
 | FRME-01 | Phase 1 | Pending |
 | FRME-02 | Phase 1 | Pending |

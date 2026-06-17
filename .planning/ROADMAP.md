@@ -36,7 +36,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — PNG image/logo watermark rendering + all 9 position coverage + configurable padding + multi-layer compositing
+- [x] 01-02-PLAN.md — PNG image/logo watermark rendering + all 9 position coverage + configurable padding + multi-layer compositing
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -94,7 +94,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Engine & Photo Pipeline | 1/3 | In Progress|  |
+| 1. Core Engine & Photo Pipeline | 2/3 | In Progress|  |
 | 2. Main App (Photo Watermark & Share) | 0/? | Not started | - |
 | 3. Video Processing & Share Extension | 0/? | Not started | - |
 | 4. Photos Edit Extension & Polish | 0/? | Not started | - |
