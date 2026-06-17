@@ -9,6 +9,9 @@ import UIKit
 /// Tests ImageWatermarkRenderer for PNG-to-CIImage rendering with alpha
 /// channel preservation, scale transforms, opacity handling, and error
 /// cases for invalid input.
+///
+/// Also includes a helper for creating PNG test data used by
+/// WatermarkEngineTests for E2E image watermark testing.
 @Suite("ImageWatermarkRenderer")
 struct ImageWatermarkRendererTests {
 

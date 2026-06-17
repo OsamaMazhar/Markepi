@@ -10,6 +10,9 @@ public struct WatermarkConfiguration: Sendable {
     /// Ordered array of watermark layers composited from bottom to top (per D-01)
     public var watermarks: [WatermarkLayer]
 
+    /// Padding between watermark and image edges, in points (default: 20)
+    public var padding: CGFloat = 20
+
     /// Optional white frame configuration (full implementation in Plan 03)
     public var whiteFrame: WhiteFrameConfig?
 
