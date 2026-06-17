@@ -808,27 +808,15 @@ struct ContentView: View {
 | A6 | 20 photo maxSelectionCount is reasonable for a sequential (non-batch) flow | PhotosPicker | Low — sequential flow means user configures each individually; 20 is generous |
 | A7 | `WatermarkConfiguration` will be Hashable (or provide a change identifier) for `.task(id:)` | Preview Rendering | Medium — if config can't produce stable identifier, debounce won't work. Need to add computed `previewIdentifier` property |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Preview resolution tradeoff**
-   - What we know: Low-res preview (1200px max) is fast, but might not show fine watermark text details. Full-res preview is slow.
-   - What's unclear: Optimal max dimension for responsive yet detailed preview. 1200px is recommended based on iPhone screen resolution (1179px for Pro Max).
-   - Recommendation: Start with 1200px on longest side; test with small text watermarks; increase to 1800px if quality insufficient, decrease to 900px if performance laggy.
+1. **Preview resolution tradeoff** — RESOLVED: Start with 1200px on longest side. Plans implement 1200px as `previewMaxDimension` in WatermarkViewModel per Plan 02-01 Task 2. Tune on device if needed.
 
-2. **PhotosPicker auto-open UX**
-   - What we know: Setting `showPicker = true` in `.onAppear` presents the picker. The system may show a brief flash of the empty UI before the picker animates in.
-   - What's unclear: Whether this flash is noticeable or jarring. Apple discourages auto-presenting sheets without user intent.
-   - Recommendation: Add a brief splash/welcome state that transitions to picker. Or use `.photosPicker` modifier (not sheet) which may be less jarring. Test on device.
+2. **PhotosPicker auto-open UX** — RESOLVED: Use `.photosPicker(isPresented:)` modifier with `.onAppear { showPicker = true }`. Brief flash of empty UI is acceptable trade-off for minimum-friction import per D-01. Plans implement this in ContentView per Plan 02-01 Task 1.
 
-3. **Two-tap share flow interaction design**
-   - What we know: D-06 specifies: tap Share → render → result in preview → confirm → share sheet. D-07 says Share button becomes ProgressView spinner during render.
-   - What's unclear: Does the user see a separate "Confirm" button after render, or does the Share button transition from spinner → active share trigger? D-07 suggests the latter (single button, state transitions).
-   - Recommendation: Single Share button with 3 states: idle → spinning (rendering) → enabled (tap to share). After render completes, brief highlight animation to signal readiness. Second tap opens share sheet.
+3. **Two-tap share flow interaction design** — RESOLVED: Single Share button with 3 states (idle → spinning → ready). After render completes, button transitions to "Ready to Share" state. Second tap opens share sheet. Plans implement this via AsyncButton/RenderButtonView per Plan 02-01 Task 3.
 
-4. **MagnifyGesture + thumbnail scroll gesture conflict**
-   - What we know: The preview area has MagnifyGesture for scale; the thumbnail strip has a horizontal ScrollView with tap gesture. These are in different views.
-   - What's unclear: If user tries to pinch near the bottom of the preview, could the gesture be captured by the thumbnail scroll? Unlikely due to view hierarchy separation.
-   - Recommendation: No special coordination needed if thumbnail strip is in a separate view hierarchy below the preview. Verify on device.
+4. **MagnifyGesture + thumbnail scroll gesture conflict** — RESOLVED: No special coordination needed. Thumbnail strip is in a separate ScrollView below the preview VStack. Plans implement MagnifyGesture on preview view only per Plan 02-02 Task 2.
 
 ## Environment Availability
 
