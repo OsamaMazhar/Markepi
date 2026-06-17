@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import WatermarkCore
 
 /// Root SwiftUI view for the share extension's watermarking UI.
@@ -241,7 +242,7 @@ struct ShareExtensionRootView: View {
                 .font(.headline)
 
             Button {
-                // Logo picker integration — will be refined in Task 2
+                viewModel.showLogoPicker = true
             } label: {
                 HStack {
                     Image(systemName: "photo.badge.plus")
@@ -251,6 +252,15 @@ struct ShareExtensionRootView: View {
             }
             .buttonStyle(.bordered)
         }
+        .photosPicker(
+            isPresented: $viewModel.showLogoPicker,
+            selection: Binding<[PhotosPickerItem]>(
+                get: { [] },
+                set: { viewModel.handleLogoSelection($0) }
+            ),
+            maxSelectionCount: 1,
+            matching: .images
+        )
     }
 
     // MARK: - White Frame Toggle

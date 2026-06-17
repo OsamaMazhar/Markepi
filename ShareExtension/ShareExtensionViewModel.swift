@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import PhotosUI
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -68,6 +69,9 @@ final class ShareExtensionViewModel {
 
     /// When true, an error alert is presented to the user.
     var showError: Bool = false
+
+    /// When true, presents the PhotosPicker for selecting a logo image.
+    var showLogoPicker: Bool = false
 
     // MARK: - Layer Management
 
@@ -235,6 +239,20 @@ final class ShareExtensionViewModel {
     }
 
     // MARK: - Layer Management (D-05)
+
+    /// Handles PhotosPicker selection for logo images.
+    ///
+    /// Loads the selected item's PNG data and delegates to `addLogoLayer(pngData:)`.
+    /// - Parameter items: Selected PhotosPicker items (expected single item)
+    func handleLogoSelection(_ items: [PhotosPickerItem]) {
+        guard let item = items.first else { return }
+        Task {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                addLogoLayer(pngData: data)
+            }
+            showLogoPicker = false
+        }
+    }
 
     /// Adds a PNG logo/image watermark layer to the configuration.
     ///
