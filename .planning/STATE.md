@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: verifying
 stopped_at: Phase 3 context gathered
-last_updated: "2026-06-17T20:07:14.891Z"
+last_updated: "2026-06-17T20:09:53.523Z"
 last_activity: 2026-06-17
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 29
 ---
 
@@ -30,7 +30,7 @@ Plan: 2 of 2
 Status: Phase complete — ready for verification
 Last activity: 2026-06-17
 
-Progress: [████████░░] 75%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [████████░░] 75%
 | Phase 01-core-engine-photo-pipeline P02 | 5min | 2 tasks | 8 files |
 | Phase 01-core-engine-photo-pipeline P03 | 11min | 2 tasks | 5 files |
 | Phase 03 P01 | 208 | 3 tasks | 16 files |
+| Phase 03 P02 | 8min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,11 @@ Recent decisions affecting current work:
 - [Phase 1]: Swift 6 Sendable: @unchecked Sendable for MediaMetadata, String keys for CFString dicts
 - [Phase ?]: Inline controls in ShareExtensionRootView — refactor to shared WatermarkCore/UI/ in Plan 03-03
 - [Phase ?]: CGColor Codable via RGBA [CGFloat] array — preserves full color fidelity for config sync across App Group
+- [Phase ?]: HDR detection via CMFormatDescription transfer function inspection (HLG/2084) instead of AVAssetTrack.hasMediaCharacteristic API
+- [Phase ?]: CALayer.colorspace not set on iOS — HDR fidelity maintained through AVVideoComposition color properties and RGBAh pixel format
+- [Phase ?]: determineCompatibleFileTypes bridged via withCheckedContinuation (completion-handler API, no native async)
+- [Phase ?]: ExportValidator implemented inline in Task 1 for compilation — Task 2 added VideoFrameExtractor
+- [Phase ?]: Video-specific PipelineError cases added in Task 1 (Rule 3 — blocking compilation)
 
 ### Pending Todos
 
@@ -96,6 +102,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-17T20:07:07.136Z
+Last session: 2026-06-17T20:09:53.476Z
 Stopped at: Phase 3 context gathered
 Resume file: None

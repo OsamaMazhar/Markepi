@@ -34,7 +34,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **QUAL-01**: All EXIF and metadata from the source media is preserved in the watermarked output
 - [x] **QUAL-02**: HDR (gain maps, color profiles) is preserved in photo output
 - [x] **QUAL-03**: Original image and video quality is preserved (no unnecessary re-compression)
-- [ ] **QUAL-04**: Video watermarking preserves HDR, color space, and audio tracks in output
+- [x] **QUAL-04**: Video watermarking preserves HDR, color space, and audio tracks in output
 
 ### ProRAW (PROR)
 
@@ -136,7 +136,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | QUAL-01 | Phase 1 | Complete |
 | QUAL-02 | Phase 1 | Complete |
 | QUAL-03 | Phase 1 | Complete |
-| QUAL-04 | Phase 3 | Pending |
+| QUAL-04 | Phase 3 | Complete |
 | PROR-01 | Phase 5 | Pending |
 | PROR-02 | Phase 5 | Pending |
 | EXIF-01 | Phase 5 | Pending |
