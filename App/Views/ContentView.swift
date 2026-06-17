@@ -81,7 +81,14 @@ struct ContentView: View {
         ZStack(alignment: .bottom) {
             PreviewView(viewModel: viewModel)
 
-            if let _ = viewModel.currentPhoto {
+            if viewModel.hasMultiplePhotos {
+                ThumbnailStripView(
+                    photos: viewModel.photos,
+                    currentIndex: $viewModel.currentIndex
+                )
+            }
+
+            if viewModel.currentPhoto != nil {
                 Button {
                     viewModel.showPicker = true
                 } label: {
