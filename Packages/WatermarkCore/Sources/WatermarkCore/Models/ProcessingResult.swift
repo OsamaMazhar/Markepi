@@ -23,3 +23,35 @@ public struct ProcessingResult: Sendable {
         self.outputUTI = outputUTI
     }
 }
+
+// MARK: - RenderingState
+
+/// Tracks the state of the watermark rendering pipeline for UI feedback.
+///
+/// Used by both the main app (`WatermarkViewModel`) and the share extension
+/// (`ShareExtensionViewModel`) to drive button states, loading indicators,
+/// and error presentation. Moved to WatermarkCore so both targets can import it.
+public enum RenderingState: Equatable, Sendable {
+    /// No render in progress; user can configure and initiate
+    case idle
+
+    /// Rendering is in progress; UI should show progress indicator
+    case rendering
+
+    /// Rendering completed successfully; ready to present share sheet
+    case done
+
+    /// Rendering failed with an error; UI should show error state
+    case error(Error)
+
+    public static func == (lhs: RenderingState, rhs: RenderingState) -> Bool {
+        switch (lhs, rhs) {
+        case (.idle, .idle), (.rendering, .rendering), (.done, .done):
+            return true
+        case (.error, .error):
+            return true
+        default:
+            return false
+        }
+    }
+}

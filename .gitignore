@@ -1,0 +1,14 @@
+# Swift Package Manager build artifacts
+.build/
+
+# Xcode build artifacts
+DerivedData/
+*.xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# CocoaPods
+Pods/
+
+# OS metadata
+.DS_Store
+Thumbs.db
