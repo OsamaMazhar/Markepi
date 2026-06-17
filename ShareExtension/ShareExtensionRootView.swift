@@ -21,6 +21,40 @@ struct ShareExtensionRootView: View {
                 Color(.separator)
                     .frame(height: 1)
 
+                // Multi-item progress (D-14)
+                if viewModel.isMultiItem {
+                    multiItemProgressBar
+                }
+
+                // HDR fallback warning (D-10)
+                if viewModel.showHDRWarning && viewModel.renderingState == .done {
+                    hdrWarningBanner
+                }
+
+                // Audio track mismatch warning (informational)
+                if viewModel.showAudioWarning && viewModel.renderingState == .done {
+                    audioWarningBanner
+                }
+
+                // Video preview "▶" indicator overlay
+                if viewModel.isVideo && !viewModel.isLoadingMedia {
+                    Color(.separator)
+                        .frame(height: 1)
+                        .overlay(alignment: .center) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "play.rectangle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("Video")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
+                        }
+                }
+
                 controlsArea
                     .frame(height: geometry.size.height * 0.40)
             }
@@ -28,6 +62,10 @@ struct ShareExtensionRootView: View {
         .alert("Error", isPresented: $viewModel.showError) {
             Button("OK") {
                 viewModel.errorMessage = nil
+                // Multi-item: proceed to next item after error dismissal
+                if viewModel.isMultiItem {
+                    Task { await viewModel.processNextItem() }
+                }
             }
         } message: {
             Text(viewModel.errorMessage ?? "An unknown error occurred")
@@ -71,6 +109,14 @@ struct ShareExtensionRootView: View {
                 Image(uiImage: previewImage)
                     .resizable()
                     .scaledToFit()
+                    .overlay(alignment: .center) {
+                        if viewModel.isVideo {
+                            Image(systemName: "play.rectangle.fill")
+                                .font(.largeTitle)
+                                .foregroundStyle(.white.opacity(0.7))
+                                .shadow(radius: 2)
+                        }
+                    }
             } else if let errorMessage = viewModel.errorMessage, viewModel.previewImage == nil {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle")
@@ -415,7 +461,72 @@ struct ShareExtensionRootView: View {
     }
 }
 
-// MARK: - Array Safe Subscript
+    // MARK: - Multi-Item Progress (D-14)
+
+    private var multiItemProgressBar: some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text(viewModel.multiItemProgress)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            ProgressView(value: Double(viewModel.currentItemIndex + 1), total: Double(viewModel.totalItemCount))
+                .tint(.blue)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - HDR Warning (D-10)
+
+    private var hdrWarningBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.caption)
+            Text(viewModel.hdrWarningMessage ?? "HDR could not be preserved. Video was exported in standard dynamic range.")
+                .font(.caption)
+                .foregroundStyle(.primary)
+            Spacer()
+            Button {
+                viewModel.showHDRWarning = false
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.15))
+    }
+
+    // MARK: - Audio Warning
+
+    private var audioWarningBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "speaker.wave.2.slash")
+                .foregroundStyle(.orange)
+                .font(.caption)
+            Text("Audio track count changed during export.")
+                .font(.caption)
+                .foregroundStyle(.primary)
+            Spacer()
+            Button {
+                viewModel.showAudioWarning = false
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.15))
+    }
+
+    // MARK: - Array Safe Subscript
 
 extension Array {
     subscript(safe index: Index) -> Element? {

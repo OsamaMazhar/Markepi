@@ -95,7 +95,38 @@ final class ShareExtensionViewModel {
 
     /// Closure set by `ShareViewController` to call `completeRequest`
     /// after the share sheet dismisses (D-07 one-shot workflow).
+    /// For multi-item shares, this is called only after ALL items are done.
     var completeRequest: (() -> Void)?
+
+    /// Closure for opening URLs from the extension (e.g., main app fallback).
+    /// Set by ShareViewController to call `extensionContext.open(url:)`.
+    var openURL: ((URL) -> Void)?
+
+    // MARK: - Multi-Item State (D-14)
+
+    /// All NSItemProviders from the extension context input items.
+    /// Collected by ShareViewController during setup.
+    var sharedItems: [NSItemProvider] = []
+
+    /// Index of the item currently being processed (0-based).
+    var currentItemIndex: Int = 0
+
+    /// Accumulated results for batch cleanup tracking.
+    var itemResults: [ProcessingResult] = []
+
+    /// Indices of items that failed during processing.
+    var failedItemIndices: [Int] = []
+
+    /// Total number of items to process.
+    var totalItemCount: Int { sharedItems.count }
+
+    /// Whether this is a multi-item share (>1 item).
+    var isMultiItem: Bool { sharedItems.count > 1 }
+
+    /// Human-readable progress label for multi-item UI.
+    var multiItemProgress: String {
+        "Item \(currentItemIndex + 1) of \(totalItemCount)"
+    }
 
     // MARK: - Private
 
@@ -369,10 +400,12 @@ final class ShareExtensionViewModel {
             renderingState = .error(error)
             errorMessage = error.localizedDescription
             showError = true
+            // Track failure for multi-item sequential processing
+            if isMultiItem {
+                failedItemIndices.append(currentItemIndex)
+            }
         }
     }
-
-    // MARK: - Preview Generation (D-03)
 
     /// Generates a debounced watermark preview for the loaded media.
     ///
@@ -432,6 +465,10 @@ final class ShareExtensionViewModel {
             renderingState = .error(error)
             errorMessage = error.localizedDescription
             showError = true
+            // Track failure for multi-item sequential processing
+            if isMultiItem {
+                failedItemIndices.append(currentItemIndex)
+            }
         }
     }
 
@@ -451,8 +488,68 @@ final class ShareExtensionViewModel {
         if let url = fullResResult?.url {
             try? TempFileManager.cleanup(url: url)
         }
+        // Track result for batch cleanup
+        if let result = fullResResult {
+            itemResults.append(result)
+        }
         fullResResult = nil
         renderingState = .idle
+
+        if isMultiItem {
+            // D-14: sequential processing — load next item
+            Task { await processNextItem() }
+        } else {
+            completeRequest?()
+        }
+    }
+
+    // MARK: - Multi-Item Sequential Processing (D-14)
+
+    /// Loads the next item after the current item's share sheet dismisses.
+    ///
+    /// Resets state for the next item, loads it via `loadSharedMedia(from:)`,
+    /// and presents the watermarking UI for the user to configure and share.
+    /// Calls `completeRequest()` after ALL items are processed.
+    ///
+    /// Error handling (per RESEARCH.md Open Question #3): failed items are
+    /// tracked but don't block remaining items. A summary is shown after
+    /// all items are processed.
+    func processNextItem() async {
+        // Track current result before moving on
+        currentItemIndex += 1
+
+        guard currentItemIndex < sharedItems.count else {
+            // All items processed — show summary for failures, then close
+            if !failedItemIndices.isEmpty {
+                let successCount = sharedItems.count - failedItemIndices.count
+                errorMessage = "Processed \(successCount) of \(sharedItems.count) items. \(failedItemIndices.count) failed."
+                showError = true
+                // After user dismisses the error alert, complete the extension
+                // The root view alert's "OK" button calls completeRequest
+            } else {
+                completeRequest?()
+            }
+            return
+        }
+
+        // Reset state for next item
+        sourceURL = nil
+        previewImage = nil
+        fullResResult = nil
+        renderingState = .idle
+        isVideo = false
+        isLoadingMedia = true
+        showHDRWarning = false
+        showAudioWarning = false
+        hdrWarningMessage = nil
+
+        let provider = sharedItems[currentItemIndex]
+        await loadSharedMedia(from: provider)
+    }
+
+    /// Called when the dismiss-alert is shown for multi-item failure summary.
+    /// Dismisses the extension after the user acknowledges.
+    func dismissAfterFailureSummary() {
         completeRequest?()
     }
 
@@ -549,12 +646,15 @@ final class ShareExtensionViewModel {
     // MARK: - URL Scheme Fallback (D-16)
 
     /// Opens the containing main app via URL scheme when an unsupported media
-    /// type is received.
+    /// type is received (D-16).
+    ///
+    /// Uses the `openURL` closure set by ShareViewController which calls
+    /// `extensionContext.open(url:completionHandler:)`. The main app must
+    /// register the "watermark" URL scheme in its Info.plist.
     func openInMainApp() {
-        // Note: extensionContext?.open(url:) requires the main app to register
-        // the "watermark" URL scheme in its Info.plist.
         guard let url = URL(string: "watermark://open") else { return }
-        extensionContext?.open(url, completionHandler: nil)
+        openURL?(url)
+        completeRequest?()
     }
 
     /// Whether the shared item has an unsupported media type.
@@ -579,10 +679,6 @@ final class ShareExtensionViewModel {
     }
 
     // MARK: - Private Helpers
-
-    /// Access to the extension context for URL scheme fallback.
-    /// Set by ShareViewController during setup.
-    var extensionContext: NSExtensionContext?
 
     @MainActor
     private func setError(_ message: String) {

@@ -48,28 +48,37 @@ class ShareViewController: UIViewController {
 
     /// Sets the `completeRequest` closure on the ViewModel so it can close
     /// the extension after the share sheet dismisses (D-07 one-shot).
+    /// Also sets `openURL` for URL scheme fallback (D-16).
     private func setupDismissHandler() {
         viewModel.completeRequest = { [weak self] in
             self?.extensionContext?.completeRequest(returningItems: nil)
+        }
+        viewModel.openURL = { [weak self] url in
+            self?.extensionContext?.open(url, completionHandler: nil)
         }
     }
 
     // MARK: - Media Loading
 
-    /// Extracts the first `NSItemProvider` from the extension context's
-    /// input items and delegates loading to the ViewModel.
+    /// Collects ALL `NSItemProvider`s from the extension context's input items,
+    /// sets them on the ViewModel for sequential processing, and loads the first item.
     private func loadSharedMedia() async {
         guard let extensionContext = extensionContext else { return }
 
-        // Provide the extension context to the ViewModel for URL scheme fallback
-        viewModel.extensionContext = extensionContext
+        // Collect ALL providers from all input items (D-14: multi-item sequential)
+        let allProviders = extensionContext.inputItems
+            .compactMap { $0 as? NSExtensionItem }
+            .flatMap { $0.attachments ?? [] }
 
-        guard let inputItem = extensionContext.inputItems.first as? NSExtensionItem,
-              let provider = inputItem.attachments?.first else {
+        guard !allProviders.isEmpty else {
             viewModel.isLoadingMedia = false
             return
         }
 
-        await viewModel.loadSharedMedia(from: provider)
+        viewModel.sharedItems = allProviders
+        viewModel.currentItemIndex = 0
+
+        // Load the first item
+        await viewModel.loadSharedMedia(from: allProviders[0])
     }
 }
