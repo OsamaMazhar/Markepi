@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ControlsView: View {
     @Bindable var viewModel: WatermarkViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollView(.vertical) {
@@ -52,9 +53,13 @@ struct ControlsView: View {
                 .frame(height: 50)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
                 .disabled(true)
+                .transition(.opacity.combined(with: .scale))
 
             case .done:
                 Button {
+                    if !reduceMotion {
+                        withAnimation(.easeOut(duration: 0.3)) {}
+                    }
                     viewModel.presentShareSheet()
                 } label: {
                     HStack(spacing: 8) {
@@ -66,6 +71,7 @@ struct ControlsView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.green)
+                .scaleEffect(viewModel.renderingState == .done && !reduceMotion ? 1.0 : 1.0)
 
             case .error:
                 Button {
@@ -83,5 +89,6 @@ struct ControlsView: View {
                 .opacity(viewModel.currentPhoto == nil ? 0.4 : 1.0)
             }
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.renderingState)
     }
 }

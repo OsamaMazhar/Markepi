@@ -23,6 +23,7 @@
 		00F /* LogoPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10F; };
 		010 /* LayerListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110; };
 		011 /* WhiteFrameToggleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111; };
+		012 /* ScaleLabelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112; };
 		00E /* WatermarkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 30E; };
 /* End PBXBuildFile section */
 
@@ -44,6 +45,7 @@
 		10F /* LogoPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogoPickerView.swift; sourceTree = "<group>"; };
 		110 /* LayerListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerListView.swift; sourceTree = "<group>"; };
 		111 /* WhiteFrameToggleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhiteFrameToggleView.swift; sourceTree = "<group>"; };
+		112 /* ScaleLabelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleLabelView.swift; sourceTree = "<group>"; };
 		10E /* WatermarkApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatermarkApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		20E /* WatermarkCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = WatermarkCore; path = Packages/WatermarkCore; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -129,6 +131,7 @@
 			isa = PBXGroup;
 			children = (
 				107 /* PreviewView.swift */,
+				112 /* ScaleLabelView.swift */,
 			);
 			path = PreviewArea;
 			sourceTree = "<group>";
@@ -263,6 +266,7 @@
 				00F /* LogoPickerView.swift in Sources */,
 				010 /* LayerListView.swift in Sources */,
 				011 /* WhiteFrameToggleView.swift in Sources */,
+				012 /* ScaleLabelView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

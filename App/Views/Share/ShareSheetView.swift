@@ -21,7 +21,8 @@ struct ShareSheetView: UIViewControllerRepresentable {
             activityItems: activityItems,
             applicationActivities: nil
         )
-        controller.excludedActivityTypes = excludedActivityTypes
+        controller.excludedActivityTypes = [.saveToCameraRoll]
+        controller.modalPresentationStyle = .pageSheet
         controller.completionWithItemsHandler = { _, _, _, _ in
             onDismiss()
         }
