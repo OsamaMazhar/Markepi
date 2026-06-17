@@ -72,16 +72,16 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MEDI-01 | Phase 1 | Pending |
-| MEDI-02 | Phase 1 | Pending |
-| MEDI-03 | Phase 2 | Pending |
+| MEDI-01 | Phase 2 | Pending |
+| MEDI-02 | Phase 3 | Pending |
+| MEDI-03 | Phase 4 | Pending |
 | WMRK-01 | Phase 1 | Pending |
 | WMRK-02 | Phase 1 | Pending |
 | WMRK-03 | Phase 1 | Pending |
-| WMRK-04 | Phase 1 | Pending |
+| WMRK-04 | Phase 2 | Pending |
 | FRME-01 | Phase 1 | Pending |
 | FRME-02 | Phase 1 | Pending |
-| SHAR-01 | Phase 1 | Pending |
+| SHAR-01 | Phase 2 | Pending |
 | QUAL-01 | Phase 1 | Pending |
 | QUAL-02 | Phase 1 | Pending |
 | QUAL-03 | Phase 1 | Pending |
