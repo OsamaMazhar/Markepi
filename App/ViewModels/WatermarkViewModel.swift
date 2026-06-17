@@ -42,11 +42,17 @@ final class WatermarkViewModel {
     var hasMultiplePhotos: Bool { photos.count > 1 }
 
     var previewIdentifier: String {
-        let imageCount = config.watermarks.filter {
-            if case .image = $0 { return true }; return false
-        }.count
-        let wf = config.whiteFrame?.isEnabled == true ? "1" : "0"
-        return "\(currentIndex)-layers:\(config.watermarks.count)-im:\(imageCount)-wf:\(wf)"
+        var parts: [String] = ["\(currentIndex)"]
+        for layer in config.watermarks {
+            switch layer {
+            case .text(let input, let pos, let scl):
+                parts.append("t:\(input.text)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
+            case .image(let input, let pos, let scl):
+                parts.append("im:\(input.pngData.hashValue)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
+            }
+        }
+        parts.append("wf:\(config.whiteFrame?.isEnabled == true ? "1" : "0")")
+        return parts.joined(separator: "-")
     }
 
     func handleSelection(_ items: [PhotosPickerItem]) {
