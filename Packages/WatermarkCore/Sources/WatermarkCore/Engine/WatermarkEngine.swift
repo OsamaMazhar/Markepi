@@ -19,10 +19,6 @@ public actor WatermarkEngine {
     /// Shared CIContext with RGBAh + displayP3 configuration (Pitfall 4)
     private let context = CIContextProvider.shared
 
-    /// Default padding for watermark positioning (hardcoded to 20 for Plan 01,
-    /// configurable in Plan 02)
-    private let defaultPadding: CGFloat = 20
-
     /// Processes a source photo and applies watermark configuration.
     ///
     /// - Parameters:
@@ -91,7 +87,7 @@ public actor WatermarkEngine {
     ///   3. For each layer: render CIImage → scale → position → collect
     ///   4. Composite all layers onto base via WatermarkRenderer
     ///
-    /// Note: `.image` watermark case is skipped for Plan 01 — Plan 02 implements.
+    /// Note: Supports both `.text` and `.image` watermark layers (Plan 01 + Plan 02).
     private func buildFilterGraph(
         base: CIImage,
         config: WatermarkConfiguration
@@ -110,9 +106,8 @@ public actor WatermarkEngine {
             case .text(let textConfig, _, _):
                 watermarkImage = TextWatermarkRenderer.render(config: textConfig)
 
-            case .image(_, _, _):
-                // Image watermark rendering deferred to Plan 02 (stub)
-                continue
+            case .image(let imageConfig, _, _):
+                watermarkImage = try ImageWatermarkRenderer.render(config: imageConfig)
             }
 
             // Scale watermark relative to base image
@@ -121,11 +116,12 @@ public actor WatermarkEngine {
             )
 
             // Calculate position using CIImage bottom-left origin coordinates
+            // Uses configurable padding from WatermarkConfiguration (default 20)
             let position = PositionCalculator.position(
                 for: watermark.position,
                 watermarkExtent: scaled.extent,
                 baseExtent: extent,
-                padding: defaultPadding
+                padding: config.padding
             )
 
             layers.append((scaled, position))
