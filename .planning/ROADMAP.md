@@ -62,7 +62,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Core vertical slice: app target + PhotosPicker import + text watermark controls + debounced preview rendering + two-tap share flow + thumbnail navigation + error handling
+- [x] 02-01-PLAN.md — Core vertical slice: app target + PhotosPicker import + text watermark controls + debounced preview rendering + two-tap share flow + thumbnail navigation + error handling
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -152,7 +152,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Core Engine & Photo Pipeline | 3/3 | Complete   | 2026-06-17 |
-| 2. Main App (Photo Watermark & Share) | 0/? | Not started | - |
+| 2. Main App (Photo Watermark & Share) | 1/2 | In Progress|  |
 | 3. Video Processing & Share Extension | 0/? | Not started | - |
 | 4. Photos Edit Extension & Polish | 0/? | Not started | - |
 | 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 0/? | Not started | - |

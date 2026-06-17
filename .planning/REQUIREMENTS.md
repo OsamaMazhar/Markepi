@@ -9,7 +9,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Media Import (MEDI)
 
-- [ ] **MEDI-01**: User can import photos and videos from in-app picker (PHPicker)
+- [x] **MEDI-01**: User can import photos and videos from in-app picker (PHPicker)
 - [ ] **MEDI-02**: User can receive photos and videos from other apps via iOS share sheet (app extension)
 - [ ] **MEDI-03**: User can receive photos and videos via Photos app native edit extension
 
@@ -18,7 +18,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **WMRK-01**: User can add custom text watermarks with font, size, color, and opacity controls
 - [x] **WMRK-02**: User can import and overlay image/logo watermarks with resize and opacity controls
 - [x] **WMRK-03**: User can place watermarks in 8 preset positions (4 corners, 4 edges, center)
-- [ ] **WMRK-04**: User can see a real-time preview of the watermarked result before sharing
+- [x] **WMRK-04**: User can see a real-time preview of the watermarked result before sharing
 
 ### White Frame (FRME)
 
@@ -27,7 +27,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Sharing (SHAR)
 
-- [ ] **SHAR-01**: User can share watermarked media via iOS share sheet without the output being saved to the camera roll
+- [x] **SHAR-01**: User can share watermarked media via iOS share sheet without the output being saved to the camera roll
 
 ### Quality Preservation (QUAL)
 
@@ -35,6 +35,43 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **QUAL-02**: HDR (gain maps, color profiles) is preserved in photo output
 - [x] **QUAL-03**: Original image and video quality is preserved (no unnecessary re-compression)
 - [ ] **QUAL-04**: Video watermarking preserves HDR, color space, and audio tracks in output
+
+### ProRAW (PROR)
+
+- [ ] **PROR-01**: User can process Apple ProRAW DNG files at full resolution (48MP) without downsampling or quality loss
+- [ ] **PROR-02**: ProRAW HDR gain maps and DNG metadata are preserved through the watermark pipeline
+
+### Dynamic EXIF Tokens (EXIF)
+
+- [ ] **EXIF-01**: User can add dynamic EXIF-based text to watermarks and frames using tokens: {camera_model}, {lens}, {aperture}, {focal_length}, {shutter_speed}, {iso}, {date}, {gps}
+- [ ] **EXIF-02**: EXIF tokens render correctly for all supported formats (HEIC, JPEG, ProRAW, DNG)
+
+### Multi-Layer Compositing (MULT)
+
+- [ ] **MULT-01**: User can apply text watermark, image/logo watermark, and white frame simultaneously in a single render pass
+- [ ] **MULT-02**: Each layer (text, image, frame) has independent position, opacity, and visibility controls
+
+### Export Control (EXPT)
+
+- [ ] **EXPT-01**: User can choose output format: HEIC, JPEG, PNG, or TIFF
+- [ ] **EXPT-02**: User can adjust output quality via a compression/quality slider (60–100%)
+- [ ] **EXPT-03**: Format choice is preserved alongside HDR and metadata (lossless re-wrap where possible)
+
+### Before/After Comparison (COMP)
+
+- [ ] **COMP-01**: User can toggle between original source and watermarked result with a gesture (swipe or long-press)
+- [ ] **COMP-02**: Comparison view works for both photos and videos in real-time preview
+
+### Video Export UX (VIDX)
+
+- [ ] **VIDX-01**: User sees real-time progress bar with estimated time remaining during video export
+- [ ] **VIDX-02**: User can cancel an in-progress video export without losing configuration
+- [ ] **VIDX-03**: Video export can run in the background with a system notification on completion
+
+### Live Photos (LIVE)
+
+- [ ] **LIVE-01**: User can watermark Live Photos while preserving the motion video component
+- [ ] **LIVE-02**: Still frame and motion component both receive the watermark overlay
 
 ## v2 Requirements
 
@@ -51,6 +88,20 @@ Deferred to future release. Tracked but not in current roadmap.
 
 - **BATC-01**: User can watermark multiple photos at once
 - **BATC-02**: User can watermark multiple videos at once
+
+### Signature (SIGN)
+
+- **SIGN-01**: User can draw or capture a signature to use as a watermark overlay
+
+### Additional Import Sources (IMPS)
+
+- **IMPS-01**: User can import media from the Files app / iCloud Drive directly
+- **IMPS-02**: User can open media via "Open In" from other apps and file providers
+
+### System Integration (SYSI)
+
+- **SYSI-01**: User can access "Watermark Last Photo" and "Watermark from Clipboard" from the home screen quick actions menu
+- **SYSI-02**: User can trigger watermarking via Siri / Shortcuts / App Intents
 
 ## Out of Scope
 
@@ -72,26 +123,47 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MEDI-01 | Phase 2 | Pending |
+| MEDI-01 | Phase 2 | Complete |
 | MEDI-02 | Phase 3 | Pending |
 | MEDI-03 | Phase 4 | Pending |
 | WMRK-01 | Phase 1 | Complete |
 | WMRK-02 | Phase 1 | Complete |
 | WMRK-03 | Phase 1 | Complete |
-| WMRK-04 | Phase 2 | Pending |
+| WMRK-04 | Phase 2 | Complete |
 | FRME-01 | Phase 1 | Complete |
 | FRME-02 | Phase 1 | Complete |
-| SHAR-01 | Phase 2 | Pending |
+| SHAR-01 | Phase 2 | Complete |
 | QUAL-01 | Phase 1 | Complete |
 | QUAL-02 | Phase 1 | Complete |
 | QUAL-03 | Phase 1 | Complete |
 | QUAL-04 | Phase 3 | Pending |
+| PROR-01 | Phase 5 | Pending |
+| PROR-02 | Phase 5 | Pending |
+| EXIF-01 | Phase 5 | Pending |
+| EXIF-02 | Phase 5 | Pending |
+| MULT-01 | Phase 5 | Pending |
+| MULT-02 | Phase 5 | Pending |
+| EXPT-01 | Phase 6 | Pending |
+| EXPT-02 | Phase 6 | Pending |
+| EXPT-03 | Phase 6 | Pending |
+| COMP-01 | Phase 6 | Pending |
+| COMP-02 | Phase 6 | Pending |
+| VIDX-01 | Phase 6 | Pending |
+| VIDX-02 | Phase 6 | Pending |
+| VIDX-03 | Phase 6 | Pending |
+| LIVE-01 | Phase 7 | Pending (v2) |
+| LIVE-02 | Phase 7 | Pending (v2) |
+| SIGN-01 | Phase 7 | Pending (v2) |
+| IMPS-01 | Phase 7 | Pending (v2) |
+| IMPS-02 | Phase 7 | Pending (v2) |
+| SYSI-01 | Phase 7 | Pending (v2) |
+| SYSI-02 | Phase 7 | Pending (v2) |
 
 **Coverage:**
-- v1 requirements: 14 total
-- Mapped to phases: 14
-- Unmapped: 0 ✓
+- v1 requirements: 28 total (14 original + 14 new)
+- v2 requirements: 13 total (6 original + 7 new)
+- All requirements mapped to phases ✓
 
 ---
 *Requirements defined: 2026-06-17*
-*Last updated: 2026-06-17 after initial definition*
+*Last updated: 2026-06-17 — added v1 phases 5-6 (ProRAW, EXIF tokens, multi-layer, export control, comparison, video UX) and v2 phase 7 (Live Photos, signature, Files import, system integration) from competitive research gaps*
