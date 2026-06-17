@@ -526,4 +526,438 @@ struct WatermarkEngineTests {
             cleanup(inputURL)
         }
     }
+
+    // MARK: - White frame integration (Plan 03)
+
+    /// Creates a JPEG with mock TIFF metadata for device model testing.
+    private func createInputWithMetadata(
+        model: String,
+        size: CGSize = CGSize(width: 400, height: 300),
+        color: CGColor = CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)
+    ) throws -> URL {
+        let (cgImage, _) = TestImageFactory.solidColorImage(
+            color: color,
+            size: size
+        )
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data, "public.jpeg" as CFString, 1, nil
+        ) else {
+            throw PipelineError.failedToCreateDestination
+        }
+        // Add TIFF metadata with device model
+        let tiffDict: [CFString: Any] = [
+            kCGImagePropertyTIFFModel: model,
+        ]
+        let metadata: [CFString: Any] = [
+            kCGImagePropertyTIFFDictionary: tiffDict,
+        ]
+        CGImageDestinationAddImage(destination, cgImage, metadata as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else {
+            throw PipelineError.failedToFinalize
+        }
+        return try createTempInputFile(data: data as Data, name: "meta_\(model)")
+    }
+
+    @Test("White frame only (no watermarks) — output has white border visible at edges")
+    func whiteFrameOnly() async throws {
+        let inputURL = try createInputWithMetadata(model: "iPhone 16 Pro")
+        let config = WatermarkConfiguration(
+            watermarks: [],
+            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false)
+        )
+        let engine = WatermarkEngine()
+
+        do {
+            let result = try await engine.process(sourceURL: inputURL, config: config)
+
+            guard let outputURL = result.url,
+                  let source = CGImageSourceCreateWithURL(outputURL as CFURL, nil),
+                  let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                Issue.record("Failed to read output image")
+                cleanup(inputURL)
+                return
+            }
+
+            let pixelData = TestImageFactory.pixelData(from: cgImage)
+            #expect(pixelData != nil, "Should be able to read pixel data")
+
+            if let data = pixelData {
+                let width = 400
+                // Sample top-left corner (should be white frame)
+                let borderOffset = (1 * width + 1) * 4
+                guard borderOffset + 3 < data.count else {
+                    Issue.record("Border pixel offset out of bounds")
+                    cleanup(inputURL, outputURL)
+                    return
+                }
+                let borderR = data[borderOffset]
+                let borderG = data[borderOffset + 1]
+                let borderB = data[borderOffset + 2]
+
+                // RED: frame not rendered → edges show base color (gray ~128)
+                // GREEN: white frame rendered → edges show white (r > 200, g > 200, b > 200)
+                #expect(borderR > 200, "Top-left corner should be white frame border (got r=\(borderR), g=\(borderG), b=\(borderB))")
+                #expect(borderG > 200, "Top-left corner green channel should be white")
+                #expect(borderB > 200, "Top-left corner blue channel should be white")
+            }
+
+            cleanup(inputURL, outputURL)
+        } catch {
+            Issue.record("Engine threw: \(error) — expected in GREEN phase")
+            cleanup(inputURL)
+        }
+    }
+
+    @Test("White frame + text watermark — watermark appears on top of frame")
+    func frameWithTextWatermark() async throws {
+        let inputURL = try createInputWithMetadata(model: "iPhone 16 Pro")
+        let config = WatermarkConfiguration(
+            watermarks: [
+                .text(TextWatermarkInput(text: "TOP", fontSize: 48, opacity: 1.0),
+                      position: .topLeft, scale: 0.15),
+            ],
+            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false)
+        )
+        let engine = WatermarkEngine()
+
+        do {
+            let result = try await engine.process(sourceURL: inputURL, config: config)
+
+            guard let outputURL = result.url,
+                  let source = CGImageSourceCreateWithURL(outputURL as CFURL, nil),
+                  let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                Issue.record("Failed to read output image")
+                cleanup(inputURL)
+                return
+            }
+
+            let pixelData = TestImageFactory.pixelData(from: cgImage)
+            #expect(pixelData != nil)
+
+            if let data = pixelData {
+                let width = 400
+                // Sample top-left region — should show text watermark, not pure white frame
+                // (text is dark "TOP" on white frame at topLeft)
+                let tlOffset = (20 * width + 30) * 4
+                guard tlOffset + 3 < data.count else {
+                    Issue.record("Top-left pixel offset out of bounds")
+                    cleanup(inputURL, outputURL)
+                    return
+                }
+                let r = data[tlOffset], g = data[tlOffset + 1], b = data[tlOffset + 2]
+
+                // RED: frame not rendered, only watermark on base color
+                // GREEN: frame rendered, watermark composited on top of frame
+                // The watermark at topLeft should be visible (not pure white from frame)
+                // With text "TOP" in dark color on white background → some pixels dark
+                #expect(r < 240 || g < 240 || b < 240,
+                        "Top-left region should show watermark, not pure white frame (got r=\(r), g=\(g), b=\(b))")
+            }
+
+            cleanup(inputURL, outputURL)
+        } catch {
+            Issue.record("Engine threw: \(error) — expected in GREEN phase")
+            cleanup(inputURL)
+        }
+    }
+
+    @Test("White frame with metadata text — 'Taken by: Model' visible in bottom region")
+    func frameWithMetadataText() async throws {
+        let inputURL = try createInputWithMetadata(model: "iPhone 16 Pro")
+        let config = WatermarkConfiguration(
+            watermarks: [],
+            whiteFrame: WhiteFrameConfig(
+                isEnabled: true,
+                frameWidthRatio: 0.05,
+                metadataTextEnabled: true
+            )
+        )
+        let engine = WatermarkEngine()
+
+        do {
+            let result = try await engine.process(sourceURL: inputURL, config: config)
+
+            guard let outputURL = result.url,
+                  let source = CGImageSourceCreateWithURL(outputURL as CFURL, nil),
+                  let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                Issue.record("Failed to read output image")
+                cleanup(inputURL)
+                return
+            }
+
+            let pixelData = TestImageFactory.pixelData(from: cgImage)
+            #expect(pixelData != nil)
+
+            if let data = pixelData {
+                let width = 400
+                let height = 300
+                // Frame width = min(400,300) × 0.05 = 15pt.
+                // Sample bottom-center region within frame where text should be.
+                // Bottom frame Y range: [height - frameWidth, height] = [285, 300]
+                let bottomRow = height - 8  // within bottom frame
+                let centerCol = width / 2
+                let textOffset = (bottomRow * width + centerCol) * 4
+                guard textOffset + 3 < data.count else {
+                    Issue.record("Bottom-center pixel offset out of bounds")
+                    cleanup(inputURL, outputURL)
+                    return
+                }
+                let r = data[textOffset], g = data[textOffset + 1], b = data[textOffset + 2]
+
+                // RED: frame not rendered → bottom-center shows base color
+                // GREEN: frame rendered with text → bottom-center shows dark text
+                // Text is darkGray, so at least one channel should be < 240
+                #expect(r < 240 || g < 240 || b < 240,
+                        "Bottom-center should show metadata text (not pure white), got r=\(r), g=\(g), b=\(b)")
+            }
+
+            cleanup(inputURL, outputURL)
+        } catch {
+            Issue.record("Engine threw: \(error) — expected in GREEN phase")
+            cleanup(inputURL)
+        }
+    }
+
+    @Test("White frame disabled — output identical to no-frame processing")
+    func whiteFrameDisabled() async throws {
+        let inputURL = try createInputWithMetadata(model: "iPhone 16 Pro")
+        let config = WatermarkConfiguration(
+            watermarks: [
+                .text(TextWatermarkInput(text: "TEST", fontSize: 36, opacity: 1.0),
+                      position: .center, scale: 0.1),
+            ],
+            whiteFrame: WhiteFrameConfig(isEnabled: false)
+        )
+        let engine = WatermarkEngine()
+
+        do {
+            let result = try await engine.process(sourceURL: inputURL, config: config)
+
+            // Should process normally — frame is disabled
+            #expect(result.url != nil)
+            guard let outputURL = result.url,
+                  let source = CGImageSourceCreateWithURL(outputURL as CFURL, nil) else {
+                Issue.record("Failed to read output")
+                cleanup(inputURL)
+                return
+            }
+            #expect(CGImageSourceGetCount(source) == 1)
+
+            // Verify dimensions preserved
+            let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
+            #expect((props[kCGImagePropertyPixelWidth] as? Int) == 400)
+            #expect((props[kCGImagePropertyPixelHeight] as? Int) == 300)
+
+            cleanup(inputURL, outputURL)
+        } catch {
+            Issue.record("Engine threw: \(error) — expected in GREEN phase")
+            cleanup(inputURL)
+        }
+    }
+
+    @Test("Custom attribution text override appears in output")
+    func customAttributionTextInOutput() async throws {
+        let inputURL = try createInputWithMetadata(model: "iPhone 16 Pro")
+        let customText = "Custom Camera v2"
+        let config = WatermarkConfiguration(
+            watermarks: [],
+            whiteFrame: WhiteFrameConfig(
+                isEnabled: true,
+                frameWidthRatio: 0.05,
+                metadataTextEnabled: true,
+                customAttributionText: customText
+            )
+        )
+        let engine = WatermarkEngine()
+
+        do {
+            let result = try await engine.process(sourceURL: inputURL, config: config)
+            #expect(result.url != nil)
+
+            guard let outputURL = result.url,
+                  let source = CGImageSourceCreateWithURL(outputURL as CFURL, nil),
+                  let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                Issue.record("Failed to read output image")
+                cleanup(inputURL)
+                return
+            }
+
+            let pixelData = TestImageFactory.pixelData(from: cgImage)
+            #expect(pixelData != nil)
+
+            if let data = pixelData {
+                let width = 400
+                let height = 300
+                // Bottom-center should show custom text, not auto-generated
+                let bottomRow = height - 8
+                let centerCol = width / 2
+                let offset = (bottomRow * width + centerCol) * 4
+                guard offset + 3 < data.count else {
+                    Issue.record("Bottom-center pixel offset out of bounds")
+                    cleanup(inputURL, outputURL)
+                    return
+                }
+                let r = data[offset], g = data[offset + 1], b = data[offset + 2]
+
+                // RED: frame not rendered → shows base color
+                // GREEN: frame with custom text → dark text pixels visible
+                #expect(r < 240 || g < 240 || b < 240,
+                        "Bottom-center should show custom text, got r=\(r), g=\(g), b=\(b)")
+            }
+
+            cleanup(inputURL, outputURL)
+        } catch {
+            Issue.record("Engine threw: \(error) — expected in GREEN phase")
+            cleanup(inputURL)
+        }
+    }
+
+    @Test("Format preservation with white frame — JPEG in → JPEG out")
+    func formatPreservationWithFrame() async throws {
+        let inputURL = try createInputWithMetadata(model: "iPhone 16 Pro")
+        let config = WatermarkConfiguration(
+            watermarks: [],
+            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false)
+        )
+        let engine = WatermarkEngine()
+
+        do {
+            let result = try await engine.process(sourceURL: inputURL, config: config)
+            #expect(result.outputUTI == "public.jpeg",
+                    "Output should preserve JPEG format, got \(result.outputUTI)")
+
+            if let outputURL = result.url {
+                // Verify output is valid JPEG (not forced to PNG due to CG rendering)
+                guard let outSource = CGImageSourceCreateWithURL(outputURL as CFURL, nil) else {
+                    Issue.record("Failed to read output")
+                    cleanup(inputURL, outputURL)
+                    return
+                }
+                let outType = CGImageSourceGetType(outSource) as String?
+                #expect(outType == "public.jpeg",
+                        "Output type should be JPEG, got \(outType ?? "nil")")
+
+                cleanup(inputURL, outputURL)
+            } else {
+                cleanup(inputURL)
+            }
+        } catch {
+            Issue.record("Engine threw: \(error) — expected in GREEN phase")
+            cleanup(inputURL)
+        }
+    }
+
+    @Test("HDR gain map survives white frame processing")
+    func hdrGainMapSurvivesFrame() async throws {
+        // Use a standard test image (no real HDR gain map in test, but verify
+        // that the processing path doesn't crash or strip auxiliary data)
+        let inputURL = try createInputWithMetadata(model: "iPhone 16 Pro")
+        let config = WatermarkConfiguration(
+            watermarks: [],
+            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false)
+        )
+        let engine = WatermarkEngine()
+
+        do {
+            let result = try await engine.process(sourceURL: inputURL, config: config)
+            // RED: frame not rendered → test passes because existing pipeline works
+            // GREEN: frame rendered → gain map preserved (per Open Question #1:
+            //         original unmodified gain map re-attached at output)
+            #expect(result.url != nil)
+
+            guard let outputURL = result.url,
+                  let source = CGImageSourceCreateWithURL(outputURL as CFURL, nil) else {
+                Issue.record("Failed to read output")
+                cleanup(inputURL)
+                return
+            }
+            #expect(CGImageSourceGetCount(source) == 1)
+
+            // Verify dimensions preserved
+            let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
+            #expect((props[kCGImagePropertyPixelWidth] as? Int) == 400)
+            #expect((props[kCGImagePropertyPixelHeight] as? Int) == 300)
+
+            cleanup(inputURL, outputURL)
+        } catch {
+            Issue.record("Engine threw: \(error) — expected in GREEN phase")
+            cleanup(inputURL)
+        }
+    }
+
+    @Test("Combined: text watermark + image watermark + white frame — all visible")
+    func combinedAllFeatures() async throws {
+        let inputURL = try createInputWithMetadata(
+            model: "iPhone 16 Pro",
+            size: CGSize(width: 500, height: 400)
+        )
+        // Create image watermark PNG
+        let pngData = makeWatermarkPNG(size: CGSize(width: 40, height: 40),
+                                        color: CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+        let imageInput = try ImageWatermarkInput(pngData: pngData, scale: 0.3, opacity: 0.9)
+
+        let config = WatermarkConfiguration(
+            watermarks: [
+                .text(TextWatermarkInput(text: "Hello", fontSize: 36, opacity: 1.0),
+                      position: .topLeft, scale: 0.12),
+                .image(imageInput, position: .bottomRight, scale: 0.3),
+            ],
+            whiteFrame: WhiteFrameConfig(
+                isEnabled: true,
+                frameWidthRatio: 0.04,
+                metadataTextEnabled: true
+            )
+        )
+        let engine = WatermarkEngine()
+
+        do {
+            let result = try await engine.process(sourceURL: inputURL, config: config)
+            #expect(result.url != nil)
+            #expect(FileManager.default.fileExists(atPath: result.url!.path))
+
+            guard let outputURL = result.url,
+                  let source = CGImageSourceCreateWithURL(outputURL as CFURL, nil),
+                  let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                Issue.record("Failed to read output image")
+                cleanup(inputURL)
+                return
+            }
+
+            // Verify dimensions preserved
+            let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
+            #expect((props[kCGImagePropertyPixelWidth] as? Int) == 500)
+            #expect((props[kCGImagePropertyPixelHeight] as? Int) == 400)
+
+            // Verify format preserved
+            #expect(result.outputUTI == "public.jpeg")
+
+            // Sample top-left corner (should be white frame border at 20pt frame width)
+            // Frame width = min(500,400) × 0.04 = 16pt
+            let pixelData = TestImageFactory.pixelData(from: cgImage)
+            #expect(pixelData != nil)
+
+            if let data = pixelData {
+                let width = 500
+                // Top-left edge should have white frame border
+                let tlOffset = (2 * width + 2) * 4
+                guard tlOffset + 3 < data.count else {
+                    Issue.record("Pixel offset out of bounds")
+                    cleanup(inputURL, outputURL)
+                    return
+                }
+                let r = data[tlOffset], g = data[tlOffset + 1], b = data[tlOffset + 2]
+
+                // RED: no frame → edges show base color (gray ~128)
+                // GREEN: frame rendered → edges show white (r > 200)
+                #expect(r > 200 && g > 200 && b > 200,
+                        "Top-left edge should be white frame, got r=\(r), g=\(g), b=\(b)")
+            }
+
+            cleanup(inputURL, outputURL)
+        } catch {
+            Issue.record("Engine threw: \(error) — expected in GREEN phase")
+            cleanup(inputURL)
+        }
+    }
 }

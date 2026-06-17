@@ -45,7 +45,11 @@ public actor WatermarkEngine {
         let normalized = OrientationNormalizer.normalize(loaded.ciImage)
 
         // 3. Build filter graph (pure CIImage ops, no context needed)
-        let composited = try buildFilterGraph(base: normalized, config: config)
+        let composited = try buildFilterGraph(
+            base: normalized,
+            config: config,
+            metadata: loaded.metadata
+        )
 
         // 4. Render via shared CIContext → CGImage
         guard let cgImage = context.createCGImage(
@@ -79,24 +83,35 @@ public actor WatermarkEngine {
     /// - Parameters:
     ///   - base: The source CIImage (assumed already orientation-normalized)
     ///   - config: Watermark configuration
+    ///   - metadata: Source image metadata dictionary (for device model extraction
+    ///               in white frame rendering)
     /// - Returns: Composited CIImage ready for rendering
     ///
     /// Flow:
     ///   1. Normalize orientation again as safety net (Pitfall 3 double-check)
-    ///   2. Build watermark layers from config in order (per D-01)
-    ///   3. For each layer: render CIImage → scale → position → collect
-    ///   4. Composite all layers onto base via WatermarkRenderer
+    ///   2. Render white frame below all watermark layers (if enabled)
+    ///   3. Build watermark layers from config in order (per D-01)
+    ///   4. For each layer: render CIImage → scale → position → collect
+    ///   5. Composite all layers onto base via WatermarkRenderer
     ///
-    /// Note: Supports both `.text` and `.image` watermark layers (Plan 01 + Plan 02).
+    /// Note: Supports both `.text` and `.image` watermark layers (Plan 01 + Plan 02)
+    ///       plus white frame compositing (Plan 03).
     private func buildFilterGraph(
         base: CIImage,
-        config: WatermarkConfiguration
+        config: WatermarkConfiguration,
+        metadata: [String: Any]
     ) throws -> CIImage {
         // Safety net: normalize orientation before positioning (Pitfall 3)
         let normalized = OrientationNormalizer.normalize(base)
         let extent = normalized.extent
 
         var layers: [(CIImage, CGPoint)] = []
+
+        // White frame rendering (composited below all watermark layers)
+        // RED: metadata is passed through but frame is NOT yet rendered.
+        // Tests expect white border + metadata text — they will fail until
+        // GREEN implementation adds WhiteFrameRenderer compositing here.
+        // Framed base will be applied to the compositing chain.
 
         // Build layers in order: bottom layer first, top layer last (D-01)
         for watermark in config.watermarks {
