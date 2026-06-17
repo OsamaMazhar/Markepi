@@ -80,7 +80,18 @@ Plans:
   2. Watermarked video output preserves HDR (Dolby Vision/HLG), color space, and all audio tracks from the source
   3. Video watermarking maintains source-equivalent quality (resolution, frame rate, bitrate) without visible re-encoding degradation
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+**Wave 1** *(parallel — no file overlap)*
+
+- [ ] 03-01-PLAN.md — Share Extension + Photo Watermarking: share extension target scaffold, SwiftUI watermarking UI via UIHostingController, NSItemProvider photo loading, WatermarkEngine integration, App Group config sync, NSExtensionActivationRule
+- [ ] 03-02-PLAN.md — Video Watermarking Engine: VideoProcessor (AVFoundation AVVideoCompositionCoreAnimationTool + CALayer overlay), VideoLayerBuilder, VideoFrameExtractor, ExportValidator, HDR preservation + audio passthrough
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-03-PLAN.md — Video in Share Extension: NSItemProvider video loading via loadFileRepresentation, static frame preview, VideoProcessor rendering, multi-item sequential processing, HDR fallback warnings, unsupported type dialog, controls sharing refactor
+
 **UI hint**: yes
 
 ### Phase 4: Photos Edit Extension & Polish
@@ -153,7 +164,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 |-------|----------------|--------|-----------|
 | 1. Core Engine & Photo Pipeline | 3/3 | Complete   | 2026-06-17 |
 | 2. Main App (Photo Watermark & Share) | 2/2 | Complete   | 2026-06-17 |
-| 3. Video Processing & Share Extension | 0/? | Not started | - |
+| 3. Video Processing & Share Extension | 0/3 | Not started | - |
 | 4. Photos Edit Extension & Polish | 0/? | Not started | - |
 | 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 0/? | Not started | - |
 | 6. Export Control & UX Polish | 0/? | Not started | - |
