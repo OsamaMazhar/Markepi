@@ -16,14 +16,44 @@ import UIKit
 /// rendered onto output.
 public struct DeviceMetadataProvider {
 
+    /// CFString keys used for EXIF metadata dictionary access.
+    /// Using raw string representations for Sendable-compatible lookups.
+    private static let tiffDictionaryKey = "{TIFF}"
+    private static let tiffModelKey = "Model"
+    private static let exifDictionaryKey = "{Exif}"
+    private static let exifLensModelKey = "LensModel"
+
     /// Extracts the device model name from EXIF metadata.
     ///
-    /// Priority: 1) TIFF Model tag, 2) EXIF LensModel tag, 3) UIDevice.current.model (iOS) / "Unknown" (macOS)
-    /// - Parameter metadata: Source image metadata dictionary (with String keys)
+    /// Priority order per D-07:
+    ///   1. TIFF Model tag (`kCGImagePropertyTIFFModel`) — most iPhone photos
+    ///   2. EXIF LensModel tag (`kCGImagePropertyExifLensModel`) — secondary
+    ///   3. `UIDevice.current.model` on iOS / "Unknown" on macOS
+    ///
+    /// - Parameter metadata: Source image metadata dictionary (with String keys
+    ///   converted from CFString at the ImageIO boundary)
     /// - Returns: Device model string (e.g., "iPhone 16 Pro", "iPad")
     public static func deviceModel(from metadata: [String: Any]) -> String {
-        // STUB — RED phase: returns fixed string, tests will fail
-        return "STUB"
+        // 1. Try TIFF dictionary → Model tag
+        if let tiff = metadata[tiffDictionaryKey] as? [String: Any],
+           let model = tiff[tiffModelKey] as? String,
+           !model.isEmpty {
+            return model
+        }
+
+        // 2. Try EXIF dictionary → LensModel tag
+        if let exif = metadata[exifDictionaryKey] as? [String: Any],
+           let lensModel = exif[exifLensModelKey] as? String,
+           !lensModel.isEmpty {
+            return lensModel
+        }
+
+        // 3. Fallback to current device model
+        #if canImport(UIKit)
+        return UIDevice.current.model  // "iPhone", "iPad"
+        #else
+        return "Unknown"  // macOS testing fallback
+        #endif
     }
 
     /// Formats the attribution text for the white frame overlay.

@@ -95,13 +95,19 @@ public struct ImageLoader {
         let (_, sourceUTI) = try FormatDetector.detect(from: source)
         let sourceUTIString = sourceUTI as String
 
-        // Create CIImage with HDR options (Pitfall 1 prevention)
+        // Create CIImage with HDR options (Pitfall 1 prevention).
+        // Primary: HDR-enabled load. Fallback: plain load (for SDR images or macOS testing).
         let options: [CIImageOption: Any] = [
             .expandToHDR: true,
             .auxiliaryHDRGainMap: true,
             .applyOrientationProperty: true,
         ]
-        guard let ciImage = CIImage(contentsOf: url, options: options) else {
+        var ciImage = CIImage(contentsOf: url, options: options)
+        if ciImage == nil {
+            // Fallback for SDR images or platforms where HDR options are not supported
+            ciImage = CIImage(contentsOf: url)
+        }
+        guard let ciImage = ciImage else {
             throw PipelineError.failedToCreateCIImage
         }
 
