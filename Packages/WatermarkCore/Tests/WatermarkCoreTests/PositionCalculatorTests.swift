@@ -226,10 +226,12 @@ struct PositionCalculatorTests {
 
         @Test("large padding should still compute valid translation")
         func largePadding() {
-            // Padding larger than base image should not crash — caller handles clamping
+            // Padding larger than base image should not crash — caller handles clamping.
+            // For bottomRight: x = width - w - padding → negative (offscreen left)
+            //                  y = padding → exceeds height (offscreen above)
             let t = WatermarkPosition.bottomRight.translation(watermarkExtent: watermarkExtent, baseExtent: baseExtent, padding: 2000)
-            #expect(t.tx < 0)    // pushed offscreen — expected, caller clamps
-            #expect(t.ty < 0)
+            #expect(t.tx < 0)                         // offscreen left
+            #expect(t.ty > baseExtent.height)          // offscreen above (CIImage bottom-left: +Y = up)
         }
     }
 
