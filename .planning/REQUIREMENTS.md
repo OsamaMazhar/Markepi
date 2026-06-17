@@ -10,7 +10,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Media Import (MEDI)
 
 - [x] **MEDI-01**: User can import photos and videos from in-app picker (PHPicker)
-- [ ] **MEDI-02**: User can receive photos and videos from other apps via iOS share sheet (app extension)
+- [x] **MEDI-02**: User can receive photos and videos from other apps via iOS share sheet (app extension)
 - [ ] **MEDI-03**: User can receive photos and videos via Photos app native edit extension
 
 ### Watermark (WMRK)
@@ -124,7 +124,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | MEDI-01 | Phase 2 | Complete |
-| MEDI-02 | Phase 3 | Pending |
+| MEDI-02 | Phase 3 | Complete |
 | MEDI-03 | Phase 4 | Pending |
 | WMRK-01 | Phase 1 | Complete |
 | WMRK-02 | Phase 1 | Complete |
