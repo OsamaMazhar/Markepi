@@ -115,7 +115,8 @@ final class ShareExtensionViewModel {
     func loadSharedMedia(from provider: NSItemProvider) async {
         // T-03-01: Verify type conformance before loading
         guard provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) else {
-            await setError("Unsupported media type. Please share a photo.")
+            unsupportedType = true
+            isLoadingMedia = false
             return
         }
 

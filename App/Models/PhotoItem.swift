@@ -14,21 +14,3 @@ struct PhotoItem: Identifiable, Hashable, Sendable {
         lhs.id == rhs.id
     }
 }
-
-enum RenderingState: Equatable {
-    case idle
-    case rendering
-    case done
-    case error(Error)
-
-    static func == (lhs: RenderingState, rhs: RenderingState) -> Bool {
-        switch (lhs, rhs) {
-        case (.idle, .idle), (.rendering, .rendering), (.done, .done):
-            return true
-        case (.error, .error):
-            return true
-        default:
-            return false
-        }
-    }
-}

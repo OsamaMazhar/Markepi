@@ -6,7 +6,7 @@ import CoreImage
 /// optional white frame settings, and output format preferences.
 ///
 /// Consumed by `WatermarkEngine.process(url:config:)` to build the filter graph.
-public struct WatermarkConfiguration: Sendable {
+public struct WatermarkConfiguration: Sendable, Codable {
     /// Ordered array of watermark layers composited from bottom to top (per D-01)
     public var watermarks: [WatermarkLayer]
 
@@ -66,13 +66,56 @@ public enum WatermarkLayer: Sendable {
     }
 }
 
+// MARK: - WatermarkLayer Codable
+
+extension WatermarkLayer: Codable {
+    enum CodingKeys: String, CodingKey {
+        case type, textConfig, imageConfig, position, scale
+    }
+
+    enum LayerType: String, Codable {
+        case text, image
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(LayerType.self, forKey: .type)
+        let position = try container.decode(WatermarkPosition.self, forKey: .position)
+        let scale = try container.decode(CGFloat.self, forKey: .scale)
+
+        switch type {
+        case .text:
+            let config = try container.decode(TextWatermarkInput.self, forKey: .textConfig)
+            self = .text(config, position: position, scale: scale)
+        case .image:
+            let config = try container.decode(ImageWatermarkInput.self, forKey: .imageConfig)
+            self = .image(config, position: position, scale: scale)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(position, forKey: .position)
+        try container.encode(scale, forKey: .scale)
+
+        switch self {
+        case .text(let config, _, _):
+            try container.encode(LayerType.text, forKey: .type)
+            try container.encode(config, forKey: .textConfig)
+        case .image(let config, _, _):
+            try container.encode(LayerType.image, forKey: .type)
+            try container.encode(config, forKey: .imageConfig)
+        }
+    }
+}
+
 // MARK: - OutputFormat
 
 /// Output image format preference.
 ///
 /// `.preserveSource` (default per D-09) keeps the source format (HEIC→HEIC, JPEG→JPEG).
 /// Explicit overrides allow forcing a specific format when needed.
-public enum OutputFormat: Sendable {
+public enum OutputFormat: Sendable, Codable {
     /// Match the source image format (default per D-09)
     case preserveSource
 
@@ -84,4 +127,31 @@ public enum OutputFormat: Sendable {
 
     /// Force PNG output
     case png
+
+    // MARK: Codable (String raw value)
+
+    enum RawValue: String, Codable {
+        case preserveSource, heic, jpeg, png
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(RawValue.self)
+        switch raw {
+        case .preserveSource: self = .preserveSource
+        case .heic: self = .heic
+        case .jpeg: self = .jpeg
+        case .png: self = .png
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .preserveSource: try container.encode(RawValue.preserveSource)
+        case .heic: try container.encode(RawValue.heic)
+        case .jpeg: try container.encode(RawValue.jpeg)
+        case .png: try container.encode(RawValue.png)
+        }
+    }
 }

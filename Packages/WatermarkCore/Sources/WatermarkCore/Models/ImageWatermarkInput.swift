@@ -5,7 +5,7 @@ import Foundation
 /// Validates PNG data and scale range on init. Opacity is clamped to 0.0–1.0.
 /// The data model carries the configuration to ImageWatermarkRenderer for
 /// CIImage creation, scaling, and opacity application.
-public struct ImageWatermarkInput: Sendable {
+public struct ImageWatermarkInput: Sendable, Codable {
     /// Raw PNG image data (must be non-empty)
     public let pngData: Data
 

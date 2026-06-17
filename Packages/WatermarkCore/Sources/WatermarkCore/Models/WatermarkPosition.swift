@@ -10,7 +10,7 @@ import CoreImage
 /// Always normalize EXIF orientation to `.up` before using this enum's
 /// translation values — working on non-normalized images causes watermark
 /// misplacement (the "double-rotation" bug).
-public enum WatermarkPosition: String, CaseIterable, Sendable {
+public enum WatermarkPosition: String, CaseIterable, Sendable, Codable {
     case topLeft
     case topCenter
     case topRight
@@ -38,8 +38,43 @@ public enum WatermarkPosition: String, CaseIterable, Sendable {
         baseExtent: CGRect,
         padding: CGFloat
     ) -> CGAffineTransform {
-        // STUB — RED phase: returns identity so tests fail
-        // GREEN phase implements the correct translation math.
-        return .identity
+        // CIImage coordinate system: origin is BOTTOM-LEFT
+        //   +X extends right, +Y extends up
+        //   topLeft  → visual top-left    (y near height)
+        //   bottomLeft → visual bottom-left (y near 0)
+        let x: CGFloat
+        let y: CGFloat
+
+        switch self {
+        case .topLeft:
+            x = padding
+            y = baseExtent.height - watermarkExtent.height - padding
+        case .topCenter:
+            x = (baseExtent.width - watermarkExtent.width) / 2
+            y = baseExtent.height - watermarkExtent.height - padding
+        case .topRight:
+            x = baseExtent.width - watermarkExtent.width - padding
+            y = baseExtent.height - watermarkExtent.height - padding
+        case .middleLeft:
+            x = padding
+            y = (baseExtent.height - watermarkExtent.height) / 2
+        case .center:
+            x = (baseExtent.width - watermarkExtent.width) / 2
+            y = (baseExtent.height - watermarkExtent.height) / 2
+        case .middleRight:
+            x = baseExtent.width - watermarkExtent.width - padding
+            y = (baseExtent.height - watermarkExtent.height) / 2
+        case .bottomLeft:
+            x = padding
+            y = padding
+        case .bottomCenter:
+            x = (baseExtent.width - watermarkExtent.width) / 2
+            y = padding
+        case .bottomRight:
+            x = baseExtent.width - watermarkExtent.width - padding
+            y = padding
+        }
+
+        return CGAffineTransform(translationX: x, y: y)
     }
 }

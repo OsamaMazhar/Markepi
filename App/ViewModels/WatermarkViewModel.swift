@@ -17,7 +17,9 @@ final class WatermarkViewModel {
             position: .bottomRight,
             scale: 0.15
         )
-    ])
+    ]) {
+        didSet { AppGroupConfigSync.save(config) }
+    }
 
     var previewImage: UIImage?
     var isGeneratingPreview: Bool = false
@@ -33,6 +35,15 @@ final class WatermarkViewModel {
     var activeLayerIndex: Int = 0
 
     private let engine = WatermarkEngine.shared
+
+    // MARK: - Init
+
+    override init() {
+        // Load saved config from App Group if available (D-08 bidirectional sync)
+        if let saved = AppGroupConfigSync.load() {
+            config = saved
+        }
+    }
 
     var currentPhoto: PhotoItem? {
         guard !photos.isEmpty, currentIndex >= 0, currentIndex < photos.count else { return nil }

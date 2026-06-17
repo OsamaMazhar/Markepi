@@ -24,6 +24,23 @@ public struct TempFileManager {
         return cachesDir.appendingPathComponent(filename)
     }
 
+    /// Creates a unique temp file URL in the specified directory.
+    ///
+    /// Used by the share extension to write to its own sandbox directory
+    /// (e.g., `FileManager.default.temporaryDirectory`) instead of the
+    /// app-wide caches directory.
+    ///
+    /// - Parameters:
+    ///   - uti: Source format UTI as CFString (e.g., "public.heic")
+    ///   - directory: Base directory to create the file in
+    /// - Returns: URL to the new temp file (file does not exist yet)
+    /// - Note: Does NOT validate that the directory exists — caller is
+    ///         responsible for ensuring a valid target directory.
+    public static func createTempFile(uti: CFString, in directory: URL) throws -> URL {
+        let filename = "watermark_\(UUID().uuidString).\(FormatDetector.fileExtension(for: uti))"
+        return directory.appendingPathComponent(filename)
+    }
+
     /// Removes a temp file at the given URL.
     ///
     /// Silently ignores if the file doesn't exist (already cleaned up).

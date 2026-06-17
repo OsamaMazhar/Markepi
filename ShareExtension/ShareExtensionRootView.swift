@@ -32,6 +32,16 @@ struct ShareExtensionRootView: View {
         } message: {
             Text(viewModel.errorMessage ?? "An unknown error occurred")
         }
+        .alert("Unsupported File Type", isPresented: $viewModel.unsupportedType) {
+            Button("Open in App") {
+                viewModel.openInMainApp()
+            }
+            Button("Cancel", role: .cancel) {
+                viewModel.completeRequest?()
+            }
+        } message: {
+            Text("This file type isn't supported yet. Open it in the Watermark app instead?")
+        }
         .sheet(isPresented: $viewModel.showShareSheet) {
             if let url = viewModel.fullResResult?.url {
                 ShareSheetView(activityItems: [url]) {

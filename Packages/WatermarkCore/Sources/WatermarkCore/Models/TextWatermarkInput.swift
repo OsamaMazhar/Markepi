@@ -4,7 +4,7 @@ import CoreImage
 ///
 /// Uses SF system fonts per D-02 decision. Defaults: system font size 72, white color, opacity 0.8.
 /// Rendered via `CIAttributedTextImageGenerator` to stay within the Core Image lazy filter graph.
-public struct TextWatermarkInput: Sendable {
+public struct TextWatermarkInput: Sendable, Codable {
     /// The text string to render as a watermark
     public let text: String
 
@@ -34,5 +34,38 @@ public struct TextWatermarkInput: Sendable {
         self.fontSize = fontSize
         self.color = color
         self.opacity = opacity
+    }
+
+    // MARK: - Codable (CGColor)
+
+    enum CodingKeys: String, CodingKey {
+        case text, fontSize, colorRGBA, opacity
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decode(String.self, forKey: .text)
+        fontSize = try container.decode(CGFloat.self, forKey: .fontSize)
+        opacity = try container.decode(CGFloat.self, forKey: .opacity)
+        let rgba = try container.decode([CGFloat].self, forKey: .colorRGBA)
+        guard rgba.count == 4,
+              let cgColor = CGColor(colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                    components: rgba) else {
+            throw DecodingError.dataCorruptedError(forKey: .colorRGBA, in: container,
+                debugDescription: "Invalid RGBA components for CGColor")
+        }
+        color = cgColor
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(text, forKey: .text)
+        try container.encode(fontSize, forKey: .fontSize)
+        try container.encode(opacity, forKey: .opacity)
+        let components = color.components ?? [1, 1, 1, 1]
+        let rgba: [CGFloat] = components.count >= 4
+            ? [components[0], components[1], components[2], components[3]]
+            : [1, 1, 1, 1]
+        try container.encode(rgba, forKey: .colorRGBA)
     }
 }
