@@ -4,7 +4,8 @@ import PackageDescription
 let package = Package(
     name: "WatermarkCore",
     platforms: [
-        .iOS(.v18)
+        .iOS(.v18),
+        .macOS(.v11),  // Needed for UTType availability when running tests on macOS
     ],
     products: [
         .library(
