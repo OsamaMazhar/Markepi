@@ -7,7 +7,7 @@ An iOS app for watermarking photos and videos, then sharing instantly without sa
 ## Phases
 
 - [x] **Phase 1: Core Engine & Photo Pipeline** — WatermarkCore foundation, photo rendering, and quality preservation (completed 2026-06-17)
-- [ ] **Phase 2: Main App (Photo Watermark & Share)** — Complete in-app photo workflow: import, configure, preview, share
+- [x] **Phase 2: Main App (Photo Watermark & Share)** — Complete in-app photo workflow: import, configure, preview, share (completed 2026-06-17)
 - [ ] **Phase 3: Video Processing & Share Extension** — Video watermarking pipeline and share sheet import
 - [ ] **Phase 4: Photos Edit Extension & Polish** — Photos app integration and comprehensive quality validation
 - [ ] **Phase 5: Extended Engine (ProRAW, EXIF Tokens, Multi-Layer)** — ProRAW support, dynamic EXIF-based text tokens, multi-layer compositing
@@ -66,7 +66,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-02-PLAN.md — Extended features: logo/image watermark picker + white frame toggle + layer list with X removal + pinch-to-resize gesture + accessibility labels + animations + validation
+- [x] 02-02-PLAN.md — Extended features: logo/image watermark picker + white frame toggle + layer list with X removal + pinch-to-resize gesture + accessibility labels + animations + validation
 
 ### Phase 3: Video Processing & Share Extension
 
@@ -152,7 +152,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Core Engine & Photo Pipeline | 3/3 | Complete   | 2026-06-17 |
-| 2. Main App (Photo Watermark & Share) | 1/2 | In Progress|  |
+| 2. Main App (Photo Watermark & Share) | 2/2 | Complete   | 2026-06-17 |
 | 3. Video Processing & Share Extension | 0/? | Not started | - |
 | 4. Photos Edit Extension & Polish | 0/? | Not started | - |
 | 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 0/? | Not started | - |
