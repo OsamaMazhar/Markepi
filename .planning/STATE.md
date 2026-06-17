@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Phase 1 execution complete — all 3 plans executed
-last_updated: "2026-06-17T18:01:06.937Z"
+stopped_at: Phase 2 context gathered
+last_updated: "2026-06-17T18:54:18.412Z"
 last_activity: 2026-06-17
 progress:
-  total_phases: 4
+  total_phases: 7
   completed_phases: 1
   total_plans: 3
   completed_plans: 3
-  percent: 25
+  percent: 14
 ---
 
 # Project State
@@ -77,15 +77,22 @@ None yet.
 - **Phase 2 planning**: HDR gain map preservation through Core Image filter chain is technically nuanced — flag from research for `/gsd-plan-phase --research-phase` attention.
 - **Phase 3 planning**: HDR video preservation with custom AVAssetWriter compositions has subtle platform-specific behavior. Needs Spike with sample Dolby Vision/HLG footage.
 - **Phase 4 planning**: PHAdjustmentData size limits are undocumented by Apple. Needs empirical testing on device.
+- **Phase 5 planning**: ProRAW DNG at 48MP is memory-intensive (≈75MB per frame). Needs Instruments profiling to validate pipeline can handle it without jetsam. Multi-layer compositing order (text→logo→frame) needs spec for expected behavior.
+- **Phase 6 planning**: Format conversion (HEIC→JPEG) requires intentional HDR→SDR tone mapping — not just a format flag flip. Video progress requires bridging AVAssetExportSession progress (0.0–1.0) to SwiftUI with cancel support via `exportSession.cancelExport()`.
+- **Phase 7 (v2) planning**: App Intents require iOS 18+ with `@AssistantIntent` macro — verify minimum deployment target still supports all v1 features. Live Photos compositing requires decomposing the paired still+video and re-assembling as a `PHLivePhoto` with `PHLivePhotoEditingContext`.
 
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none)* | | | |
+| v1 scope | Extended engine features (ProRAW, EXIF tokens, multi-layer) added as Phase 5 | New | 2026-06-17 |
+| v1 scope | Export control + UX polish added as Phase 6 | New | 2026-06-17 |
+| v2 scope | Additional inputs + system integration added as Phase 7 | New | 2026-06-17 |
+| v2 scope | Batch processing (BATC-01, BATC-02) remains deferred to v2 | Existing | — |
+| v2 scope | Customization (CUST-01 through CUST-04) remains deferred to v2 | Existing | — |
 
 ## Session Continuity
 
-Last session: 2026-06-17T18:01:06.930Z
-Stopped at: Phase 1 execution complete — all 3 plans executed
-Resume file: None
+Last session: 2026-06-17T18:54:18.398Z
+Stopped at: Phase 2 context gathered
+Resume file: .planning/phases/02-main-app-photo-watermark-share/02-CONTEXT.md
