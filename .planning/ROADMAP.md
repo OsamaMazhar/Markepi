@@ -24,7 +24,12 @@ An iOS app for watermarking photos and videos, then sharing instantly without sa
   3. Photo processor applies white frame border with device model metadata (e.g., "Taken by: iPhone 16 Pro") overlaid on the frame
   4. Output photos retain all source EXIF, GPS, and metadata fields (verifiable via exiftool before/after comparison)
   5. Output photos preserve HDR gain maps and color profiles through the rendering pipeline with no unnecessary re-compression
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — WatermarkCore Swift Package skeleton + text watermark pipeline with full quality preservation (HDR, metadata, format)
+- [ ] 01-02-PLAN.md — PNG image/logo watermark rendering + all 9 position coverage + configurable padding + multi-layer compositing
+- [ ] 01-03-PLAN.md — White frame border rendering + device metadata text overlay ("Taken by: iPhone 16 Pro")
 
 ### Phase 2: Main App (Photo Watermark & Share)
 **Goal**: Users can import photos from their library, configure watermarks with real-time preview, and share immediately without saving to the camera roll
@@ -69,7 +74,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Engine & Photo Pipeline | 0/? | Not started | - |
+| 1. Core Engine & Photo Pipeline | 0/3 | Not started | - |
 | 2. Main App (Photo Watermark & Share) | 0/? | Not started | - |
 | 3. Video Processing & Share Extension | 0/? | Not started | - |
 | 4. Photos Edit Extension & Polish | 0/? | Not started | - |
