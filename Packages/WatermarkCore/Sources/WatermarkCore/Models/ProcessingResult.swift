@@ -7,6 +7,8 @@ import Foundation
 /// `url` or `data` is always non-nil.
 ///
 /// The `outputUTI` identifies the file format (e.g., "public.heic", "public.jpeg").
+/// The optional `videoValidation` field carries post-export quality inspection
+/// results for video processing (nil for photo processing).
 public struct ProcessingResult: Sendable {
     /// Temp file URL when output is written to disk (via TempFileManager)
     public let url: URL?
@@ -17,10 +19,21 @@ public struct ProcessingResult: Sendable {
     /// Output format UTI (from source or explicit override)
     public let outputUTI: String
 
-    public init(url: URL?, data: Data?, outputUTI: String) {
+    /// Optional video validation result (nil for photo processing).
+    /// Contains HDR preservation status, audio track count match,
+    /// and any warnings from post-export inspection.
+    public let videoValidation: ExportValidator.ExportValidationResult?
+
+    public init(
+        url: URL?,
+        data: Data?,
+        outputUTI: String,
+        videoValidation: ExportValidator.ExportValidationResult? = nil
+    ) {
         self.url = url
         self.data = data
         self.outputUTI = outputUTI
+        self.videoValidation = videoValidation
     }
 }
 

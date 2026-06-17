@@ -1,6 +1,8 @@
+import AVFoundation
 import CoreImage
 import Foundation
 import ImageIO
+import UniformTypeIdentifiers
 
 /// Actor-isolated photo watermarking engine (Pattern 3).
 ///
@@ -21,7 +23,37 @@ public actor WatermarkEngine {
     /// Shared CIContext with RGBAh + displayP3 configuration (Pitfall 4)
     private let context = CIContextProvider.shared
 
-    /// Processes a source photo and applies watermark configuration.
+    // MARK: - Media Type Detection
+
+    /// Detects whether a URL points to a photo, video, or unknown media type.
+    public enum MediaType: Sendable {
+        case photo
+        case video
+        case unknown
+    }
+
+    /// Detects the media type of a file URL by inspecting its UTI.
+    ///
+    /// - Parameter url: File URL to inspect
+    /// - Returns: `.photo`, `.video`, or `.unknown`
+    public static func mediaType(for url: URL) -> MediaType {
+        guard let uti = try? url.resourceValues(forKeys: [.typeIdentifierKey]).typeIdentifier,
+              let type = UTType(uti) else {
+            return .unknown
+        }
+
+        if type.conforms(to: .movie) || type.conforms(to: .audiovisualContent) {
+            return .video
+        }
+
+        if type.conforms(to: .image) {
+            return .photo
+        }
+
+        return .unknown
+    }
+
+    // MARK: - Photo Processing
     ///
     /// - Parameters:
     ///   - sourceURL: File URL to the source photo
@@ -75,6 +107,38 @@ public actor WatermarkEngine {
 
         // 6. Return result
         return ProcessingResult(url: outputURL, data: nil, outputUTI: loaded.sourceUTI)
+    }
+
+    /// Processes a video file, applying watermark via AVFoundation CALayer overlay.
+    ///
+    /// Delegates to `VideoProcessor.process(sourceURL:config:)` for the full
+    /// AVFoundation pipeline: load → compose → CALayer overlay → export → validate.
+    /// Returns a `ProcessingResult` with the output URL, source UTI, and
+    /// post-export validation data (HDR preservation, audio track count).
+    ///
+    /// - Parameters:
+    ///   - sourceURL: File URL to the source video
+    ///   - config: Watermark configuration (layers, frame, output format)
+    /// - Returns: `ProcessingResult` with the output file URL and video validation
+    /// - Throws: `PipelineError` for any pipeline stage failure
+    public func processVideo(
+        sourceURL: URL,
+        config: WatermarkConfiguration
+    ) async throws -> ProcessingResult {
+        let (outputURL, validation) = try await VideoProcessor.process(
+            sourceURL: sourceURL,
+            config: config
+        )
+
+        let sourceUTI = (try? sourceURL.resourceValues(forKeys: [.typeIdentifierKey]).typeIdentifier)
+            ?? "public.mpeg-4"
+
+        return ProcessingResult(
+            url: outputURL,
+            data: nil,
+            outputUTI: sourceUTI,
+            videoValidation: validation
+        )
     }
 
     /// Builds the Core Image filter graph for watermark compositing.
