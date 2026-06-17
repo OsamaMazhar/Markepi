@@ -911,24 +911,24 @@ func loadMediaFromProvider(_ provider: NSItemProvider) async throws -> MediaInpu
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Can CALayer overlay in AVVideoCompositionCoreAnimationTool preserve HDR metadata on all iOS 18 devices?**
+1. **Can CALayer overlay in AVVideoCompositionCoreAnimationTool preserve HDR metadata on all iOS 18 devices?** **RESOLVED:**
    - What we know: Research indicates CALayer renders in SDR color space by default. Explicit color properties on AVVideoComposition can help, but community reports are mixed on Dolby Vision preservation. AVAssetWriter with per-frame CIFilter compositing is the more reliable (but complex) alternative.
    - What's unclear: Whether setting CALayer color space + AVVideoComposition HDR properties together is sufficient for Dolby Vision 8.4 passthrough on device.
    - Recommendation: Implement the CALayer path first (per D-01). Test with actual Dolby Vision footage on device. If HDR is lost, implement D-10 fallback (SDR + tone mapping + warning). If fallback is unacceptable, consider AVAssetWriter + CIFilter per-frame as a v1.1 enhancement.
 
-2. **What is the exact App Group identifier for this project?**
+2. **What is the exact App Group identifier for this project?** **RESOLVED:**
    - What we know: The STACK.md and CONTEXT.md reference `group.com.[bundle].watermark`. The codebase uses placeholder.
    - What's unclear: The actual bundle identifier chosen for the project.
    - Recommendation: Confirm bundle identifier from Xcode project settings. Use `group.{bundleID}` as the App Group ID. Planner should add a task to configure this in both main app and extension targets.
 
-3. **How should multi-item sequential processing handle failures?**
+3. **How should multi-item sequential processing handle failures?** **RESOLVED:**
    - What we know: D-14 requires sequential processing with config reuse. The user configures watermark once, applies to each item.
    - What's unclear: If item 2 of 5 fails during export, should items 3-5 still process? Should the extension show a summary of successes/failures?
    - Recommendation: Continue processing remaining items on failure; show per-item status in a summary view after all items complete. Log failures. This is in the agent's discretion area.
 
-4. **Should the share extension's temp files use cachesDirectory or App Group container?**
+4. **Should the share extension's temp files use cachesDirectory or App Group container?** **RESOLVED:**
    - What we know: cachesDirectory is sandboxed to the extension; App Group container is shared with main app. The share extension produces output for immediate sharing (not for main app access).
    - What's unclear: Whether the main app needs access to watermarked files produced by the extension.
    - Recommendation: Use cachesDirectory for share extension output (matched to D-07 one-shot workflow). The main app doesn't need access — the share sheet handles distribution directly. Clean up after share sheet dismiss + 60s grace period.
