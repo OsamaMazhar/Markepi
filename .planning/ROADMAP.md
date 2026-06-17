@@ -6,7 +6,7 @@ An iOS app for watermarking photos and videos, then sharing instantly without sa
 
 ## Phases
 
-- [ ] **Phase 1: Core Engine & Photo Pipeline** — WatermarkCore foundation, photo rendering, and quality preservation
+- [x] **Phase 1: Core Engine & Photo Pipeline** — WatermarkCore foundation, photo rendering, and quality preservation (completed 2026-06-17)
 - [ ] **Phase 2: Main App (Photo Watermark & Share)** — Complete in-app photo workflow: import, configure, preview, share
 - [ ] **Phase 3: Video Processing & Share Extension** — Video watermarking pipeline and share sheet import
 - [ ] **Phase 4: Photos Edit Extension & Polish** — Photos app integration and comprehensive quality validation
@@ -40,7 +40,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 01-03-PLAN.md — White frame border rendering + device metadata text overlay ("Taken by: iPhone 16 Pro")
+- [x] 01-03-PLAN.md — White frame border rendering + device metadata text overlay ("Taken by: iPhone 16 Pro")
 
 ### Phase 2: Main App (Photo Watermark & Share)
 
@@ -94,7 +94,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Engine & Photo Pipeline | 2/3 | In Progress|  |
+| 1. Core Engine & Photo Pipeline | 3/3 | Complete   | 2026-06-17 |
 | 2. Main App (Photo Watermark & Share) | 0/? | Not started | - |
 | 3. Video Processing & Share Extension | 0/? | Not started | - |
 | 4. Photos Edit Extension & Polish | 0/? | Not started | - |

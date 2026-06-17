@@ -22,8 +22,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### White Frame (FRME)
 
-- [ ] **FRME-01**: User can apply a white frame border to photos and videos
-- [ ] **FRME-02**: User can overlay device metadata text (e.g., "Taken by: iPhone 16 Pro") on the white frame
+- [x] **FRME-01**: User can apply a white frame border to photos and videos
+- [x] **FRME-02**: User can overlay device metadata text (e.g., "Taken by: iPhone 16 Pro") on the white frame
 
 ### Sharing (SHAR)
 
@@ -79,8 +79,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | WMRK-02 | Phase 1 | Complete |
 | WMRK-03 | Phase 1 | Complete |
 | WMRK-04 | Phase 2 | Pending |
-| FRME-01 | Phase 1 | Pending |
-| FRME-02 | Phase 1 | Pending |
+| FRME-01 | Phase 1 | Complete |
+| FRME-02 | Phase 1 | Complete |
 | SHAR-01 | Phase 2 | Pending |
 | QUAL-01 | Phase 1 | Complete |
 | QUAL-02 | Phase 1 | Complete |
