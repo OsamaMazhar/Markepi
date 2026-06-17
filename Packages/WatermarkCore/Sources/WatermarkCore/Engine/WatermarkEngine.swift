@@ -16,6 +16,8 @@ import ImageIO
 /// `CIFilter` instances are NOT thread-safe and are created fresh per call.
 public actor WatermarkEngine {
 
+    public static let shared = WatermarkEngine()
+
     /// Shared CIContext with RGBAh + displayP3 configuration (Pitfall 4)
     private let context = CIContextProvider.shared
 
