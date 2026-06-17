@@ -1,3 +1,4 @@
+import CoreImage
 import Foundation
 import Observation
 import PhotosUI
@@ -32,13 +33,25 @@ final class ShareExtensionViewModel {
     /// Written to the extension's temp directory for sandbox isolation (T-03-02).
     var sourceURL: URL?
 
-    /// Whether the shared media is a video (always false for Plan 01 photos).
-    /// Gated by media type detection; will be true in Plan 03.
+    /// Whether the shared media is a video.
+    /// Gated by media type detection.
     var isVideo: Bool = false
 
     /// True while NSItemProvider is loading the shared media.
     /// Drives the loading spinner in the root view.
     var isLoadingMedia: Bool = true
+
+    // MARK: - Video Warning State
+
+    /// D-10: HDR could not be preserved in the output video.
+    /// Surfaced as a warning banner in the root view.
+    var showHDRWarning: Bool = false
+
+    /// Audio track count mismatch detected during export (informational).
+    var showAudioWarning: Bool = false
+
+    /// Detailed HDR warning text from ExportValidationResult.
+    var hdrWarningMessage: String?
 
     // MARK: - Preview State
 
@@ -103,6 +116,33 @@ final class ShareExtensionViewModel {
         self.config = AppGroupConfigSync.load() ?? defaultConfig
     }
 
+    // MARK: - Media Type Detection
+
+    /// Detected media type for the shared item.
+    enum MediaType {
+        case photo
+        case video
+        case unsupported
+    }
+
+    /// Detects the media type of an NSItemProvider by checking UTI conformance.
+    ///
+    /// Checks video FIRST (some video formats also match image UTIs).
+    /// Returns `.unsupported` if neither photo nor video UTIs match.
+    ///
+    /// - Parameter provider: The NSItemProvider from the extension context
+    /// - Returns: The detected media type
+    func detectMediaType(from provider: NSItemProvider) -> MediaType {
+        // Check video first — some video containers also conform to public.image
+        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+            return .video
+        }
+        if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+            return .photo
+        }
+        return .unsupported
+    }
+
     // MARK: - Media Loading (D-13)
 
     /// Loads shared photo data from an NSItemProvider into the extension sandbox.
@@ -113,13 +153,28 @@ final class ShareExtensionViewModel {
     ///
     /// - Parameter provider: The NSItemProvider from the share extension context
     func loadSharedMedia(from provider: NSItemProvider) async {
-        // T-03-01: Verify type conformance before loading
-        guard provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) else {
+        // Detect media type first (video BEFORE photo — some video containers also match image UTIs)
+        let mediaType = detectMediaType(from: provider)
+
+        switch mediaType {
+        case .video:
+            await loadVideoFromProvider(provider)
+        case .photo:
+            await loadPhotoFromProvider(provider)
+        case .unsupported:
             unsupportedType = true
             isLoadingMedia = false
-            return
         }
+    }
 
+    /// Loads shared photo data from an NSItemProvider into the extension sandbox.
+    ///
+    /// Handles both `URL` and `Data` return types from `loadItem`. Data is
+    /// immediately copied to a temp file in the extension sandbox to prevent
+    /// ephemeral URL expiry (Pitfall 5 — RESEARCH.md lines 593-598).
+    ///
+    /// - Parameter provider: The NSItemProvider from the share extension context
+    private func loadPhotoFromProvider(_ provider: NSItemProvider) async {
         do {
             let item = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<NSSecureCoding, Error>) in
                 provider.loadItem(forTypeIdentifier: UTType.image.identifier) { (item, error) in
@@ -166,15 +221,173 @@ final class ShareExtensionViewModel {
         }
     }
 
+    // MARK: - Video Loading (Pitfall 2 + Pitfall 5)
+
+    /// Loads a video from an NSItemProvider using `loadFileRepresentation`
+    /// for memory efficiency (Pitfall 2: ~120MB extension memory ceiling).
+    ///
+    /// The temp URL provided by `loadFileRepresentation` is ephemeral —
+    /// immediately copies to the extension sandbox (Pitfall 5).
+    ///
+    /// - Parameter provider: The NSItemProvider from the extension context
+    private func loadVideoFromProvider(_ provider: NSItemProvider) async {
+        do {
+            let url = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+                provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { url, error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    guard let url = url else {
+                        continuation.resume(throwing: PipelineError.invalidSource)
+                        return
+                    }
+                    // Pitfall 5: copy immediately — temp URL expires after this block
+                    let destURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("shared_video_\(UUID().uuidString).mp4")
+                    do {
+                        try FileManager.default.copyItem(at: url, to: destURL)
+                        continuation.resume(returning: destURL)
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+            }
+
+            sourceURL = url
+            isVideo = true
+            isLoadingMedia = false
+
+            // Generate static frame preview (D-03)
+            await generateVideoPreview()
+        } catch {
+            await setError("Failed to load video: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Video Preview Generation (D-03)
+
+    /// Generates a static frame preview for video content.
+    ///
+    /// Extracts the midpoint frame via `VideoFrameExtractor`, then applies
+    /// watermark layers using the Core Image compositing pipeline (same as the
+    /// photo preview path) for true WYSIWYG preview.
+    ///
+    /// No white frame is applied to preview — white frame compositing requires
+    /// knowledge of final frame dimensions which may differ in the export.
+    func generateVideoPreview() async {
+        guard let sourceURL = sourceURL, isVideo else { return }
+        isGeneratingPreview = true
+        defer { isGeneratingPreview = false }
+
+        // Debounce: wait 350ms to avoid rapid re-renders during config changes
+        try? await Task.sleep(for: .milliseconds(350))
+        guard !Task.isCancelled else { return }
+
+        // Extract midpoint frame
+        guard let frame = try? await VideoFrameExtractor.extract(from: sourceURL) else {
+            previewImage = nil
+            return
+        }
+
+        let frameUIImage = UIImage(cgImage: frame)
+
+        // If no watermark layers, use raw frame as preview
+        guard !config.watermarks.isEmpty else {
+            previewImage = frameUIImage
+            return
+        }
+
+        // Build CIImage watermark layers on static frame
+        guard let baseCIImage = CIImage(image: frameUIImage) else {
+            previewImage = frameUIImage
+            return
+        }
+
+        let extent = baseCIImage.extent
+        var layers: [(CIImage, CGPoint)] = []
+
+        for watermark in config.watermarks {
+            let watermarkImage: CIImage
+            switch watermark {
+            case .text(let textConfig, _, _):
+                watermarkImage = TextWatermarkRenderer.render(config: textConfig)
+            case .image(let imageConfig, _, _):
+                guard let rendered = try? ImageWatermarkRenderer.render(config: imageConfig) else { continue }
+                watermarkImage = rendered
+            }
+
+            let scaled = watermarkImage.transformed(
+                by: CGAffineTransform(scaleX: watermark.scale, y: watermark.scale)
+            )
+            let position = PositionCalculator.position(
+                for: watermark.position,
+                watermarkExtent: scaled.extent,
+                baseExtent: extent,
+                padding: config.padding
+            )
+            layers.append((scaled, position))
+        }
+
+        let composited = WatermarkRenderer.composite(layers: layers, onto: baseCIImage)
+
+        guard let cgImage = CIContextProvider.shared.createCGImage(
+            composited,
+            from: composited.extent
+        ) else {
+            previewImage = frameUIImage
+            return
+        }
+
+        previewImage = UIImage(cgImage: cgImage)
+    }
+
+    // MARK: - Video Rendering
+
+    /// Renders the watermarked video at full resolution via `VideoProcessor`,
+    /// checking post-export validation for HDR and audio warnings.
+    func renderAndShareVideo() async {
+        guard let sourceURL = sourceURL, isVideo else { return }
+        renderingState = .rendering
+
+        do {
+            let result = try await engine.processVideo(sourceURL: sourceURL, config: config)
+            fullResResult = result
+            renderingState = .done
+
+            // D-10: Check HDR preservation
+            if let validation = result.videoValidation {
+                if !validation.hdrPreserved {
+                    showHDRWarning = true
+                    hdrWarningMessage = validation.warnings.first(where: { $0.contains("HDR") })
+                }
+                if !validation.audioTrackCountMatch {
+                    showAudioWarning = true
+                }
+            }
+        } catch {
+            renderingState = .error(error)
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
     // MARK: - Preview Generation (D-03)
 
     /// Generates a debounced watermark preview for the loaded media.
     ///
-    /// Uses the same pattern as `WatermarkViewModel.generatePreview()`:
-    /// 350ms debounce, Task.isCancelled guard, engine.process call,
-    /// result loaded into UIImage for display.
+    /// Branches by media type: video uses `generateVideoPreview()` for static
+    /// frame extraction + CIImage watermark compositing. Photo uses
+    /// `engine.process()` for full photo pipeline preview.
     func generatePreview() async {
-        guard !isGeneratingPreview, let sourceURL = sourceURL else { return }
+        guard !isGeneratingPreview, sourceURL != nil else { return }
+
+        if isVideo {
+            await generateVideoPreview()
+            return
+        }
+
+        guard let sourceURL = sourceURL else { return }
         isGeneratingPreview = true
         defer { isGeneratingPreview = false }
 
@@ -195,10 +408,14 @@ final class ShareExtensionViewModel {
 
     /// Renders the watermarked output at full resolution, preparing for sharing.
     ///
-    /// Mirrors `WatermarkViewModel.renderAndPrepareShare()`:
-    /// sets `.rendering` state, calls engine.process, sets `.done` on success
-    /// or `.error` on failure.
+    /// Branches by media type: video uses `renderAndShareVideo()` which delegates
+    /// to `engine.processVideo()`. Photo uses `engine.process()`.
     func renderAndPrepareShare() async {
+        if isVideo {
+            await renderAndShareVideo()
+            return
+        }
+
         guard let sourceURL = sourceURL else { return }
         renderingState = .rendering
 
