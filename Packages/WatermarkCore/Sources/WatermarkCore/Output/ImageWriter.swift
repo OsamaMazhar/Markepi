@@ -12,9 +12,13 @@ public struct ImageWriter {
 
     /// Writes a CGImage to a file URL with metadata and optional HDR gain map.
     ///
+    /// Uses `CGImageDestinationAddImage` (NOT `AddImageFromSource`) with the
+    /// preserved metadata dictionary. Re-attaches HDR gain map via
+    /// `CGImageDestinationAddAuxiliaryDataInfo` when available (Pitfall 1 prevention).
+    ///
     /// - Parameters:
     ///   - cgImage: The rendered CGImage to write
-    ///   - metadata: Full metadata dictionary (with String keys)
+    ///   - metadata: Full metadata dictionary (with String keys, converted back to CFString for output)
     ///   - gainMapAuxData: Optional HDR gain map auxiliary data (with String keys)
     ///   - sourceUTI: Source format UTI as String (e.g., "public.heic")
     ///   - url: Output file URL
@@ -26,13 +30,32 @@ public struct ImageWriter {
         sourceUTI: String,
         to url: URL
     ) throws {
-        // STUB — RED phase: throws, tests will fail
-        throw PipelineError.failedToCreateDestination
+        guard let destination = CGImageDestinationCreateWithURL(
+            url as CFURL, sourceUTI as CFString, 1, nil
+        ) else {
+            throw PipelineError.failedToCreateDestination
+        }
+
+        // Re-attach metadata (Pattern 2)
+        CGImageDestinationAddImage(destination, cgImage, metadata as CFDictionary)
+
+        // Re-attach HDR gain map if present (Pitfall 1 prevention)
+        if let gainMap = gainMapAuxData {
+            CGImageDestinationAddAuxiliaryDataInfo(
+                destination,
+                kCGImageAuxiliaryDataTypeHDRGainMap,
+                gainMap as CFDictionary
+            )
+        }
+
+        guard CGImageDestinationFinalize(destination) else {
+            throw PipelineError.failedToFinalize
+        }
     }
 
     /// Writes a CGImage to an in-memory Data buffer with metadata and optional HDR gain map.
     ///
-    /// - Parameters same as above, but output is `Data` instead of a file URL
+    /// - Parameters same as the file URL variant, but output is `Data` instead of a file URL
     /// - Returns: Encoded image data
     /// - Throws: Same as the URL variant
     public static func write(
@@ -41,7 +64,27 @@ public struct ImageWriter {
         gainMapAuxData: [String: Any]?,
         sourceUTI: String
     ) throws -> Data {
-        // STUB — RED phase: throws, tests will fail
-        throw PipelineError.failedToCreateDestination
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data, sourceUTI as CFString, 1, nil
+        ) else {
+            throw PipelineError.failedToCreateDestination
+        }
+
+        CGImageDestinationAddImage(destination, cgImage, metadata as CFDictionary)
+
+        if let gainMap = gainMapAuxData {
+            CGImageDestinationAddAuxiliaryDataInfo(
+                destination,
+                kCGImageAuxiliaryDataTypeHDRGainMap,
+                gainMap as CFDictionary
+            )
+        }
+
+        guard CGImageDestinationFinalize(destination) else {
+            throw PipelineError.failedToFinalize
+        }
+
+        return data as Data
     }
 }

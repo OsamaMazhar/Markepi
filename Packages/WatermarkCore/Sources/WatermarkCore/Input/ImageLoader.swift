@@ -8,6 +8,7 @@ import Foundation
 /// Uses CGImageSource for metadata extraction and CIImage for pixel data,
 /// following Pattern 2 (CGImageSource → CGImageDestination metadata pipeline).
 /// Never uses UIImage in the processing path.
+@available(macOS 11.0, *)
 public struct ImageLoader {
 
     /// Result of loading an image — contains the CIImage and all extracted metadata.
@@ -15,7 +16,7 @@ public struct ImageLoader {
         /// The loaded CIImage with HDR and gain map options enabled
         public let ciImage: CIImage
 
-        /// Full metadata dictionary (EXIF, GPS, TIFF, IPTC, etc.)
+        /// Full metadata dictionary (EXIF, GPS, TIFF, IPTC, etc.) with String keys
         public let metadata: [String: Any]
 
         /// HDR gain map auxiliary data (nil if no gain map)
@@ -28,6 +29,12 @@ public struct ImageLoader {
         public let sourceUTI: String
     }
 
+    /// Maximum file size in bytes (500 MB) — security validation per T-01-01
+    private static let maxFileSize: Int64 = 500_000_000
+
+    /// Maximum pixel count (100 MP) — security validation per T-01-01
+    private static let maxMegapixels: Int = 100
+
     /// Loads an image from a file URL with full metadata and HDR extraction.
     ///
     /// Performs security validation: file size ≤ 500MB, pixel count ≤ 100MP.
@@ -36,7 +43,83 @@ public struct ImageLoader {
     /// - Returns: `LoadedImage` with CIImage, metadata, and format info
     /// - Throws: `PipelineError` for invalid source, oversized images, or format issues
     public static func load(from url: URL) throws -> LoadedImage {
-        // STUB — RED phase: throw not implemented, tests will fail
-        throw PipelineError.invalidSource
+        // Security: validate file exists and size (T-01-01)
+        let fileAttributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let fileSize = (fileAttributes?[.size] as? Int64) ?? 0
+        guard fileSize > 0 else {
+            throw PipelineError.invalidSource
+        }
+        guard fileSize <= maxFileSize else {
+            throw PipelineError.dataTooLarge
+        }
+
+        // Create CGImageSource
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+            throw PipelineError.invalidSource
+        }
+        guard CGImageSourceGetCount(source) > 0 else {
+            throw PipelineError.invalidImageData
+        }
+
+        // Security: validate pixel dimensions (T-01-01)
+        let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
+        let width = (props[kCGImagePropertyPixelWidth] as? Int) ?? 0
+        let height = (props[kCGImagePropertyPixelHeight] as? Int) ?? 0
+        let megapixels = (width * height) / 1_000_000
+        guard megapixels <= maxMegapixels else {
+            throw PipelineError.imageTooLarge
+        }
+
+        // Extract metadata dictionary BEFORE any CIImage creation (Pattern 2)
+        let metadata = convertCFDictionary(props)
+
+        // Extract HDR gain map auxiliary data (Pitfall 1 prevention)
+        let gainMapAuxData: [String: Any]? = {
+            if let auxData = CGImageSourceCopyAuxiliaryDataInfoAtIndex(
+                source, 0, kCGImageAuxiliaryDataTypeHDRGainMap
+            ) as? [CFString: Any] {
+                return convertCFDictionary(auxData)
+            }
+            return nil
+        }()
+
+        // Extract color space from profile name
+        let colorSpace: CGColorSpace? = {
+            guard let profileName = props[kCGImagePropertyProfileName] as? String else {
+                return nil
+            }
+            return CGColorSpace(name: profileName as CFString)
+        }()
+
+        // Detect source UTI via FormatDetector
+        let (_, sourceUTI) = try FormatDetector.detect(from: source)
+        let sourceUTIString = sourceUTI as String
+
+        // Create CIImage with HDR options (Pitfall 1 prevention)
+        let options: [CIImageOption: Any] = [
+            .expandToHDR: true,
+            .auxiliaryHDRGainMap: true,
+            .applyOrientationProperty: true,
+        ]
+        guard let ciImage = CIImage(contentsOf: url, options: options) else {
+            throw PipelineError.failedToCreateCIImage
+        }
+
+        return LoadedImage(
+            ciImage: ciImage,
+            metadata: metadata,
+            gainMapAuxData: gainMapAuxData,
+            colorSpace: colorSpace,
+            sourceUTI: sourceUTIString
+        )
+    }
+
+    /// Converts a [CFString: Any] dictionary to [String: Any] for Sendable conformance.
+    private static func convertCFDictionary(_ dict: [CFString: Any]) -> [String: Any] {
+        var result: [String: Any] = [:]
+        for (key, value) in dict {
+            result[key as String] = value
+        }
+        return result
     }
 }

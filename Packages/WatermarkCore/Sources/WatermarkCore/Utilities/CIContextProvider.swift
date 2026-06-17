@@ -13,9 +13,11 @@ public struct CIContextProvider {
     ///
     /// - workingFormat: `.RGBAh` — 16-bit float for HDR preservation
     /// - workingColorSpace: `displayP3` — wide gamut color space
-    /// - allowsLowPrecision: `false` — full precision for quality output
     public static let shared: CIContext = {
-        // STUB — RED phase: bare default CIContext, will add HDR config in GREEN
-        return CIContext()
+        let colorSpace = CGColorSpace(name: CGColorSpace.displayP3)
+        return CIContext(options: [
+            .workingColorSpace: colorSpace as Any,
+            .workingFormat: CIFormat.RGBAh,
+        ])
     }()
 }

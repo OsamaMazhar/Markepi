@@ -11,10 +11,13 @@ public struct OrientationNormalizer {
 
     /// Normalizes a CIImage's orientation to `.up`.
     ///
+    /// Uses `CIImage.oriented(.up)` which handles all 8 EXIF orientation cases
+    /// correctly. The returned image has its coordinate system aligned with the
+    /// visual display orientation.
+    ///
     /// - Parameter image: The source CIImage (may have any EXIF orientation)
     /// - Returns: A new CIImage with orientation set to `.up`
     public static func normalize(_ image: CIImage) -> CIImage {
-        // STUB — RED phase: returns identity (no normalization)
-        return image
+        return image.oriented(.up)
     }
 }
