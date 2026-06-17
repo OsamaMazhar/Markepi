@@ -42,12 +42,13 @@ public struct VideoProcessor {
     /// - Parameters:
     ///   - sourceURL: File URL to the source video
     ///   - config: Watermark configuration (layers, position, scale, white frame)
-    /// - Returns: URL to the watermarked output temp file
+    /// - Returns: A tuple containing the output temp file URL and the post-export
+    ///   validation result for surfacing HDR/audio warnings to the caller
     /// - Throws: `PipelineError` for any pipeline stage failure
     public static func process(
         sourceURL: URL,
         config: WatermarkConfiguration
-    ) async throws -> URL {
+    ) async throws -> (outputURL: URL, validation: ExportValidator.ExportValidationResult) {
         let asset = AVURLAsset(url: sourceURL)
 
         // Step 1: Load duration and validate video track
@@ -207,8 +208,8 @@ public struct VideoProcessor {
             os_log(.default, "WatermarkCore VideoProcessor: Audio track count mismatch in output")
         }
 
-        // Step 8: Return output URL
-        return outputURL
+        // Step 8: Return output URL with validation result
+        return (outputURL, validationResult)
     }
 
     // MARK: - HDR Color Property Extraction
