@@ -15,7 +15,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Watermark (WMRK)
 
-- [ ] **WMRK-01**: User can add custom text watermarks with font, size, color, and opacity controls
+- [x] **WMRK-01**: User can add custom text watermarks with font, size, color, and opacity controls
 - [ ] **WMRK-02**: User can import and overlay image/logo watermarks with resize and opacity controls
 - [ ] **WMRK-03**: User can place watermarks in 8 preset positions (4 corners, 4 edges, center)
 - [ ] **WMRK-04**: User can see a real-time preview of the watermarked result before sharing
@@ -31,9 +31,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Quality Preservation (QUAL)
 
-- [ ] **QUAL-01**: All EXIF and metadata from the source media is preserved in the watermarked output
-- [ ] **QUAL-02**: HDR (gain maps, color profiles) is preserved in photo output
-- [ ] **QUAL-03**: Original image and video quality is preserved (no unnecessary re-compression)
+- [x] **QUAL-01**: All EXIF and metadata from the source media is preserved in the watermarked output
+- [x] **QUAL-02**: HDR (gain maps, color profiles) is preserved in photo output
+- [x] **QUAL-03**: Original image and video quality is preserved (no unnecessary re-compression)
 - [ ] **QUAL-04**: Video watermarking preserves HDR, color space, and audio tracks in output
 
 ## v2 Requirements
@@ -75,16 +75,16 @@ Deferred to future release. Tracked but not in current roadmap.
 | MEDI-01 | Phase 2 | Pending |
 | MEDI-02 | Phase 3 | Pending |
 | MEDI-03 | Phase 4 | Pending |
-| WMRK-01 | Phase 1 | Pending |
+| WMRK-01 | Phase 1 | Complete |
 | WMRK-02 | Phase 1 | Pending |
 | WMRK-03 | Phase 1 | Pending |
 | WMRK-04 | Phase 2 | Pending |
 | FRME-01 | Phase 1 | Pending |
 | FRME-02 | Phase 1 | Pending |
 | SHAR-01 | Phase 2 | Pending |
-| QUAL-01 | Phase 1 | Pending |
-| QUAL-02 | Phase 1 | Pending |
-| QUAL-03 | Phase 1 | Pending |
+| QUAL-01 | Phase 1 | Complete |
+| QUAL-02 | Phase 1 | Complete |
+| QUAL-03 | Phase 1 | Complete |
 | QUAL-04 | Phase 3 | Pending |
 
 **Coverage:**

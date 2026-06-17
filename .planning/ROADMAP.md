@@ -32,7 +32,7 @@ An iOS app for watermarking photos and videos, then sharing instantly without sa
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — WatermarkCore Swift Package skeleton + text watermark pipeline with full quality preservation (HDR, metadata, format)
+- [x] 01-01-PLAN.md — WatermarkCore Swift Package skeleton + text watermark pipeline with full quality preservation (HDR, metadata, format)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -94,7 +94,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Engine & Photo Pipeline | 0/3 | Not started | - |
+| 1. Core Engine & Photo Pipeline | 1/3 | In Progress|  |
 | 2. Main App (Photo Watermark & Share) | 0/? | Not started | - |
 | 3. Video Processing & Share Extension | 0/? | Not started | - |
 | 4. Photos Edit Extension & Polish | 0/? | Not started | - |
