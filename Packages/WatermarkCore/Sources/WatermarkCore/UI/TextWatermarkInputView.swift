@@ -1,10 +1,18 @@
 import SwiftUI
 import WatermarkCore
 
-struct TextWatermarkInputView: View {
-    @Bindable var viewModel: WatermarkViewModel
+/// Text watermark input view — editable text field bound to the first watermark layer.
+///
+/// Generic over any `WatermarkConfigurable & Observable` ViewModel so both
+/// the main app and share extension can reuse it without code duplication.
+public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observable>: View {
+    @Bindable var viewModel: ViewModel
 
-    var body: some View {
+    public init(viewModel: ViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Watermark Text")
                 .font(.title3.weight(.semibold))
@@ -26,8 +34,6 @@ struct TextWatermarkInputView: View {
                     .stroke(Color(.separator))
             )
         }
-        .opacity(viewModel.currentPhoto == nil ? 0.4 : 1.0)
-        .disabled(viewModel.currentPhoto == nil)
         .onChange(of: currentText) { _, newValue in
             if newValue.count > 500 {
                 textBinding.wrappedValue = String(newValue.prefix(500))

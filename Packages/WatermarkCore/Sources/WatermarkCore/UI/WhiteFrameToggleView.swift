@@ -1,9 +1,17 @@
 import SwiftUI
+import WatermarkCore
 
-struct WhiteFrameToggleView: View {
-    @Bindable var viewModel: WatermarkViewModel
+/// Toggle switch for enabling/disabling the white frame overlay.
+///
+/// Generic over any `WatermarkConfigurable & Observable` ViewModel.
+public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable>: View {
+    @Bindable var viewModel: ViewModel
 
-    var body: some View {
+    public init(viewModel: ViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: Binding(
                 get: { viewModel.whiteFrameEnabled },
@@ -17,8 +25,6 @@ struct WhiteFrameToggleView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .opacity(viewModel.currentPhoto == nil ? 0.4 : 1.0)
-        .disabled(viewModel.currentPhoto == nil)
         .accessibilityLabel("White frame")
         .accessibilityHint("Add a white border with device model text to your photo")
     }

@@ -1,10 +1,17 @@
 import SwiftUI
 import WatermarkCore
 
-struct LayerListView: View {
-    @Bindable var viewModel: WatermarkViewModel
+/// Displays all watermark layers with selection and removal capability.
+///
+/// Generic over any `WatermarkConfigurable & Observable` ViewModel.
+public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View {
+    @Bindable var viewModel: ViewModel
 
-    var body: some View {
+    public init(viewModel: ViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
         if viewModel.config.watermarks.isEmpty { EmptyView() }
         else {
             VStack(alignment: .leading, spacing: 8) {

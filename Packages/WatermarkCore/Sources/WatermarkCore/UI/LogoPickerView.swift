@@ -4,14 +4,21 @@ import SwiftUI
 import UniformTypeIdentifiers
 import WatermarkCore
 
-struct LogoPickerView: View {
-    @Bindable var viewModel: WatermarkViewModel
+/// Logo/image watermark picker with Photos library and Files app support.
+///
+/// Generic over any `WatermarkConfigurable & Observable` ViewModel.
+public struct LogoPickerView<ViewModel: WatermarkConfigurable & Observable>: View {
+    @Bindable var viewModel: ViewModel
     @State private var showConfirmationDialog = false
     @State private var showPhotosPicker = false
     @State private var showFileImporter = false
     @State private var logoPickerItems: [PhotosPickerItem] = []
 
-    var body: some View {
+    public init(viewModel: ViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Logo Watermark")
                 .font(.title3.weight(.semibold))
@@ -22,8 +29,6 @@ struct LogoPickerView: View {
                 addLogoButton
             }
         }
-        .opacity(viewModel.currentPhoto == nil ? 0.4 : 1.0)
-        .disabled(viewModel.currentPhoto == nil)
         .confirmationDialog("Add Logo Watermark", isPresented: $showConfirmationDialog) {
             Button("From Photos") {
                 showPhotosPicker = true

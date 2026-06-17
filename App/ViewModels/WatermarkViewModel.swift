@@ -7,7 +7,7 @@ import UIKit
 import WatermarkCore
 
 @Observable @MainActor
-final class WatermarkViewModel {
+final class WatermarkViewModel: WatermarkConfigurable {
     var selectedItems: [PhotosPickerItem] = []
     var photos: [PhotoItem] = []
     var currentIndex: Int = 0

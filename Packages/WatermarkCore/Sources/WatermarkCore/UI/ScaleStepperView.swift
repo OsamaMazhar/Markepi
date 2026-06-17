@@ -1,8 +1,15 @@
 import SwiftUI
 import WatermarkCore
 
-struct ScaleStepperView: View {
-    @Bindable var viewModel: WatermarkViewModel
+/// Scale stepper control for adjusting watermark size.
+///
+/// Generic over any `WatermarkConfigurable & Observable` ViewModel.
+public struct ScaleStepperView<ViewModel: WatermarkConfigurable & Observable>: View {
+    @Bindable var viewModel: ViewModel
+
+    public init(viewModel: ViewModel) {
+        self.viewModel = viewModel
+    }
 
     private var layerIndex: Int {
         let idx = viewModel.activeLayerIndex
@@ -10,7 +17,7 @@ struct ScaleStepperView: View {
         return idx
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Scale")
                 .font(.title3.weight(.semibold))
@@ -31,8 +38,6 @@ struct ScaleStepperView: View {
                 .labelsHidden()
             }
         }
-        .opacity(viewModel.currentPhoto == nil ? 0.4 : 1.0)
-        .disabled(viewModel.currentPhoto == nil)
         .accessibilityLabel("Watermark scale")
         .accessibilityHint("Adjust watermark size. Current value: \(Int(currentScale * 100)) percent")
     }

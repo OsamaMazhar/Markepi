@@ -1,8 +1,15 @@
 import SwiftUI
 import WatermarkCore
 
-struct PositionGridView: View {
-    @Bindable var viewModel: WatermarkViewModel
+/// 9-position grid picker for watermark placement.
+///
+/// Generic over any `WatermarkConfigurable & Observable` ViewModel.
+public struct PositionGridView<ViewModel: WatermarkConfigurable & Observable>: View {
+    @Bindable var viewModel: ViewModel
+
+    public init(viewModel: ViewModel) {
+        self.viewModel = viewModel
+    }
 
     private let columns = [
         GridItem(.flexible()),
@@ -28,7 +35,7 @@ struct PositionGridView: View {
         return idx
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Position")
                 .font(.title3.weight(.semibold))
@@ -60,8 +67,6 @@ struct PositionGridView: View {
                 }
             }
         }
-        .opacity(viewModel.currentPhoto == nil ? 0.4 : 1.0)
-        .disabled(viewModel.currentPhoto == nil)
     }
 
     private var currentPosition: WatermarkPosition? {

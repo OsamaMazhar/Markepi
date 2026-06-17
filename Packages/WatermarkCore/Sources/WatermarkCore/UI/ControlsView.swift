@@ -1,10 +1,23 @@
 import SwiftUI
+import WatermarkCore
 
-struct ControlsView: View {
-    @Bindable var viewModel: WatermarkViewModel
+/// Composite view combining all watermarking controls: text input, position
+/// grid, scale stepper, logo picker, white frame toggle, and layer list.
+///
+/// Generic over any `WatermarkConfigurable & Observable` ViewModel so both
+/// the main app and share extension can reuse it with their own ViewModels.
+///
+/// Includes the Share/Render button which adapts to the ViewModel's
+/// `renderingState` (idle/rendering/done/error).
+public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View {
+    @State var viewModel: ViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
+    public init(viewModel: ViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 20) {
                 TextWatermarkInputView(viewModel: viewModel)
@@ -40,8 +53,6 @@ struct ControlsView: View {
                     .frame(height: 50)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(viewModel.currentPhoto == nil)
-                .opacity(viewModel.currentPhoto == nil ? 0.4 : 1.0)
 
             case .rendering:
                 HStack(spacing: 8) {
@@ -71,22 +82,20 @@ struct ControlsView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.green)
-                .scaleEffect(viewModel.renderingState == .done && !reduceMotion ? 1.0 : 1.0)
 
             case .error:
                 Button {
                     Task { await viewModel.renderAndPrepareShare() }
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "square.and.arrow.up")
-                        Text("Share")
+                        Image(systemName: "arrow.clockwise")
+                        Text("Retry")
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(viewModel.currentPhoto == nil)
-                .opacity(viewModel.currentPhoto == nil ? 0.4 : 1.0)
+                .buttonStyle(.bordered)
+                .tint(.orange)
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.renderingState)
