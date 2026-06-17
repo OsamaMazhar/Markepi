@@ -20,6 +20,9 @@
 		00B /* ThumbnailStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10B; };
 		00C /* WatermarkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10C; };
 		00D /* WatermarkViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D; };
+		00F /* LogoPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10F; };
+		010 /* LayerListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110; };
+		011 /* WhiteFrameToggleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111; };
 		00E /* WatermarkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 30E; };
 /* End PBXBuildFile section */
 
@@ -38,6 +41,9 @@
 		10B /* ThumbnailStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailStripView.swift; sourceTree = "<group>"; };
 		10C /* WatermarkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkApp.swift; sourceTree = "<group>"; };
 		10D /* WatermarkViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkViewModel.swift; sourceTree = "<group>"; };
+		10F /* LogoPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogoPickerView.swift; sourceTree = "<group>"; };
+		110 /* LayerListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerListView.swift; sourceTree = "<group>"; };
+		111 /* WhiteFrameToggleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhiteFrameToggleView.swift; sourceTree = "<group>"; };
 		10E /* WatermarkApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatermarkApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		20E /* WatermarkCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = WatermarkCore; path = Packages/WatermarkCore; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -134,6 +140,9 @@
 				10A /* TextWatermarkInputView.swift */,
 				106 /* PositionGridView.swift */,
 				108 /* ScaleStepperView.swift */,
+				10F /* LogoPickerView.swift */,
+				110 /* LayerListView.swift */,
+				111 /* WhiteFrameToggleView.swift */,
 			);
 			path = Controls;
 			sourceTree = "<group>";
@@ -251,6 +260,9 @@
 				00B /* ThumbnailStripView.swift in Sources */,
 				00C /* WatermarkApp.swift in Sources */,
 				00D /* WatermarkViewModel.swift in Sources */,
+				00F /* LogoPickerView.swift in Sources */,
+				010 /* LayerListView.swift in Sources */,
+				011 /* WhiteFrameToggleView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

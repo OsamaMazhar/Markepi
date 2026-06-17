@@ -9,6 +9,9 @@ struct ControlsView: View {
                 TextWatermarkInputView(viewModel: viewModel)
                 PositionGridView(viewModel: viewModel)
                 ScaleStepperView(viewModel: viewModel)
+                LogoPickerView(viewModel: viewModel)
+                WhiteFrameToggleView(viewModel: viewModel)
+                LayerListView(viewModel: viewModel)
 
                 Divider()
                     .padding(.vertical, 4)

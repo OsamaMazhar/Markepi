@@ -30,6 +30,8 @@ final class WatermarkViewModel {
     var errorMessage: String?
     var showError: Bool = false
 
+    var activeLayerIndex: Int = 0
+
     private let engine = WatermarkEngine.shared
 
     var currentPhoto: PhotoItem? {
@@ -40,21 +42,11 @@ final class WatermarkViewModel {
     var hasMultiplePhotos: Bool { photos.count > 1 }
 
     var previewIdentifier: String {
-        let textLayer = config.watermarks.first
-        let text: String
-        let position: String
-        let scale: String
-        if case .text(let input, let pos, let scl) = textLayer {
-            text = input.text
-            position = pos.rawValue
-            scale = String(format: "%.2f", scl)
-        } else {
-            text = ""
-            position = WatermarkPosition.bottomRight.rawValue
-            scale = "0.15"
-        }
+        let imageCount = config.watermarks.filter {
+            if case .image = $0 { return true }; return false
+        }.count
         let wf = config.whiteFrame?.isEnabled == true ? "1" : "0"
-        return "\(currentIndex)-t:\(text)-pos:\(position)-s:\(scale)-wf:\(wf)"
+        return "\(currentIndex)-layers:\(config.watermarks.count)-im:\(imageCount)-wf:\(wf)"
     }
 
     func handleSelection(_ items: [PhotosPickerItem]) {
@@ -146,6 +138,64 @@ final class WatermarkViewModel {
         fullResResult = nil
         renderingState = .idle
         showPicker = true
+    }
+
+    func addLogoLayer(pngData: Data) {
+        guard let _ = CIImage(data: pngData) else {
+            errorMessage = "The selected image is not a valid PNG file."
+            showError = true
+            return
+        }
+        guard let input = try? ImageWatermarkInput(pngData: pngData) else {
+            errorMessage = "The selected image is not a valid PNG file."
+            showError = true
+            return
+        }
+        config.watermarks.append(.image(input, position: .bottomRight, scale: 0.15))
+        activeLayerIndex = config.watermarks.count - 1
+    }
+
+    func removeLayer(at index: Int) {
+        guard index >= 0, index < config.watermarks.count else { return }
+        config.watermarks.remove(at: index)
+        if activeLayerIndex >= config.watermarks.count {
+            activeLayerIndex = max(0, config.watermarks.count - 1)
+        }
+    }
+
+    func updateLayerPosition(at index: Int, position: WatermarkPosition) {
+        guard index >= 0, index < config.watermarks.count else { return }
+        let scale = config.watermarks[index].scale
+        switch config.watermarks[index] {
+        case .text(let input, _, _):
+            config.watermarks[index] = .text(input, position: position, scale: scale)
+        case .image(let input, _, _):
+            config.watermarks[index] = .image(input, position: position, scale: scale)
+        }
+    }
+
+    func updateLayerScale(at index: Int, scale scaleInput: CGFloat) {
+        guard index >= 0, index < config.watermarks.count else { return }
+        let clamped = min(max(scaleInput, 0.01), 0.90)
+        let position = config.watermarks[index].position
+        switch config.watermarks[index] {
+        case .text(let input, _, _):
+            config.watermarks[index] = .text(input, position: position, scale: clamped)
+        case .image(let input, _, _):
+            config.watermarks[index] = .image(input, position: position, scale: clamped)
+        }
+    }
+
+    func toggleWhiteFrame() {
+        if config.whiteFrame?.isEnabled == true {
+            config.whiteFrame = nil
+        } else {
+            config.whiteFrame = WhiteFrameConfig(isEnabled: true)
+        }
+    }
+
+    var whiteFrameEnabled: Bool {
+        config.whiteFrame?.isEnabled ?? false
     }
 
     private func copyToTemp(data: Data) async -> URL {

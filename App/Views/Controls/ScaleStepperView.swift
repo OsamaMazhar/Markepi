@@ -4,6 +4,12 @@ import WatermarkCore
 struct ScaleStepperView: View {
     @Bindable var viewModel: WatermarkViewModel
 
+    private var layerIndex: Int {
+        let idx = viewModel.activeLayerIndex
+        guard idx >= 0, idx < viewModel.config.watermarks.count else { return 0 }
+        return idx
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Scale")
@@ -27,29 +33,19 @@ struct ScaleStepperView: View {
         }
         .opacity(viewModel.currentPhoto == nil ? 0.4 : 1.0)
         .disabled(viewModel.currentPhoto == nil)
+        .accessibilityLabel("Watermark scale")
+        .accessibilityHint("Adjust watermark size. Current value: \(Int(currentScale * 100)) percent")
     }
 
     private var currentScale: CGFloat {
-        guard let layer = viewModel.config.watermarks.first else { return 0.15 }
-        switch layer {
-        case .text(_, _, let scale): return scale
-        case .image(_, _, let scale): return scale
-        }
+        guard let layer = viewModel.config.watermarks[safe: layerIndex] else { return 0.15 }
+        return layer.scale
     }
 
     private var scaleBinding: Binding<CGFloat> {
         Binding(
             get: { currentScale },
-            set: { newValue in
-                guard var layer = viewModel.config.watermarks.first else { return }
-                let clamped = min(max(newValue, 0.01), 0.90)
-                switch layer {
-                case .text(let input, let position, _):
-                    viewModel.config.watermarks[0] = .text(input, position: position, scale: clamped)
-                case .image(let input, let position, _):
-                    viewModel.config.watermarks[0] = .image(input, position: position, scale: clamped)
-                }
-            }
+            set: { viewModel.updateLayerScale(at: layerIndex, scale: $0) }
         )
     }
 }

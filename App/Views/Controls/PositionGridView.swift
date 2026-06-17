@@ -22,6 +22,12 @@ struct PositionGridView: View {
         (.bottomRight, "BR", "Bottom Right")
     ]
 
+    private var layerIndex: Int {
+        let idx = viewModel.activeLayerIndex
+        guard idx >= 0, idx < viewModel.config.watermarks.count else { return 0 }
+        return idx
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Position")
@@ -30,7 +36,7 @@ struct PositionGridView: View {
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(positions, id: \.0.rawValue) { position, label, fullName in
                     Button {
-                        setPosition(position)
+                        viewModel.updateLayerPosition(at: layerIndex, position: position)
                     } label: {
                         ZStack {
                             if currentPosition == position {
@@ -49,7 +55,8 @@ struct PositionGridView: View {
                         }
                         .frame(width: 40, height: 40)
                     }
-                    .accessibilityLabel(fullName)
+                    .accessibilityLabel("Position: \(fullName)")
+                    .accessibilityHint("Double tap to place watermark at \(fullName.lowercased())")
                 }
             }
         }
@@ -58,20 +65,13 @@ struct PositionGridView: View {
     }
 
     private var currentPosition: WatermarkPosition? {
-        guard let layer = viewModel.config.watermarks.first else { return nil }
-        switch layer {
-        case .text(_, let position, _): return position
-        case .image(_, let position, _): return position
-        }
+        guard let layer = viewModel.config.watermarks[safe: layerIndex] else { return nil }
+        return layer.position
     }
+}
 
-    private func setPosition(_ position: WatermarkPosition) {
-        guard var layer = viewModel.config.watermarks.first else { return }
-        switch layer {
-        case .text(let input, _, let scale):
-            viewModel.config.watermarks[0] = .text(input, position: position, scale: scale)
-        case .image(let input, _, let scale):
-            viewModel.config.watermarks[0] = .image(input, position: position, scale: scale)
-        }
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
