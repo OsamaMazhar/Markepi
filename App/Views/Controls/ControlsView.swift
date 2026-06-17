@@ -6,11 +6,10 @@ struct ControlsView: View {
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Controls")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
+                TextWatermarkInputView(viewModel: viewModel)
+                PositionGridView(viewModel: viewModel)
+                ScaleStepperView(viewModel: viewModel)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.bottom, 20)
         }
