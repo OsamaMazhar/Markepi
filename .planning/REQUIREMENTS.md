@@ -69,16 +69,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TRACE-01 | — | Pending |
-| TRACE-02 | — | Pending |
-| REFA-01 | — | Pending |
-| PHDR-01 | — | Pending |
-| BUILD-01 | — | Pending |
+| TRACE-01 | Phase 8 | Pending |
+| TRACE-02 | Phase 8 | Pending |
+| REFA-01 | Phase 10 | Pending |
+| PHDR-01 | Phase 11 | Pending |
+| BUILD-01 | Phase 9 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 5 total
-- Mapped to phases: 0
-- Unmapped: 5 ⚠️ (pending roadmap creation)
+- Mapped to phases: 5 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-18*
