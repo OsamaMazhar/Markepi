@@ -162,6 +162,9 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
 
         self.isLoadingMedia = false
 
+        // Phase 11: Detect HDR and source format for HDR→JPEG warning (PHDR-01)
+        detectSourceProperties()
+
         // D-05: Re-load config from prior adjustment data (re-edit scenario)
         if let adjustmentData = input.adjustmentData,
            canHandle(adjustmentData),
@@ -171,6 +174,79 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
 
         // Trigger debounced preview generation
         Task { await generatePreview() }
+    }
+
+    // MARK: - Source Detection (Phase 11 / PHDR-01)
+
+    /// Detects HDR capability and source format from the `PHContentEditingInput`.
+    ///
+    /// Photo path: Uses `CGImageSourceCreateWithURL` to read the file header UTI
+    /// without loading pixel data. HEIC (`public.heic`) → HDR capable.
+    /// Video path: Uses `AVAsset.tracks(withMediaType:)` and checks
+    /// `hasMediaCharacteristic(.containsHDRVideo)`.
+    ///
+    /// Sets `sourceHasHDR` and `sourceFormatLabel`, which drive the HDR→JPEG
+    /// warning alert and "Match Source (FORMAT)" label in `ControlsView`.
+    private func detectSourceProperties() {
+        guard let sourceURL = sourceURL else { return }
+
+        if isVideo {
+            detectVideoProperties(sourceURL: sourceURL)
+        } else {
+            detectPhotoProperties(sourceURL: sourceURL)
+        }
+    }
+
+    /// Detects HDR and format label for photo sources via CGImageSource UTI.
+    ///
+    /// Uses `CGImageSourceCreateWithURL` to read only the file header (~4KB),
+    /// not the full pixel data. Guards against nil source and nil UTI.
+    ///
+    /// - Parameter sourceURL: The file URL from `PHContentEditingInput.fullSizeImageURL`
+    private func detectPhotoProperties(sourceURL: URL) {
+        guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
+              let uti = CGImageSourceGetType(source) else {
+            return
+        }
+        let utiString = uti as String
+
+        // D-01: HEIC UTI heuristic — potential HDR carrier
+        sourceHasHDR = (utiString == "public.heic")
+
+        // D-05: Format label from UTI (4-way mapping)
+        switch utiString {
+        case "public.heic": sourceFormatLabel = "HEIC"
+        case "public.jpeg": sourceFormatLabel = "JPEG"
+        case "public.png":  sourceFormatLabel = "PNG"
+        case "public.tiff": sourceFormatLabel = "TIFF"
+        default:            sourceFormatLabel = nil
+        }
+    }
+
+    /// Detects HDR and format label for video sources via AVAssetTrack.
+    ///
+    /// Uses synchronous `tracks(withMediaType:)` API (deprecated but functional)
+    /// because `startEditing` is a synchronous method. Checks
+    /// `AVMediaCharacteristic.containsHDRVideo` for HDR detection.
+    /// Format label derived from path extension (mov/mp4/m4v).
+    ///
+    /// - Parameter sourceURL: The file URL from `PHContentEditingInput.audiovisualAsset`
+    private func detectVideoProperties(sourceURL: URL) {
+        // D-03: Video HDR detection via AVAssetTrack
+        if let asset = input?.audiovisualAsset {
+            let videoTracks = asset.tracks(withMediaType: .video)
+            sourceHasHDR = videoTracks.contains { track in
+                track.hasMediaCharacteristic(.containsHDRVideo)
+            }
+        }
+
+        // D-04/D-06: Video format label from path extension
+        switch sourceURL.pathExtension.lowercased() {
+        case "mov": sourceFormatLabel = "MOV"
+        case "mp4": sourceFormatLabel = "MP4"
+        case "m4v": sourceFormatLabel = "M4V"
+        default:    sourceFormatLabel = nil
+        }
     }
 
     /// Called when the user taps Done. Stores the completion handler and
