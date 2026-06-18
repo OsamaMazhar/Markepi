@@ -32,6 +32,7 @@ struct ImageWriterTests {
                 cgImage: originalCG,
                 metadata: metadata,
                 gainMapAuxData: nil,
+                dngMetadata: nil,
                 sourceUTI: sourceUTI
             )
             // GREEN assertion: data should be non-empty
@@ -73,6 +74,7 @@ struct ImageWriterTests {
                 cgImage: originalCG,
                 metadata: metadata,
                 gainMapAuxData: nil,
+                dngMetadata: nil,
                 sourceUTI: "public.jpeg"
             )
             #expect(!outputData.isEmpty)
@@ -110,6 +112,7 @@ struct ImageWriterTests {
                 cgImage: originalCG,
                 metadata: metadata,
                 gainMapAuxData: nil,
+                dngMetadata: nil,
                 sourceUTI: "public.jpeg",
                 to: tempURL
             )

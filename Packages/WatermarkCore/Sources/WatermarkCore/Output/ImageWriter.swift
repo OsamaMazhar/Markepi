@@ -20,6 +20,7 @@ public struct ImageWriter {
     ///   - cgImage: The rendered CGImage to write
     ///   - metadata: Full metadata dictionary (with String keys, converted back to CFString for output)
     ///   - gainMapAuxData: Optional HDR gain map auxiliary data (with String keys)
+    ///   - dngMetadata: Optional DNG-specific metadata dictionary (kCGImagePropertyDNGDictionary)
     ///   - sourceUTI: Source format UTI as String (e.g., "public.heic")
     ///   - url: Output file URL
     /// - Throws: `PipelineError.failedToCreateDestination` or `.failedToFinalize`
@@ -27,6 +28,7 @@ public struct ImageWriter {
         cgImage: CGImage,
         metadata: [String: Any],
         gainMapAuxData: [String: Any]?,
+        dngMetadata: [String: Any]?,
         sourceUTI: String,
         to url: URL
     ) throws {
@@ -36,8 +38,14 @@ public struct ImageWriter {
             throw PipelineError.failedToCreateDestination
         }
 
+        // Build combined metadata dictionary with DNG metadata if present (D-02)
+        var combinedMetadata = metadata
+        if let dng = dngMetadata {
+            combinedMetadata[kCGImagePropertyDNGDictionary as String] = dng
+        }
+
         // Re-attach metadata (Pattern 2)
-        CGImageDestinationAddImage(destination, cgImage, metadata as CFDictionary)
+        CGImageDestinationAddImage(destination, cgImage, combinedMetadata as CFDictionary)
 
         // Re-attach HDR gain map if present (Pitfall 1 prevention)
         if let gainMap = gainMapAuxData {
@@ -62,6 +70,7 @@ public struct ImageWriter {
         cgImage: CGImage,
         metadata: [String: Any],
         gainMapAuxData: [String: Any]?,
+        dngMetadata: [String: Any]?,
         sourceUTI: String
     ) throws -> Data {
         let data = NSMutableData()
@@ -71,7 +80,13 @@ public struct ImageWriter {
             throw PipelineError.failedToCreateDestination
         }
 
-        CGImageDestinationAddImage(destination, cgImage, metadata as CFDictionary)
+        // Build combined metadata dictionary with DNG metadata if present (D-02)
+        var combinedMetadata = metadata
+        if let dng = dngMetadata {
+            combinedMetadata[kCGImagePropertyDNGDictionary as String] = dng
+        }
+
+        CGImageDestinationAddImage(destination, cgImage, combinedMetadata as CFDictionary)
 
         if let gainMap = gainMapAuxData {
             CGImageDestinationAddAuxiliaryDataInfo(
