@@ -11,7 +11,7 @@ An iOS app for watermarking photos and videos, then sharing instantly without sa
 - [x] **Phase 3: Video Processing & Share Extension** — Video watermarking pipeline and share sheet import (completed 2026-06-17)
 - [x] **Phase 4: Photos Edit Extension & Polish** — Photos app integration and comprehensive quality validation (completed 2026-06-18)
 - [x] **Phase 5: Extended Engine (ProRAW, EXIF Tokens, Multi-Layer)** — ProRAW support, dynamic EXIF-based text tokens, multi-layer compositing (completed 2026-06-18)
-- [ ] **Phase 6: Export Control & UX Polish** — Format/quality selection, before/after comparison, video progress UX
+- [x] **Phase 6: Export Control & UX Polish** — Format/quality selection, before/after comparison, video progress UX (completed 2026-06-18)
 - [ ] **Phase 7: Additional Inputs & System Integration (v2)** — Live Photos, signature, Files import, quick actions, App Intents
 
 ## Phase Details
@@ -172,7 +172,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 06-03-PLAN.md — Video Export UX: RenderingState.renderingVideo case, VideoProcessor iOS 18 states(updateInterval:) migration with progress callback, ControlsView progress bar + percentage + ETA + Cancel button, UNNotification background completion, beginBackgroundTask lifecycle
+- [x] 06-03-PLAN.md — Video Export UX: RenderingState.renderingVideo case, VideoProcessor iOS 18 states(updateInterval:) migration with progress callback, ControlsView progress bar + percentage + ETA + Cancel button, UNNotification background completion, beginBackgroundTask lifecycle
 
 **UI hint**: yes
 
@@ -205,5 +205,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Video Processing & Share Extension | 3/3 | Complete   | 2026-06-17 |
 | 4. Photos Edit Extension & Polish | 2/2 | Complete   | 2026-06-18 |
 | 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 4/4 | Complete   | 2026-06-18 |
-| 6. Export Control & UX Polish | 2/3 | In Progress|  |
+| 6. Export Control & UX Polish | 3/3 | Complete   | 2026-06-18 |
 | 7. Additional Inputs & System Integration (v2) | 0/? | Not started | - |
