@@ -20,7 +20,7 @@ v1.0 phases 1-7 are archived under `.planning/milestones/v1.0-ROADMAP.md`.
 - [x] **Phase 8: Traceability Reconciliation & Recurrence Guard** - Audit REQUIREMENTS.md against shipped v1.0 code and add a mechanism that keeps checkboxes in sync per plan (completed 2026-06-18)
 - [x] **Phase 9: Wave-Level Build Gate** - Per-wave xcodebuild verification across all 3 targets, replacing file-existence-only self-checks [🔨 planned] (completed 2026-06-18)
 - [x] **Phase 10: WatermarkConfigurable Protocol Defaults** - Default implementations for layer-management ops, collapsing ~186 duplicated lines across 3 ViewModels to ~20 [🔨 planned] (completed 2026-06-18)
-- [ ] **Phase 11: Photos Extension HDR Detection** - Populate sourceHasHDR/sourceFormatLabel in PhotosExtensionViewModel so HDR→JPEG warning fires in Photos extension
+- [ ] **Phase 11: Photos Extension HDR Detection** - Populate sourceHasHDR/sourceFormatLabel in PhotosExtensionViewModel so HDR→JPEG warning fires in Photos extension [🔨 planned]
 
 ## Phase Details
 
@@ -78,7 +78,10 @@ Plans:
   2. PhotosExtensionViewModel sets `sourceFormatLabel` from the input asset's format (HEIC/JPEG/DNG/etc.)
   3. When a Dolby Vision or HLG HDR source is loaded in the Photos extension and the user selects JPEG output, the HDR→JPEG format-conversion warning fires (verified by test or manual QA)
   4. All 227 existing automated tests still pass and the Phase 9 build gate passes for all 3 targets
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 11-01-PLAN.md — Add HDR + format detection in PhotosExtensionViewModel.startEditing: photo HDR via CGImageSourceCreateWithURL UTI heuristic, video HDR via AVAssetTrack.hasMediaCharacteristic, format labels for both; full verification (build gate, test suite, grep audit)
 
 ## Progress
 
@@ -97,4 +100,4 @@ Phases execute in numeric order: 8 → 9 → 10 → 11
 | 8. Traceability Reconciliation & Recurrence Guard | v1.1 | 2/2 | Complete   | 2026-06-18 |
 | 9. Wave-Level Build Gate | v1.1 | 1/1 | Complete   | 2026-06-18 |
 | 10. WatermarkConfigurable Protocol Defaults | v1.1 | 2/2 | Complete   | 2026-06-18 |
-| 11. Photos Extension HDR Detection | v1.1 | 0/TBD | Not started | - |
+| 11. Photos Extension HDR Detection | v1.1 | 0/1 | Not started | - |
