@@ -85,7 +85,7 @@ struct PhotosExtensionRootView: View {
                 VStack(spacing: 12) {
                     ProgressView()
                         .controlSize(.large)
-                    Text("Loading from Photos...")
+                    Text(viewModel.isVideo ? "Loading video from Photos…" : "Loading from Photos...")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

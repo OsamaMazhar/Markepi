@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreImage
 import Foundation
 import Observation
@@ -191,30 +192,26 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
     ///
     /// Pipeline:
     ///   1. Guard: input and sourceURL must be non-nil
-    ///   2. Detect media type via `WatermarkEngine.mediaType(for:)`
-    ///   3. For videos: skip for now (will be Plan 04-02)
-    ///   4. For photos: call `engine.process(sourceURL:config:)` (D-06)
-    ///   5. Create `PHContentEditingOutput` from the input
-    ///   6. Copy rendered data to `renderedContentURL`
-    ///   7. Attach `PHAdjustmentData` with JSON-encoded config (D-04)
-    ///   8. Call `finishHandler` with the output
-    ///   9. On error: set error state and call `finishHandler(nil)`
+    ///   2. Detect media type — branch to photo or video path
+    ///   3. Render via WatermarkEngine (process for photos, processVideo for videos)
+    ///   4. Create `PHContentEditingOutput` from the input
+    ///   5. Copy rendered data to `renderedContentURL` with format-aware extension
+    ///   6. Attach `PHAdjustmentData` with JSON-encoded config (D-04)
+    ///   7. For videos: check HDR preservation and surface warnings
+    ///   8. Call `finishHandler` with the output (or nil on error)
     ///
     /// Source format preservation (D-07): `engine.process()` uses the
     /// default `.preserveSource` output format, which matches the source
     /// format (HEIC→HEIC, JPEG→JPEG, PNG→PNG). Non-destructive editing
     /// via `PHAdjustmentData` + undo means the original format is always
     /// recoverable via "Revert to Original" in the Photos app.
+    ///
+    /// D-08: Video processing reuses the existing VideoProcessor via
+    /// `engine.processVideo(sourceURL:config:)`. AVAssetExportSession
+    /// streams frames without loading the full video into memory, making
+    /// it safe for the extension's ~120 MB sandbox limit.
     private func renderAndCommit() async {
         guard let input = input, let sourceURL = sourceURL else {
-            finishHandler?(nil)
-            return
-        }
-
-        // Video processing deferred to Plan 04-02
-        let mediaType = WatermarkEngine.mediaType(for: sourceURL)
-        if mediaType == .video || isVideo {
-            renderingState = .idle
             finishHandler?(nil)
             return
         }
@@ -222,17 +219,27 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
         renderingState = .rendering
 
         do {
-            // D-06: Render via existing WatermarkEngine pipeline
-            // D-07: Uses .preserveSource output format by default
-            let result = try await engine.process(sourceURL: sourceURL, config: config)
+            let result: ProcessingResult
+
+            // D-08: Video path — process via VideoProcessor
+            if isVideo {
+                result = try await engine.processVideo(sourceURL: sourceURL, config: config)
+            } else {
+                // D-06: Photo path — process via existing pipeline
+                // D-07: Uses .preserveSource output format by default
+                result = try await engine.process(sourceURL: sourceURL, config: config)
+            }
 
             // D-06: Create PHContentEditingOutput from the input
             let output = PHContentEditingOutput(contentEditingInput: input)
 
-            // Copy rendered data to renderedContentURL
+            // Copy rendered data to renderedContentURL with format-aware extension
             if let renderedURL = result.url {
                 let renderedData = try Data(contentsOf: renderedURL)
-                try renderedData.write(to: output.renderedContentURL, options: .atomic)
+                let targetURL = formatAwareOutputURL(from: output.renderedContentURL,
+                                                     sourceURL: sourceURL,
+                                                     isVideo: isVideo)
+                try renderedData.write(to: targetURL, options: .atomic)
 
                 // Cleanup engine temp file after writing to Photos output path
                 try? TempFileManager.cleanup(url: renderedURL)
@@ -247,6 +254,18 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
                 )
             }
 
+            // D-08: HDR preservation check for video output
+            if let validation = result.videoValidation {
+                if !validation.hdrPreserved {
+                    showHDRWarning = true
+                    hdrWarningMessage = validation.warnings.first(where: { $0.contains("HDR") })
+                        ?? "HDR could not be preserved. Video was exported in standard dynamic range."
+                } else {
+                    showHDRWarning = false
+                    hdrWarningMessage = nil
+                }
+            }
+
             hasUnsavedChanges = false
             renderingState = .done
             finishHandler?(output)
@@ -258,29 +277,87 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
         }
     }
 
+    // MARK: - Format-Aware Output URL
+
+    /// Returns a URL with the appropriate file extension for the rendered output.
+    ///
+    /// PHContentEditingOutput.renderedContentURL provides a system path, but the
+    /// extension may not match the source format. This method adjusts the extension:
+    /// - JPEG/HEIC source → .jpg (safe for both per Research Pitfall 3)
+    /// - PNG source → .png
+    /// - Video source → .mov
+    ///
+    /// - Parameters:
+    ///   - systemURL: The system-provided renderedContentURL
+    ///   - sourceURL: The source media URL (for format detection)
+    ///   - isVideo: Whether the source is a video
+    /// - Returns: URL with format-appropriate file extension
+    private func formatAwareOutputURL(from systemURL: URL, sourceURL: URL, isVideo: Bool) -> URL {
+        if isVideo {
+            return systemURL.deletingPathExtension().appendingPathExtension("mov")
+        }
+
+        // Determine appropriate extension from source format
+        let ext = sourceURL.pathExtension.lowercased()
+        switch ext {
+        case "png":
+            return systemURL.deletingPathExtension().appendingPathExtension("png")
+        case "heic", "heif":
+            // JPEG is safer for HEIC at renderedContentURL (Research Pitfall 3)
+            // The non-destructive undo preserves original HEIC quality
+            return systemURL.deletingPathExtension().appendingPathExtension("jpg")
+        default:
+            // Default to .jpg for JPEG and unknown formats
+            return systemURL.deletingPathExtension().appendingPathExtension("jpg")
+        }
+    }
+
     // MARK: - Preview Generation
 
-    /// Generates a debounced watermark preview for the loaded photo.
+    /// Generates a debounced watermark preview for the loaded photo or video.
     ///
-    /// Waits 350ms to debounce rapid config changes, then calls
-    /// `engine.process()` for a full pipeline preview. Errors are
-    /// silently ignored — preview is best-effort.
+    /// Waits 350ms (photo) or 500ms (video) to debounce rapid config changes,
+    /// then renders via the engine. For photos, calls `engine.process()`.
+    /// For videos, calls `engine.processVideo()` and extracts the first frame
+    /// via `AVAssetImageGenerator` for the preview image. Errors are silently
+    /// ignored — preview is best-effort.
     func generatePreview() async {
         guard !isGeneratingPreview, sourceURL != nil else { return }
         guard let sourceURL = sourceURL else { return }
         isGeneratingPreview = true
         defer { isGeneratingPreview = false }
 
-        // Debounce: wait 350ms to avoid rapid re-renders during config changes
-        try? await Task.sleep(for: .milliseconds(350))
+        let mediaType = WatermarkEngine.mediaType(for: sourceURL)
+        let debounceMs = (mediaType == .video || isVideo) ? 500 : 350
+
+        // Debounce: wait to avoid rapid re-renders during config changes
+        try? await Task.sleep(for: .milliseconds(debounceMs))
         guard !Task.isCancelled else { return }
 
-        // Best-effort preview — errors are silently ignored
-        let result = try? await engine.process(sourceURL: sourceURL, config: config)
-        if let url = result?.url,
-           let data = try? Data(contentsOf: url),
-           let uiImage = UIImage(data: data) {
-            previewImage = uiImage
+        if mediaType == .video || isVideo {
+            // D-08: Video preview — process video, extract first frame
+            guard let result = try? await engine.processVideo(sourceURL: sourceURL, config: config),
+                  let outputURL = result.url else { return }
+            defer { try? TempFileManager.cleanup(url: outputURL) }
+
+            // Extract first frame for preview using AVAssetImageGenerator
+            let asset = AVAsset(url: outputURL)
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 480, height: 480)
+
+            let time = CMTime.zero
+            if let cgImage = try? generator.copyCGImage(at: time, actualTime: nil) {
+                previewImage = UIImage(cgImage: cgImage)
+            }
+        } else {
+            // Photo preview — best-effort, errors silently ignored
+            let result = try? await engine.process(sourceURL: sourceURL, config: config)
+            if let url = result?.url,
+               let data = try? Data(contentsOf: url),
+               let uiImage = UIImage(data: data) {
+                previewImage = uiImage
+            }
         }
     }
 
