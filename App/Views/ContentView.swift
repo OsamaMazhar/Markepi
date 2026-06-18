@@ -1,9 +1,11 @@
 import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 import WatermarkCore
 
 struct ContentView: View {
     @State var viewModel: WatermarkViewModel
+    @State private var showFileImporter = false
 
     var body: some View {
         NavigationStack {
@@ -19,6 +21,13 @@ struct ContentView: View {
                         .frame(height: geometry.size.height * 0.40)
                 }
                 .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            showFileImporter = true
+                        } label: {
+                            Image(systemName: "folder.badge.plus")
+                        }
+                    }
                     if viewModel.hasMultiplePhotos {
                         ToolbarItem(placement: .navigationBarLeading) {
                             Button("Cancel") {
@@ -39,6 +48,14 @@ struct ContentView: View {
                     maxSelectionCount: 20,
                     matching: .images
                 )
+                .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.image, .movie, .audiovisualContent]) { result in
+                    switch result {
+                    case .success(let url):
+                        viewModel.handleIncomingFile(url: url)
+                    case .failure:
+                        break
+                    }
+                }
                 .onAppear {
                     if viewModel.photos.isEmpty {
                         viewModel.showPicker = true

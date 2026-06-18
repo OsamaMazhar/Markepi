@@ -2,5 +2,54 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Image</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.image</string>
+				<string>public.jpeg</string>
+				<string>public.heic</string>
+				<string>public.png</string>
+				<string>public.tiff</string>
+				<string>com.adobe.raw-image</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Video</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.movie</string>
+				<string>com.apple.quicktime-movie</string>
+				<string>public.mpeg-4</string>
+			</array>
+		</dict>
+	</array>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.watermark.app.watermark-last-photo</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Watermark Last Photo</string>
+			<key>UIApplicationShortcutItemIconSystemImageName</key>
+			<string>photo.on.rectangle.angled</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.watermark.app.watermark-from-clipboard</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Watermark from Clipboard</string>
+			<key>UIApplicationShortcutItemIconSystemImageName</key>
+			<string>doc.on.clipboard</string>
+		</dict>
+	</array>
 </dict>
 </plist>

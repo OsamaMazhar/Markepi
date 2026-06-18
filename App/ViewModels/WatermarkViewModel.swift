@@ -3,9 +3,11 @@ import Foundation
 import ImageIO
 import Observation
 import os.log
+import Photos
 import PhotosUI
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 import UserNotifications
 import WatermarkCore
 
@@ -52,6 +54,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
         if let saved = AppGroupConfigSync.load() {
             config = saved
         }
+        checkPendingIntent()
     }
 
     var currentPhoto: PhotoItem? {
@@ -583,6 +586,189 @@ final class WatermarkViewModel: WatermarkConfigurable {
         let url = tempDir.appendingPathComponent(filename)
         try? data.write(to: url)
         return url
+    }
+
+    // MARK: - Files Import (IMPS-01)
+
+    func handleIncomingFile(url: URL) {
+        guard url.startAccessingSecurityScopedResource() else { return }
+        defer { url.stopAccessingSecurityScopedResource() }
+
+        let mediaType = WatermarkEngine.mediaType(for: url)
+        guard mediaType != .unknown else {
+            errorMessage = "Unsupported file format. Supported formats: HEIC, JPEG, PNG, TIFF, DNG, MOV, MP4."
+            showError = true
+            return
+        }
+
+        guard let uti = UTType(filenameExtension: url.pathExtension)?.identifier else { return }
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("import_\(UUID().uuidString)")
+            .appendingPathExtension(url.pathExtension)
+
+        do {
+            try FileManager.default.copyItem(at: url, to: tempURL)
+        } catch {
+            errorMessage = "Could not open the selected file."
+            showError = true
+            return
+        }
+
+        if let data = try? Data(contentsOf: tempURL) {
+            let thumb = createThumbnail(from: data, maxPixelSize: 200)
+            photos = [PhotoItem(id: UUID(), thumbnail: thumb, sourceURL: tempURL, videoSourceURL: nil, mediaType: mediaType)]
+            currentIndex = 0
+            if !sourceHasHDR { sourceHasHDR = detectHDRSource(from: data) }
+            if sourceFormatLabel == nil { sourceFormatLabel = detectSourceFormatLabel(from: data) }
+        }
+        Task { await loadSourceForComparison() }
+    }
+
+    // MARK: - Quick Actions (IMPS-02)
+
+    func handleQuickAction(_ type: String) {
+        switch type {
+        case "com.watermark.app.watermark-last-photo":
+            Task { await fetchMostRecentPhoto() }
+        case "com.watermark.app.watermark-from-clipboard":
+            Task { await loadFromClipboard() }
+        default:
+            break
+        }
+    }
+
+    func fetchMostRecentPhoto() async {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        switch status {
+        case .notDetermined:
+            let granted = await withCheckedContinuation { continuation in
+                PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
+                    continuation.resume(returning: newStatus == .authorized || newStatus == .limited)
+                }
+            }
+            guard granted else {
+                errorMessage = "Photo library access is needed to use this feature."
+                showError = true
+                return
+            }
+        case .denied, .restricted:
+            errorMessage = "Photo library access is needed to use this feature."
+            showError = true
+            return
+        case .authorized, .limited:
+            break
+        @unknown default:
+            errorMessage = "Photo library access is needed to use this feature."
+            showError = true
+            return
+        }
+
+        let fetchOptions = PHFetchOptions()
+        fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        fetchOptions.fetchLimit = 1
+        fetchOptions.predicate = NSPredicate(format: "mediaType = %d", PHAssetMediaType.image.rawValue)
+
+        let result = PHAsset.fetchAssets(with: fetchOptions)
+        guard let asset = result.firstObject else {
+            errorMessage = "No photos found in your library."
+            showError = true
+            return
+        }
+
+        let (data, _) = await withCheckedContinuation { (continuation: CheckedContinuation<(Data?, [AnyHashable: Any]?), Never>) in
+            let options = PHImageRequestOptions()
+            options.deliveryMode = .highQualityFormat
+            options.isNetworkAccessAllowed = true
+            PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { imageData, _, _, _ in
+                continuation.resume(returning: (imageData, nil))
+            }
+        }
+
+        guard let imageData = data else {
+            errorMessage = "Could not load the most recent photo."
+            showError = true
+            return
+        }
+
+        let ext = "heic"
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lastphoto_\(UUID().uuidString)")
+            .appendingPathExtension(ext)
+        try? imageData.write(to: tempURL)
+
+        let thumb = createThumbnail(from: imageData, maxPixelSize: 200)
+        let mediaType = WatermarkEngine.mediaType(for: tempURL)
+        photos = [PhotoItem(id: UUID(), thumbnail: thumb, sourceURL: tempURL, videoSourceURL: nil, mediaType: mediaType)]
+        currentIndex = 0
+        if !sourceHasHDR { sourceHasHDR = detectHDRSource(from: imageData) }
+        if sourceFormatLabel == nil { sourceFormatLabel = detectSourceFormatLabel(from: imageData) }
+        Task { await loadSourceForComparison() }
+    }
+
+    func loadFromClipboard() async {
+        guard UIPasteboard.general.hasImages else {
+            errorMessage = "No image found on clipboard."
+            showError = true
+            return
+        }
+
+        guard let image = UIPasteboard.general.image else {
+            errorMessage = "No image found on clipboard."
+            showError = true
+            return
+        }
+
+        guard let pngData = image.pngData() ?? image.jpegData(compressionQuality: 1.0) else {
+            errorMessage = "Could not read clipboard image."
+            showError = true
+            return
+        }
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clipboard_\(UUID().uuidString).png")
+        try? pngData.write(to: tempURL)
+
+        let thumb = createThumbnail(from: pngData, maxPixelSize: 200)
+        let mediaType = WatermarkEngine.mediaType(for: tempURL)
+        photos = [PhotoItem(id: UUID(), thumbnail: thumb, sourceURL: tempURL, videoSourceURL: nil, mediaType: mediaType)]
+        currentIndex = 0
+        if !sourceHasHDR { sourceHasHDR = detectHDRSource(from: pngData) }
+        if sourceFormatLabel == nil { sourceFormatLabel = detectSourceFormatLabel(from: pngData) }
+        Task { await loadSourceForComparison() }
+    }
+
+    // MARK: - App Intents (SYSI-01, SYSI-02)
+
+    func checkPendingIntent() {
+        guard let defaults = UserDefaults(suiteName: AppGroupConfigSync.suiteName) else { return }
+        guard let mediaURLString = defaults.string(forKey: "pendingIntentMediaURL") else { return }
+
+        let mediaType = defaults.string(forKey: "pendingIntentMediaType") ?? "photo"
+        let configJSON = defaults.string(forKey: "pendingIntentConfigJSON")
+
+        if let json = configJSON, let jsonData = json.data(using: .utf8) {
+            if let decodedConfig = try? JSONDecoder().decode(WatermarkConfiguration.self, from: jsonData) {
+                config = decodedConfig
+            }
+        }
+
+        let url = URL(fileURLWithPath: mediaURLString)
+        if FileManager.default.fileExists(atPath: url.path) {
+            let engine = WatermarkEngine.mediaType(for: url)
+            if engine != .unknown {
+                if let data = try? Data(contentsOf: url) {
+                    let thumb = createThumbnail(from: data, maxPixelSize: 200)
+                    photos = [PhotoItem(id: UUID(), thumbnail: thumb, sourceURL: url, videoSourceURL: nil, mediaType: engine)]
+                    currentIndex = 0
+                    if !sourceHasHDR { sourceHasHDR = detectHDRSource(from: data) }
+                    if sourceFormatLabel == nil { sourceFormatLabel = detectSourceFormatLabel(from: data) }
+                }
+            }
+        }
+
+        defaults.removeObject(forKey: "pendingIntentMediaURL")
+        defaults.removeObject(forKey: "pendingIntentConfigJSON")
+        defaults.removeObject(forKey: "pendingIntentMediaType")
     }
 }
 
