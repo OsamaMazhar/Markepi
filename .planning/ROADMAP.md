@@ -12,7 +12,7 @@ An iOS app for watermarking photos and videos, then sharing instantly without sa
 - [x] **Phase 4: Photos Edit Extension & Polish** — Photos app integration and comprehensive quality validation (completed 2026-06-18)
 - [x] **Phase 5: Extended Engine (ProRAW, EXIF Tokens, Multi-Layer)** — ProRAW support, dynamic EXIF-based text tokens, multi-layer compositing (completed 2026-06-18)
 - [x] **Phase 6: Export Control & UX Polish** — Format/quality selection, before/after comparison, video progress UX (completed 2026-06-18)
-- [ ] **Phase 7: Additional Inputs & System Integration (v2)** — Live Photos, signature, Files import, quick actions, App Intents
+- [x] **Phase 7: Additional Inputs & System Integration (v2)** — Live Photos, signature, Files import, quick actions, App Intents (completed 2026-06-18)
 
 ## Phase Details
 
@@ -199,7 +199,7 @@ Plans:
 - [x] 07-02-PLAN.md — Live Photos (LIVE-01, LIVE-02): LivePhotoProcessor via PHLivePhotoEditingContext, PipelineError.livePhotoUnsupported, PhotosPicker Live Photo pair detection, still+video watermarking with graceful fallback
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 07-03-PLAN.md — System Import & Integration (IMPS-01, IMPS-02, SYSI-01, SYSI-02): CFBundleDocumentTypes + .onOpenURL + .fileImporter for Files import, UIApplicationShortcutItems + AppDelegate/SceneDelegate for quick actions, @AssistantIntent + AppIntent + AppShortcutsProvider for Siri/Shortcuts
+- [x] 07-03-PLAN.md — System Import & Integration (IMPS-01, IMPS-02, SYSI-01, SYSI-02): CFBundleDocumentTypes + .onOpenURL + .fileImporter for Files import, UIApplicationShortcutItems + AppDelegate/SceneDelegate for quick actions, @AssistantIntent + AppIntent + AppShortcutsProvider for Siri/Shortcuts
 
 **UI hint**: yes
 
@@ -217,4 +217,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Photos Edit Extension & Polish | 2/2 | Complete   | 2026-06-18 |
 | 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 4/4 | Complete   | 2026-06-18 |
 | 6. Export Control & UX Polish | 3/3 | Complete   | 2026-06-18 |
-| 7. Additional Inputs & System Integration (v2) | 2/3 | In Progress|  |
+| 7. Additional Inputs & System Integration (v2) | 3/3 | Complete   | 2026-06-18 |
