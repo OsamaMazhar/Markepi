@@ -19,7 +19,7 @@ v1.0 phases 1-7 are archived under `.planning/milestones/v1.0-ROADMAP.md`.
 
 - [x] **Phase 8: Traceability Reconciliation & Recurrence Guard** - Audit REQUIREMENTS.md against shipped v1.0 code and add a mechanism that keeps checkboxes in sync per plan (completed 2026-06-18)
 - [x] **Phase 9: Wave-Level Build Gate** - Per-wave xcodebuild verification across all 3 targets, replacing file-existence-only self-checks [🔨 planned] (completed 2026-06-18)
-- [ ] **Phase 10: WatermarkConfigurable Protocol Defaults** - Default implementations for layer-management ops, collapsing ~186 duplicated lines across 3 ViewModels to ~20 [🔨 planned]
+- [x] **Phase 10: WatermarkConfigurable Protocol Defaults** - Default implementations for layer-management ops, collapsing ~186 duplicated lines across 3 ViewModels to ~20 [🔨 planned] (completed 2026-06-18)
 - [ ] **Phase 11: Photos Extension HDR Detection** - Populate sourceHasHDR/sourceFormatLabel in PhotosExtensionViewModel so HDR→JPEG warning fires in Photos extension
 
 ## Phase Details
@@ -67,7 +67,7 @@ Plans:
 
 Plans:
 - [x] 10-01-PLAN.md — Add error properties + protocol extension with 8 default implementations (5 methods + 3 computed properties) to WatermarkConfigurable.swift
-- [ ] 10-02-PLAN.md — Remove 26 duplicated implementations across 3 ViewModels; full verification (build gate, 227 tests, grep audit, line count)
+- [x] 10-02-PLAN.md — Remove 26 duplicated implementations across 3 ViewModels; full verification (build gate, 227 tests, grep audit, line count)
 
 ### Phase 11: Photos Extension HDR Detection
 **Goal**: PhotosExtensionViewModel populates sourceHasHDR and sourceFormatLabel from PHContentEditingInput so the HDR→JPEG format-conversion warning fires correctly in the Photos extension context
@@ -96,5 +96,5 @@ Phases execute in numeric order: 8 → 9 → 10 → 11
 | 7. Additional Inputs & System Integration (v2) | v1.0 | 3/3 | Complete | 2026-06-18 |
 | 8. Traceability Reconciliation & Recurrence Guard | v1.1 | 2/2 | Complete   | 2026-06-18 |
 | 9. Wave-Level Build Gate | v1.1 | 1/1 | Complete   | 2026-06-18 |
-| 10. WatermarkConfigurable Protocol Defaults | v1.1 | 1/2 | In Progress|  |
+| 10. WatermarkConfigurable Protocol Defaults | v1.1 | 2/2 | Complete   | 2026-06-18 |
 | 11. Photos Extension HDR Detection | v1.1 | 0/TBD | Not started | - |
