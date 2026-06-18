@@ -135,6 +135,9 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
     /// Shared engine instance for photo processing.
     private let engine = WatermarkEngine.shared
 
+    /// Tracks the in-progress video export task for cancellation support.
+    private var videoExportTask: Task<Void, Never>?
+
     // MARK: - Init
 
     init() {
@@ -406,36 +409,61 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
 
     // MARK: - Video Rendering
 
-    /// Renders the watermarked video at full resolution via `VideoProcessor`,
-    /// checking post-export validation for HDR and audio warnings.
+    /// Renders the watermarked video at full resolution with progress tracking
+    /// and cancel support. Share extension does NOT schedule notifications
+    /// (extensions terminate after completeRequest()).
     func renderAndShareVideo() async {
         guard let sourceURL = sourceURL, isVideo else { return }
-        renderingState = .rendering
+        renderingState = .renderingVideo(progress: 0.0, estimatedTimeRemaining: nil)
 
-        do {
-            let result = try await engine.processVideo(sourceURL: sourceURL, config: config)
-            fullResResult = result
-            renderingState = .done
-
-            // D-10: Check HDR preservation
-            if let validation = result.videoValidation {
-                if !validation.hdrPreserved {
-                    showHDRWarning = true
-                    hdrWarningMessage = validation.warnings.first(where: { $0.contains("HDR") })
+        let task = Task {
+            do {
+                let result = try await engine.processVideo(
+                    sourceURL: sourceURL,
+                    config: config,
+                    onProgress: { [weak self] progress, eta in
+                        Task { @MainActor in
+                            self?.renderingState = .renderingVideo(
+                                progress: progress,
+                                estimatedTimeRemaining: eta
+                            )
+                        }
+                    }
+                )
+                await MainActor.run {
+                    fullResResult = result
+                    renderingState = .done
+                    // Check HDR/audio warnings
+                    if let validation = result.videoValidation {
+                        if !validation.hdrPreserved {
+                            showHDRWarning = true
+                            hdrWarningMessage = validation.warnings.first(where: { $0.contains("HDR") })
+                        }
+                        if !validation.audioTrackCountMatch {
+                            showAudioWarning = true
+                        }
+                    }
                 }
-                if !validation.audioTrackCountMatch {
-                    showAudioWarning = true
+            } catch is CancellationError {
+                await MainActor.run {
+                    renderingState = .idle
+                    if let url = fullResResult?.url {
+                        try? TempFileManager.cleanup(url: url)
+                        fullResResult = nil
+                    }
                 }
-            }
-        } catch {
-            renderingState = .error(error)
-            errorMessage = error.localizedDescription
-            showError = true
-            // Track failure for multi-item sequential processing
-            if isMultiItem {
-                failedItemIndices.append(currentItemIndex)
+            } catch {
+                await MainActor.run {
+                    renderingState = .error(error)
+                    errorMessage = error.localizedDescription
+                    showError = true
+                    if isMultiItem {
+                        failedItemIndices.append(currentItemIndex)
+                    }
+                }
             }
         }
+        videoExportTask = task
     }
 
     /// Generates a debounced watermark preview for the loaded media.
@@ -515,7 +543,8 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
 
     /// Cancels an in-progress video export.
     func cancelVideoExport() {
-        // Stub — full implementation in Task 3
+        videoExportTask?.cancel()
+        videoExportTask = nil
     }
 
     /// Handles share sheet dismissal — cleans up temp files and closes the
@@ -569,6 +598,8 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
         }
 
         // Reset state for next item
+        videoExportTask?.cancel()
+        videoExportTask = nil
         sourceURL = nil
         previewImage = nil
         originalSourceImage = nil

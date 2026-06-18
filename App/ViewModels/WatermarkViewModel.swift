@@ -2,9 +2,11 @@ import CoreImage
 import Foundation
 import ImageIO
 import Observation
+import os.log
 import PhotosUI
 import SwiftUI
 import UIKit
+import UserNotifications
 import WatermarkCore
 
 @Observable @MainActor
@@ -37,6 +39,9 @@ final class WatermarkViewModel: WatermarkConfigurable {
     var activeLayerIndex: Int = 0
 
     private let engine = WatermarkEngine.shared
+
+    /// Tracks the in-progress video export task for cancellation support.
+    private var videoExportTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -170,6 +175,15 @@ final class WatermarkViewModel: WatermarkConfigurable {
 
     func renderAndPrepareShare() async {
         guard let sourceURL = currentPhoto?.sourceURL else { return }
+
+        // D-13: Branch by media type — video uses progress-tracked export
+        let mediaType = WatermarkEngine.mediaType(for: sourceURL)
+        if mediaType == .video {
+            await renderAndShareVideo()
+            return
+        }
+
+        // Photo rendering path (unchanged)
         renderingState = .rendering
 
         do {
@@ -188,13 +202,116 @@ final class WatermarkViewModel: WatermarkConfigurable {
         }
     }
 
+    /// Renders watermarked video at full resolution with progress tracking,
+    /// cancel support, and background notification (VIDX-01, VIDX-02, VIDX-03).
+    func renderAndShareVideo() async {
+        guard let sourceURL = currentPhoto?.sourceURL else { return }
+        renderingState = .renderingVideo(progress: 0.0, estimatedTimeRemaining: nil)
+
+        // D-14: Request background execution time for export + notification
+        var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask {
+            // Expiration handler: system is about to suspend — cancel export gracefully
+            self.videoExportTask?.cancel()
+            UIApplication.shared.endBackgroundTask(backgroundTaskID)
+            backgroundTaskID = .invalid
+        }
+
+        let task = Task {
+            defer {
+                UIApplication.shared.endBackgroundTask(backgroundTaskID)
+                backgroundTaskID = .invalid
+            }
+
+            do {
+                let result = try await engine.processVideo(
+                    sourceURL: sourceURL,
+                    config: config,
+                    onProgress: { [weak self] progress, eta in
+                        Task { @MainActor in
+                            self?.renderingState = .renderingVideo(
+                                progress: progress,
+                                estimatedTimeRemaining: eta
+                            )
+                        }
+                    }
+                )
+                await MainActor.run {
+                    fullResResult = result
+                    renderingState = .done
+                    // D-14: Schedule notification for background completion
+                    scheduleCompletionNotification(success: true)
+                }
+            } catch is CancellationError {
+                // D-12: Export was cancelled — cleanup and return to idle
+                await MainActor.run {
+                    renderingState = .idle
+                    // Cleanup incomplete temp file
+                    if let url = fullResResult?.url {
+                        try? TempFileManager.cleanup(url: url)
+                        fullResResult = nil
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    renderingState = .error(error)
+                    errorMessage = error.localizedDescription
+                    showError = true
+                    scheduleCompletionNotification(success: false)
+                }
+            }
+        }
+        videoExportTask = task
+    }
+
+    /// Schedules a local notification for video export completion/failure (D-14).
+    private func scheduleCompletionNotification(success: Bool) {
+        let center = UNUserNotificationCenter.current()
+
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            guard granted else { return }
+
+            let content = UNMutableNotificationContent()
+            if success {
+                content.title = "Watermark Complete"
+                content.body = "Video watermarked"
+            } else {
+                content.title = "Export Failed"
+                content.body = "Video export failed"
+            }
+            content.sound = .default
+
+            // Store output URL in App Group UserDefaults for notification tap deep-link
+            if success, let url = self.fullResResult?.url {
+                UserDefaults(suiteName: AppGroupConfigSync.suiteName)?
+                    .set(url.absoluteString, forKey: "completedExportURL")
+            }
+
+            let identifier = "com.watermark.app.video-export-\(UUID().uuidString)"
+            let request = UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: nil
+            )
+
+            center.add(request) { error in
+                if let error = error {
+                    os_log(.error, "Failed to schedule notification: %{public}@",
+                           error.localizedDescription)
+                }
+            }
+        }
+    }
+
     func presentShareSheet() {
         guard renderingState == .done else { return }
         showShareSheet = true
     }
 
     func cancelVideoExport() {
-        // Stub — full implementation in Task 3
+        videoExportTask?.cancel()
+        videoExportTask = nil
+        // State cleanup handled in renderAndShareVideo's CancellationError catch
     }
 
     func cleanupTempFile() {
@@ -210,6 +327,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
     }
 
     func confirmCancel() {
+        videoExportTask?.cancel()
+        videoExportTask = nil
         photos = []
         currentIndex = 0
         originalSourceImage = nil

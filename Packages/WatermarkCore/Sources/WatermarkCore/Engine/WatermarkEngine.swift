@@ -114,7 +114,7 @@ public actor WatermarkEngine {
 
     /// Processes a video file, applying watermark via AVFoundation CALayer overlay.
     ///
-    /// Delegates to `VideoProcessor.process(sourceURL:config:)` for the full
+    /// Delegates to `VideoProcessor.process(sourceURL:config:onProgress:)` for the full
     /// AVFoundation pipeline: load → compose → CALayer overlay → export → validate.
     /// Returns a `ProcessingResult` with the output URL, source UTI, and
     /// post-export validation data (HDR preservation, audio track count).
@@ -122,15 +122,19 @@ public actor WatermarkEngine {
     /// - Parameters:
     ///   - sourceURL: File URL to the source video
     ///   - config: Watermark configuration (layers, frame, output format)
+    ///   - onProgress: Optional callback for export progress (0.0–1.0) and
+    ///     estimated time remaining in seconds. Passed through to VideoProcessor.
     /// - Returns: `ProcessingResult` with the output file URL and video validation
     /// - Throws: `PipelineError` for any pipeline stage failure
     public func processVideo(
         sourceURL: URL,
-        config: WatermarkConfiguration
+        config: WatermarkConfiguration,
+        onProgress: (@Sendable (Double, TimeInterval?) -> Void)? = nil
     ) async throws -> ProcessingResult {
         let (outputURL, validation) = try await VideoProcessor.process(
             sourceURL: sourceURL,
-            config: config
+            config: config,
+            onProgress: onProgress
         )
 
         let sourceUTI = (try? sourceURL.resourceValues(forKeys: [.typeIdentifierKey]).typeIdentifier)
