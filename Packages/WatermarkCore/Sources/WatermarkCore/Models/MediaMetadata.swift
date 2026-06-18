@@ -26,6 +26,10 @@ public struct MediaMetadata: @unchecked Sendable {
     /// Values are value types.
     public let gainMapAuxData: [String: Any]?
 
+    /// DNG-specific metadata dictionary (kCGImagePropertyDNGDictionary).
+    /// Non-nil only for ProRAW/DNG source images.
+    public let dngMetadata: [String: Any]?
+
     /// Source image color space (e.g., displayP3, sRGB)
     public let colorSpace: CGColorSpace?
 
@@ -35,11 +39,13 @@ public struct MediaMetadata: @unchecked Sendable {
     public init(
         metadata: [String: Any],
         gainMapAuxData: [String: Any]?,
+        dngMetadata: [String: Any]?,
         colorSpace: CGColorSpace?,
         sourceUTI: String
     ) {
         self.metadata = metadata
         self.gainMapAuxData = gainMapAuxData
+        self.dngMetadata = dngMetadata
         self.colorSpace = colorSpace
         self.sourceUTI = sourceUTI
     }

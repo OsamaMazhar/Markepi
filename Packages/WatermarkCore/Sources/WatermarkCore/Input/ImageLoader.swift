@@ -1,6 +1,7 @@
 import CoreImage
 import ImageIO
 import Foundation
+import os.log
 
 /// Loads a photo from a file URL, extracting metadata, HDR gain map,
 /// color space, and format information BEFORE creating the CIImage.
@@ -21,6 +22,10 @@ public struct ImageLoader {
 
         /// HDR gain map auxiliary data (nil if no gain map)
         public let gainMapAuxData: [String: Any]?
+
+        /// DNG-specific metadata dictionary (kCGImagePropertyDNGDictionary).
+        /// Non-nil only for ProRAW/DNG source images.
+        public let dngMetadata: [String: Any]?
 
         /// Source color space from profile name
         public let colorSpace: CGColorSpace?
@@ -83,6 +88,14 @@ public struct ImageLoader {
             return nil
         }()
 
+        // Extract DNG-specific metadata (ProRAW support per D-02)
+        let dngMetadata: [String: Any]? = {
+            if let dng = props[kCGImagePropertyDNGDictionary] as? [CFString: Any] {
+                return convertCFDictionary(dng)
+            }
+            return nil
+        }()
+
         // Extract color space from profile name
         let colorSpace: CGColorSpace? = {
             guard let profileName = props[kCGImagePropertyProfileName] as? String else {
@@ -94,6 +107,16 @@ public struct ImageLoader {
         // Detect source UTI via FormatDetector
         let (_, sourceUTI) = try FormatDetector.detect(from: source)
         let sourceUTIString = sourceUTI as String
+
+        // DNG resolution validation per Pitfall 1: ProRAW photos should be >= 4000px
+        // on the short side to confirm we're processing RAW data, not the embedded
+        // JPEG preview (which is typically ~12MP / ~4000px long side)
+        if sourceUTIString == "com.adobe.raw-image" {
+            let minDimension = min(width, height)
+            if minDimension < 4000 {
+                os_log(.default, "[WatermarkCore] DNG image has short-side dimension %d px — may have loaded embedded JPEG preview instead of full RAW data", minDimension)
+            }
+        }
 
         // Create CIImage with HDR options (Pitfall 1 prevention).
         // Primary: HDR-enabled load. Fallback: plain load (for SDR images or macOS testing).
@@ -115,6 +138,7 @@ public struct ImageLoader {
             ciImage: ciImage,
             metadata: metadata,
             gainMapAuxData: gainMapAuxData,
+            dngMetadata: dngMetadata,
             colorSpace: colorSpace,
             sourceUTI: sourceUTIString
         )

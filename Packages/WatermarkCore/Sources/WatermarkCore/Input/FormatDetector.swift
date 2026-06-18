@@ -14,6 +14,7 @@ public struct FormatDetector {
         "public.heic",
         "public.jpeg",
         "public.png",
+        "com.adobe.raw-image",
     ]
 
     /// Detects the image format from a CGImageSource.
@@ -34,6 +35,7 @@ public struct FormatDetector {
         case "public.heic": type = .heic
         case "public.jpeg": type = .jpeg
         case "public.png":  type = .png
+        case "com.adobe.raw-image": type = .rawImage
         default:
             throw PipelineError.unsupportedFormat(utiString)
         }
@@ -50,7 +52,21 @@ public struct FormatDetector {
         case "public.heic": return "heic"
         case "public.jpeg": return "jpg"
         case "public.png":  return "png"
+        case "com.adobe.raw-image": return "dng"
         default:            return "jpg"
         }
+    }
+
+    /// Verifies a file is a valid DNG/TIFF by checking the byte-order marker.
+    /// DNG files start with "II" (little-endian) or "MM" (big-endian) TIFF header.
+    /// - Parameter url: File URL to verify
+    /// - Returns: `true` if the file begins with a valid TIFF/DNG byte-order marker
+    public static func isDNG(url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        let header = handle.readData(ofLength: 4)
+        let isII = header.starts(with: Data([0x49, 0x49, 0x2A, 0x00]))
+        let isMM = header.starts(with: Data([0x4D, 0x4D, 0x00, 0x2A]))
+        return isII || isMM
     }
 }
