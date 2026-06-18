@@ -101,6 +101,7 @@ public actor WatermarkEngine {
             cgImage: cgImage,
             metadata: loaded.metadata,
             gainMapAuxData: loaded.gainMapAuxData,
+            dngMetadata: nil,
             sourceUTI: loaded.sourceUTI,
             to: outputURL
         )

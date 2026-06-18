@@ -49,29 +49,114 @@ public struct EXIFTokenParser {
     /// - Returns: Text with all recognized tokens replaced; unrecognized tokens left as-is;
     ///   missing EXIF fields render as "--" per D-08
     public static func substitute(_ text: String, metadata: [String: Any]) -> String {
-        // RED phase stub: returns input unchanged (tests will fail)
-        return text
+        var result = text
+        for token in Token.allCases {
+            let pattern = "{\(token.rawValue)}"
+            guard result.contains(pattern) else { continue }
+            let replacement = value(for: token, metadata: metadata)
+            result = result.replacingOccurrences(of: pattern, with: replacement)
+        }
+        return result
     }
 
     // MARK: - Token Value Resolvers
 
     /// Resolves a token to its formatted EXIF value, or "--" if missing.
     private static func value(for token: Token, metadata: [String: Any]) -> String {
-        // RED phase stub: returns "--" for all tokens
-        return "--"
+        switch token {
+        case .camera_model:
+            let tiff = metadata[tiffDictKey] as? [String: Any]
+            if let model = tiff?["Model"] as? String, !model.isEmpty {
+                return model
+            }
+            return "--"
+
+        case .lens:
+            let exif = metadata[exifDictKey] as? [String: Any]
+            if let lensModel = exif?["LensModel"] as? String, !lensModel.isEmpty {
+                return lensModel
+            }
+            return "--"
+
+        case .aperture:
+            let exif = metadata[exifDictKey] as? [String: Any]
+            guard let fNumber = exif?["FNumber"] as? Double else { return "--" }
+            return String(format: "f/%.1f", fNumber)
+
+        case .focal_length:
+            let exif = metadata[exifDictKey] as? [String: Any]
+            guard let focal = exif?["FocalLength"] as? Double else { return "--" }
+            return String(format: "%.0fmm", focal)
+
+        case .shutter_speed:
+            let exif = metadata[exifDictKey] as? [String: Any]
+            guard let apexValue = exif?["ShutterSpeedValue"] as? Double else { return "--" }
+            let exposureTime = pow(2.0, -apexValue)  // APEX to seconds
+            if exposureTime < 1.0 {
+                let denominator = Int(round(1.0 / exposureTime))
+                return "1/\(denominator)"
+            } else {
+                return String(format: "%.1fs", exposureTime)
+            }
+
+        case .iso:
+            let exif = metadata[exifDictKey] as? [String: Any]
+            let isoValue: Int? = {
+                // Handle both [Int] array (take first) and Int scalar (Research A4)
+                if let ratings = exif?["ISOSpeedRatings"] as? [Int], let first = ratings.first {
+                    return first
+                }
+                if let rating = exif?["ISOSpeedRatings"] as? Int {
+                    return rating
+                }
+                return nil
+            }()
+            guard let iso = isoValue else { return "--" }
+            return "ISO \(iso)"
+
+        case .date:
+            let exif = metadata[exifDictKey] as? [String: Any]
+            let dateString = (exif?["DateTimeOriginal"] as? String)
+                ?? (exif?["DateTimeDigitized"] as? String)
+                ?? (exif?["DateTime"] as? String)
+            guard let dateString = dateString else { return "--" }
+            return formatDate(dateString)
+
+        case .gps:
+            return formatGPS(from: metadata)
+        }
     }
 
     // MARK: - Formatters
 
     /// Formats an EXIF date string (yyyy:MM:dd HH:mm:ss) to locale-aware short date.
+    ///
+    /// - Parameter exifDateString: EXIF-format date string
+    /// - Returns: Locale-aware short date (e.g., "Jun 18, 2026") or "--" if parsing fails
     private static func formatDate(_ exifDateString: String) -> String {
-        // RED phase stub
-        return "--"
+        let inputFormatter = DateFormatter()
+        inputFormatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+        guard let date = inputFormatter.date(from: exifDateString) else { return "--" }
+
+        let outputFormatter = DateFormatter()
+        outputFormatter.dateStyle = .short
+        outputFormatter.timeStyle = .none
+        return outputFormatter.string(from: date)
     }
 
     /// Formats GPS latitude/longitude from metadata GPS dictionary.
+    ///
+    /// - Parameter metadata: Source metadata dictionary containing "{GPS}" sub-dict
+    /// - Returns: Formatted GPS string like "37.7749° N, 122.4194° W" or "--" if missing
     private static func formatGPS(from metadata: [String: Any]) -> String {
-        // RED phase stub
-        return "--"
+        guard let gps = metadata[gpsDictKey] as? [String: Any],
+              let lat = gps["Latitude"] as? Double,
+              let lon = gps["Longitude"] as? Double else {
+            return "--"
+        }
+        let latRef = gps["LatitudeRef"] as? String ?? (lat >= 0 ? "N" : "S")
+        let lonRef = gps["LongitudeRef"] as? String ?? (lon >= 0 ? "E" : "W")
+        return String(format: "%.4f° %@, %.4f° %@",
+                      abs(lat), latRef, abs(lon), lonRef)
     }
 }
