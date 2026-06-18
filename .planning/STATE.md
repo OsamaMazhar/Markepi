@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: verifying
 stopped_at: Phase 5 context gathered
-last_updated: "2026-06-18T08:34:35.433Z"
+last_updated: "2026-06-18T08:35:06.271Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 7
@@ -62,6 +62,7 @@ Progress: [█████████░] 93%
 | Phase 03 P03-03 | 378 | 3 tasks | 12 files |
 | Phase 05-extended-engine-proraw-exif-tokens-multi-layer P01 | 120 | 2 tasks | 4 files |
 | Phase 05 P03 | 3 | 3 tasks | 6 files |
+| Phase 05 P02 | 296 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Both extension targets added to Xcode project in single wave to fix Phase 3 gap
 - [Phase ?]: Engine's default .preserveSource output format handles D-07 format preservation
 - [Phase ?]: DNG write is UNSUPPORTED — CGImageDestinationCreateWithData returns nil for DNG UTI (com.adobe.raw-image). Plan 05-03 must use HEIC fallback for ProRAW output with os_log warning.
+- [Phase ?]: Used simple String.replacingOccurrences over regex — 8 tokens have no substring overlap (Pitfall 4 prevention)
+- [Phase ?]: Token substitution is preprocessing step BEFORE NSAttributedString creation per D-07
 
 ### Pending Todos
 

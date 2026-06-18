@@ -43,8 +43,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Dynamic EXIF Tokens (EXIF)
 
-- [ ] **EXIF-01**: User can add dynamic EXIF-based text to watermarks and frames using tokens: {camera_model}, {lens}, {aperture}, {focal_length}, {shutter_speed}, {iso}, {date}, {gps}
-- [ ] **EXIF-02**: EXIF tokens render correctly for all supported formats (HEIC, JPEG, ProRAW, DNG)
+- [x] **EXIF-01**: User can add dynamic EXIF-based text to watermarks and frames using tokens: {camera_model}, {lens}, {aperture}, {focal_length}, {shutter_speed}, {iso}, {date}, {gps}
+- [x] **EXIF-02**: EXIF tokens render correctly for all supported formats (HEIC, JPEG, ProRAW, DNG)
 
 ### Multi-Layer Compositing (MULT)
 
@@ -139,8 +139,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | QUAL-04 | Phase 3 | Complete |
 | PROR-01 | Phase 5 | Complete |
 | PROR-02 | Phase 5 | Complete |
-| EXIF-01 | Phase 5 | Pending |
-| EXIF-02 | Phase 5 | Pending |
+| EXIF-01 | Phase 5 | Complete |
+| EXIF-02 | Phase 5 | Complete |
 | MULT-01 | Phase 5 | Pending |
 | MULT-02 | Phase 5 | Pending |
 | EXPT-01 | Phase 6 | Pending |
