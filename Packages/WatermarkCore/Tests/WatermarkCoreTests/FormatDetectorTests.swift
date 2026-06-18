@@ -64,10 +64,39 @@ struct FormatDetectorTests {
         #expect(result?.0 != UTType.heic)
     }
 
+    @Test("Detects TIFF format from TIFF data")
+    func detectsTIFF() throws {
+        // Create a TIFF data source
+        let (cgImage, _) = TestImageFactory.solidColorImage(
+            color: CGColor(red: 0, green: 1, blue: 0, alpha: 1),
+            size: CGSize(width: 100, height: 100)
+        )
+        let tiffData = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            tiffData, UTType.tiff.identifier as CFString, 1, nil
+        ) else {
+            Issue.record("Failed to create TIFF destination")
+            return
+        }
+        CGImageDestinationAddImage(dest, cgImage, nil)
+        guard CGImageDestinationFinalize(dest) else {
+            Issue.record("Failed to finalize TIFF data")
+            return
+        }
+        guard let source = CGImageSourceCreateWithData(tiffData as CFData, nil) else {
+            Issue.record("Failed to create CGImageSource from TIFF data")
+            return
+        }
+        let (type, uti) = try FormatDetector.detect(from: source)
+        #expect(type == UTType.tiff)
+        #expect(uti as String == "public.tiff")
+    }
+
     @Test("fileExtension maps UTIs correctly")
     func fileExtensionMapping() {
         #expect(FormatDetector.fileExtension(for: "public.heic" as CFString) == "heic")
         #expect(FormatDetector.fileExtension(for: "public.jpeg" as CFString) == "jpg")
         #expect(FormatDetector.fileExtension(for: "public.png" as CFString) == "png")
+        #expect(FormatDetector.fileExtension(for: "public.tiff" as CFString) == "tiff")
     }
 }
