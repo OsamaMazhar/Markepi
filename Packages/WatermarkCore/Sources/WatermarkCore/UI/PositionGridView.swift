@@ -1,11 +1,23 @@
 import SwiftUI
 import WatermarkCore
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// 9-position grid picker for watermark placement.
 ///
 /// Generic over any `WatermarkConfigurable & Observable` ViewModel.
 public struct PositionGridView<ViewModel: WatermarkConfigurable & Observable>: View {
     @Bindable var viewModel: ViewModel
+
+    /// Returns the appropriate semantic separator color for the current platform.
+    private var separatorColor: Color {
+        #if canImport(UIKit)
+        Color(UIColor.separator)
+        #else
+        Color(.separatorColor)
+        #endif
+    }
 
     public init(viewModel: ViewModel) {
         self.viewModel = viewModel
@@ -53,8 +65,8 @@ public struct PositionGridView<ViewModel: WatermarkConfigurable & Observable>: V
                                     .font(.caption.weight(.bold))
                                     .foregroundStyle(.white)
                             } else {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color(.separator))
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(separatorColor)
                                 Text(label)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)

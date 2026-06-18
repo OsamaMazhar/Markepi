@@ -158,11 +158,9 @@ struct PhotosExtensionTests {
         // Since test assets are generated programmatically as JPEG,
         // we log a skip unless a fixture HEIC is provided.
         #if canImport(PhotosUI)
-        // Attempt to locate a test HEIC asset in the test bundle
-        let testBundle = Bundle.module
-        guard let heicURL = testBundle.url(forResource: "test_hdr", withExtension: "heic") else {
-            Issue.record("SKIP: No HDR HEIC test asset (test_hdr.heic) in test bundle. "
-                         + "Place a real HDR HEIC photo in the test resources to enable this test.")
+        // Locate test HEIC asset from any available bundle
+        guard let heicURL = Bundle.allBundles.lazy.compactMap({ $0.url(forResource: "test_hdr", withExtension: "heic") }).first else {
+            Issue.record("SKIP: No HDR HEIC test asset (test_hdr.heic) in any test bundle. Place a real HDR HEIC photo in the test resources to enable this test.")
             return
         }
 
@@ -204,7 +202,7 @@ struct PhotosExtensionTests {
     // MARK: - Test 6: EXIF metadata preservation
 
     @Test("EXIF metadata fields survive engine.process() round-trip")
-    func exifMetadataPreservedThroughProcessing() async throws {
+    mutating func exifMetadataPreservedThroughProcessing() async throws {
         // Create temp JPEG with EXIF metadata attached
         let (_, jpegData) = TestImageFactory.solidColorImage(
             color: CGColor(red: 0.3, green: 0.6, blue: 0.9, alpha: 1),
@@ -341,10 +339,8 @@ struct PhotosExtensionTests {
         // This test requires a real video test asset.
         // With no bundled video fixture, we log a skip.
         // On a device with a test video, this would verify processVideo().
-        let testBundle = Bundle.module
-        guard let videoURL = testBundle.url(forResource: "test_video", withExtension: "mov") else {
-            Issue.record("SKIP: No test video asset (test_video.mov) in test bundle. "
-                         + "Place a short H.264 .mov file in test resources to enable this test.")
+        guard let videoURL = Bundle.allBundles.lazy.compactMap({ $0.url(forResource: "test_video", withExtension: "mov") }).first else {
+            Issue.record("SKIP: No test video asset (test_video.mov) in any test bundle. Place a short H.264 .mov file in test resources to enable this test.")
             return
         }
 
@@ -376,9 +372,8 @@ struct PhotosExtensionTests {
 
     @Test("ProcessingResult.videoValidation.hdrPreserved is true for SDR source")
     func videoValidationHdrPreservedForSDR() async throws {
-        let testBundle = Bundle.module
-        guard let videoURL = testBundle.url(forResource: "test_video", withExtension: "mov") else {
-            Issue.record("SKIP: No test video asset (test_video.mov) in test bundle.")
+        guard let videoURL = Bundle.allBundles.lazy.compactMap({ $0.url(forResource: "test_video", withExtension: "mov") }).first else {
+            Issue.record("SKIP: No test video asset (test_video.mov) in any test bundle.")
             return
         }
 
@@ -551,8 +546,7 @@ struct PhotosExtensionTests {
         // RED: The ViewModel's renderAndCommit() skips video — this test
         // documents the expected behavior. In GREEN phase, this will be
         // replaced with a test that actually exercises the video path.
-        Issue.record("RED: ViewModel video path returns nil (skipped). "
-                     + "Expected PHContentEditingOutput with valid renderedContentURL in GREEN phase.")
+        Issue.record("RED: ViewModel video path returns nil (skipped). Expected PHContentEditingOutput with valid renderedContentURL in GREEN phase.")
         #else
         Issue.record("SKIP: PhotosUI not available on this platform")
         #endif

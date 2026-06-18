@@ -1,5 +1,8 @@
 import SwiftUI
 import WatermarkCore
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Text watermark input view — editable text field bound to the first watermark layer.
 ///
@@ -12,6 +15,24 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
         self.viewModel = viewModel
     }
 
+    /// Returns the appropriate semantic placeholder text color for the current platform.
+    private var placeholderColor: Color {
+        #if canImport(UIKit)
+        Color(UIColor.placeholderText)
+        #else
+        Color(.placeholderTextColor)
+        #endif
+    }
+
+    /// Returns the appropriate semantic separator color for the current platform.
+    private var separatorColor: Color {
+        #if canImport(UIKit)
+        Color(UIColor.separator)
+        #else
+        Color(.separatorColor)
+        #endif
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Watermark Text")
@@ -20,7 +41,7 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
             ZStack(alignment: .topLeading) {
                 if currentText.isEmpty {
                     Text("Watermark text")
-                        .foregroundColor(Color(.placeholderText))
+                        .foregroundColor(placeholderColor)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 8)
                 }
@@ -31,7 +52,7 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(.separator))
+                    .stroke(separatorColor)
             )
         }
         .onChange(of: currentText) { _, newValue in
