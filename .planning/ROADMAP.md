@@ -164,7 +164,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 06-01-PLAN.md — Export Format & Quality Control: OutputFormat.tiff, outputQuality config, ImageWriter destinationUTI+quality, engine format resolution, Export Options DisclosureGroup in ControlsView with format Picker and quality Slider, HDR→JPEG warning dialog
+- [x] 06-01-PLAN.md — Export Format & Quality Control: OutputFormat.tiff, outputQuality config, ImageWriter destinationUTI+quality, engine format resolution, Export Options DisclosureGroup in ControlsView with format Picker and quality Slider, HDR→JPEG warning dialog
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -205,5 +205,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Video Processing & Share Extension | 3/3 | Complete   | 2026-06-17 |
 | 4. Photos Edit Extension & Polish | 2/2 | Complete   | 2026-06-18 |
 | 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 4/4 | Complete   | 2026-06-18 |
-| 6. Export Control & UX Polish | 0/3 | Planned | 2026-06-18 |
+| 6. Export Control & UX Polish | 1/3 | In Progress|  |
 | 7. Additional Inputs & System Integration (v2) | 0/? | Not started | - |
