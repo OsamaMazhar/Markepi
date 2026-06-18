@@ -19,20 +19,51 @@ public struct WatermarkConfiguration: Sendable, Codable {
     /// Output format preference
     public var outputFormat: OutputFormat
 
+    /// Output quality for lossy formats (0.0–1.0). Default 1.0 (maximum quality).
+    /// Maps to kCGImageDestinationLossyCompressionQuality. Ignored by lossless formats (PNG, TIFF).
+    public var outputQuality: Float = 1.0
+
+    // MARK: CodingKeys
+
+    enum CodingKeys: String, CodingKey {
+        case watermarks, padding, whiteFrame, outputFormat, outputQuality
+    }
+
     /// Creates a watermark configuration.
     ///
     /// - Parameters:
     ///   - watermarks: Ordered watermark layers (bottom → top)
     ///   - whiteFrame: Optional white frame config (default: nil)
     ///   - outputFormat: Output format preference (default: .preserveSource)
+    ///   - outputQuality: Output quality 0.0–1.0 (default: 1.0, max quality)
     public init(
         watermarks: [WatermarkLayer] = [],
         whiteFrame: WhiteFrameConfig? = nil,
-        outputFormat: OutputFormat = .preserveSource
+        outputFormat: OutputFormat = .preserveSource,
+        outputQuality: Float = 1.0
     ) {
         self.watermarks = watermarks
         self.whiteFrame = whiteFrame
         self.outputFormat = outputFormat
+        self.outputQuality = outputQuality
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.watermarks = try container.decode([WatermarkLayer].self, forKey: .watermarks)
+        self.padding = try container.decodeIfPresent(CGFloat.self, forKey: .padding) ?? 20
+        self.whiteFrame = try container.decodeIfPresent(WhiteFrameConfig.self, forKey: .whiteFrame)
+        self.outputFormat = try container.decodeIfPresent(OutputFormat.self, forKey: .outputFormat) ?? .preserveSource
+        self.outputQuality = try container.decodeIfPresent(Float.self, forKey: .outputQuality) ?? 1.0
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(watermarks, forKey: .watermarks)
+        try container.encode(padding, forKey: .padding)
+        try container.encodeIfPresent(whiteFrame, forKey: .whiteFrame)
+        try container.encode(outputFormat, forKey: .outputFormat)
+        try container.encode(outputQuality, forKey: .outputQuality)
     }
 }
 
@@ -154,10 +185,33 @@ public enum OutputFormat: Sendable, Codable {
     /// Force PNG output
     case png
 
+    /// Force TIFF output
+    case tiff
+
+    /// Returns the Core Graphics / UTType UTI string for this format,
+    /// or nil for `.preserveSource` (which means "use the source UTI").
+    public var uti: String? {
+        switch self {
+        case .preserveSource: return nil
+        case .heic: return "public.heic"
+        case .jpeg: return "public.jpeg"
+        case .png: return "public.png"
+        case .tiff: return "public.tiff"
+        }
+    }
+
+    /// Returns true for lossless formats (PNG, TIFF) where quality slider should be disabled.
+    public var isLossless: Bool {
+        switch self {
+        case .png, .tiff: return true
+        default: return false
+        }
+    }
+
     // MARK: Codable (String raw value)
 
     enum RawValue: String, Codable {
-        case preserveSource, heic, jpeg, png
+        case preserveSource, heic, jpeg, png, tiff
     }
 
     public init(from decoder: Decoder) throws {
@@ -168,6 +222,7 @@ public enum OutputFormat: Sendable, Codable {
         case .heic: self = .heic
         case .jpeg: self = .jpeg
         case .png: self = .png
+        case .tiff: self = .tiff
         }
     }
 
@@ -177,7 +232,8 @@ public enum OutputFormat: Sendable, Codable {
         case .preserveSource: try container.encode(RawValue.preserveSource)
         case .heic: try container.encode(RawValue.heic)
         case .jpeg: try container.encode(RawValue.jpeg)
-            case .png: try container.encode(RawValue.png)
+        case .png: try container.encode(RawValue.png)
+        case .tiff: try container.encode(RawValue.tiff)
         }
     }
 }

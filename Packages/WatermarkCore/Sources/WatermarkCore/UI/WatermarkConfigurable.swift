@@ -18,6 +18,9 @@ public protocol WatermarkConfigurable: AnyObject {
     var activeLayerIndex: Int { get set }
     var renderingState: RenderingState { get }
     var whiteFrameEnabled: Bool { get }
+    var outputFormat: OutputFormat { get set }
+    var outputQuality: Float { get set }
+    var sourceHasHDR: Bool { get }
 
     func addLogoLayer(pngData: Data)
     func removeLayer(at index: Int)

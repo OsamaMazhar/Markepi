@@ -14,6 +14,7 @@ public struct FormatDetector {
         "public.heic",
         "public.jpeg",
         "public.png",
+        "public.tiff",
         "com.adobe.raw-image",
     ]
 
@@ -35,6 +36,7 @@ public struct FormatDetector {
         case "public.heic": type = .heic
         case "public.jpeg": type = .jpeg
         case "public.png":  type = .png
+        case "public.tiff": type = .tiff
         case "com.adobe.raw-image": type = .rawImage
         default:
             throw PipelineError.unsupportedFormat(utiString)
@@ -52,6 +54,7 @@ public struct FormatDetector {
         case "public.heic": return "heic"
         case "public.jpeg": return "jpg"
         case "public.png":  return "png"
+        case "public.tiff": return "tiff"
         case "com.adobe.raw-image": return "dng"
         default:            return "jpg"
         }
