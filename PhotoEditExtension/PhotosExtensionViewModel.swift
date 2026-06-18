@@ -489,28 +489,34 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
 
     /// Encodes a `WatermarkConfiguration` for storage in `PHAdjustmentData`.
     ///
-    /// Uses JSON encoding via the existing `Codable` conformance. Text-only
-    /// configs are small enough to stay well within PHAdjustmentData size
-    /// constraints (~2 MB effective limit — Pitfall 1).
+    /// Strips image watermark PNG data (replaced with 67-byte 1×1 placeholder)
+    /// before JSON encoding to stay safely under the PHAdjustmentData ~2 MB
+    /// effective size limit (Pitfall 1, T-04-09). The full image data is
+    /// stored in App Group UserDefaults for rehydration on re-edit.
     ///
     /// - Parameter config: The watermark configuration to encode
-    /// - Returns: JSON-encoded `Data`, or `nil` on encoding failure
+    /// - Returns: JSON-encoded `Data` with stripped image PNG data, or `nil` on failure
     private func encodeAdjustmentData(_ config: WatermarkConfiguration) -> Data? {
-        return try? JSONEncoder().encode(config)
+        let strippedConfig = config.strippingImageData()
+        return try? JSONEncoder().encode(strippedConfig)
     }
 
     /// Decodes a `PHAdjustmentData` back into a `WatermarkConfiguration`.
     ///
     /// Validates the `formatIdentifier` and `formatVersion` before decoding.
+    /// After decoding, rehydrates image watermark PNG data from App Group
+    /// storage via `rehydrateImageData()` (D-05: re-edit restores full config).
     /// Returns `nil` if the adjustment data is from a foreign extension or
     /// the JSON cannot be decoded (D-09).
     ///
     /// - Parameter adjustmentData: The `PHAdjustmentData` from the Photos library
-    /// - Returns: Decoded configuration, or `nil` if validation/decoding fails
+    /// - Returns: Decoded and rehydrated configuration, or `nil` on failure
     private func decodeAdjustmentData(_ adjustmentData: PHAdjustmentData) -> WatermarkConfiguration? {
         guard adjustmentData.formatIdentifier == AdjustmentConstants.formatIdentifier,
               adjustmentData.formatVersion == AdjustmentConstants.formatVersion else { return nil }
-        return try? JSONDecoder().decode(WatermarkConfiguration.self, from: adjustmentData.data)
+        guard var config = try? JSONDecoder().decode(WatermarkConfiguration.self, from: adjustmentData.data) else { return nil }
+        config.rehydrateImageData()
+        return config
     }
 
     // MARK: - Logo Picker

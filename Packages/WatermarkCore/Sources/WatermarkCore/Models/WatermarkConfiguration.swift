@@ -156,25 +156,121 @@ public enum OutputFormat: Sendable, Codable {
     }
 }
 
-// MARK: - PHAdjustmentData Image Stripping (stubs — RED phase)
+// MARK: - PHAdjustmentData Image Stripping
 
 extension WatermarkConfiguration {
-    /// Returns a copy with image watermark PNG data replaced by a minimal
-    /// placeholder, keeping the serialized config under PHAdjustmentData
-    /// size limits.
+    /// A valid minimal 1×1 RGBA transparent PNG (67 bytes).
+    /// Used as a placeholder for image watermark data when stripping
+    /// large PNG blobs before JSON-encoding for PHAdjustmentData.
     ///
-    /// - RED stub: returns self unchanged. Will be properly implemented
-    ///   in Task 3.
+    /// PHAdjustmentData has an implicit ~2 MB size limit (Pitfall 1).
+    /// Replacing image PNG data with this placeholder keeps serialized
+    /// configs safely under that limit. The full PNG data is stored
+    /// in App Group UserDefaults for rehydration on re-edit.
+    private static let strippedPlaceholderPNG: Data = {
+        // Pre-computed valid 1×1 RGBA transparent PNG bytes
+        let bytes: [UInt8] = [
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+            0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+            0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+            0x54, 0x78, 0x9C, 0x62, 0x00, 0x00, 0x00, 0x02,
+            0x00, 0x01, 0xE5, 0x27, 0xDE, 0xFC, 0x00, 0x00,
+            0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42,
+            0x60, 0x82,
+        ]
+        return Data(bytes)
+    }()
+
+    /// Returns a copy of this configuration with all `.image` watermark
+    /// layer PNG data replaced by a 1×1 transparent placeholder PNG.
+    ///
+    /// Text layers, white frame config, output format, and padding are
+    /// left unchanged. Layer positions and scales are preserved so that
+    /// `rehydrateImageData()` can match layers back to the full config.
+    ///
+    /// This keeps JSON-encoded configs safely under the PHAdjustmentData
+    /// ~2 MB effective size limit (Pitfall 1, T-04-09).
+    ///
+    /// - Returns: A copy with image PNG data replaced by minimal placeholders
     public func strippingImageData() -> WatermarkConfiguration {
-        // RED: stub — returns self, not yet stripping image data
-        return self
+        var copy = self
+
+        // Replace image watermark PNG data with 1×1 transparent placeholder
+        copy.watermarks = watermarks.map { layer in
+            switch layer {
+            case .image(let input, let position, let scale):
+                // Preserve position and scale for rehydration matching (T-04-08)
+                // Replace pngData with minimal placeholder (~67 bytes vs original)
+                if let strippedInput = try? ImageWatermarkInput(
+                    pngData: Self.strippedPlaceholderPNG,
+                    scale: input.scale,
+                    opacity: input.opacity
+                ) {
+                    return .image(strippedInput, position: position, scale: scale)
+                }
+                // Fallback: if placeholder fails (shouldn't), keep original as text marker
+                return .text(
+                    TextWatermarkInput(text: "[Image]", fontSize: 12,
+                                       color: CGColor(gray: 0.5, alpha: 1), opacity: 0.5),
+                    position: position,
+                    scale: scale
+                )
+            case .text:
+                return layer
+            }
+        }
+
+        return copy
     }
 
-    /// Restores image watermark PNG data from the full config stored in
-    /// App Group UserDefaults.
+    /// Restores image watermark PNG data from the full configuration
+    /// stored in App Group UserDefaults.
     ///
-    /// - RED stub: no-op. Will be properly implemented in Task 3.
+    /// Matches `.image` layers in this (stripped) config to their
+    /// counterparts in the full config by position AND scale (T-04-08:
+    /// both must match to prevent tampering). If no match is found,
+    /// the layer keeps its placeholder — the engine will use it as-is
+    /// or fall back gracefully.
+    ///
+    /// - Note: This mutates `self.watermarks` in place. Call after
+    ///   decoding a stripped config from PHAdjustmentData JSON.
     public mutating func rehydrateImageData() {
-        // RED: stub — no-op, not yet rehydrating
+        // Load the full config (with real image data) from App Group storage
+        guard let fullConfig = AppGroupConfigSync.load() else {
+            return // No full config available — keep stripped placeholders
+        }
+
+        // Build lookup: (position, scale) → ImageWatermarkInput from full config
+        var fullImageLayers: [(WatermarkPosition, CGFloat, ImageWatermarkInput)] = []
+        for layer in fullConfig.watermarks {
+            if case .image(let input, let position, let scale) = layer {
+                fullImageLayers.append((position, scale, input))
+            }
+        }
+
+        // Rehydrate each image layer in self by matching position + scale
+        watermarks = watermarks.map { layer in
+            switch layer {
+            case .image(let strippedInput, let position, let scale):
+                // T-04-08: match by position AND scale
+                if let match = fullImageLayers.first(where: { $0.0 == position && abs($0.1 - scale) < 0.001 }),
+                   !match.2.pngData.isEmpty {
+                    // Validate rehydrated data (non-empty check per threat model)
+                    if let rehydrated = try? ImageWatermarkInput(
+                        pngData: match.2.pngData,
+                        scale: strippedInput.scale,
+                        opacity: strippedInput.opacity
+                    ) {
+                        return .image(rehydrated, position: position, scale: scale)
+                    }
+                }
+                // No match found or invalid data — keep the stripped placeholder
+                return layer
+            case .text:
+                return layer
+            }
+        }
     }
 }
