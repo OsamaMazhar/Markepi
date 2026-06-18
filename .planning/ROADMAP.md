@@ -66,7 +66,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — Add error properties + protocol extension with 8 default implementations (5 methods + 3 computed properties) to WatermarkConfigurable.swift
+- [x] 10-01-PLAN.md — Add error properties + protocol extension with 8 default implementations (5 methods + 3 computed properties) to WatermarkConfigurable.swift
 - [ ] 10-02-PLAN.md — Remove 26 duplicated implementations across 3 ViewModels; full verification (build gate, 227 tests, grep audit, line count)
 
 ### Phase 11: Photos Extension HDR Detection
@@ -96,5 +96,5 @@ Phases execute in numeric order: 8 → 9 → 10 → 11
 | 7. Additional Inputs & System Integration (v2) | v1.0 | 3/3 | Complete | 2026-06-18 |
 | 8. Traceability Reconciliation & Recurrence Guard | v1.1 | 2/2 | Complete   | 2026-06-18 |
 | 9. Wave-Level Build Gate | v1.1 | 1/1 | Complete   | 2026-06-18 |
-| 10. WatermarkConfigurable Protocol Defaults | v1.1 | 2/2 | Planned | - |
+| 10. WatermarkConfigurable Protocol Defaults | v1.1 | 1/2 | In Progress|  |
 | 11. Photos Extension HDR Detection | v1.1 | 0/TBD | Not started | - |

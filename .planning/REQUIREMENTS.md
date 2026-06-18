@@ -17,7 +17,7 @@ Requirements for the v1.1 tech-debt milestone. Each maps to a roadmap phase.
 
 ### Refactor (REFA)
 
-- [ ] **REFA-01**: `WatermarkConfigurable` protocol provides default implementations for shared layer-management operations (update position, update scale, remove layer, toggle white frame, add logo layer), eliminating ~186 lines of per-target duplication across the Main App, ShareExtension, and PhotoEditExtension ViewModels
+- [x] **REFA-01**: `WatermarkConfigurable` protocol provides default implementations for shared layer-management operations (update position, update scale, remove layer, toggle white frame, add logo layer), eliminating ~186 lines of per-target duplication across the Main App, ShareExtension, and PhotoEditExtension ViewModels
 
 ### Photos HDR (PHDR)
 
@@ -25,7 +25,7 @@ Requirements for the v1.1 tech-debt milestone. Each maps to a roadmap phase.
 
 ### Build Gate (BUILD)
 
-- [ ] **BUILD-01**: A wave-level build gate runs `xcodebuild` across all 3 targets (Main App, ShareExtension, PhotoEditExtension) after each execution wave — replacing file-existence-only self-checks — so broken builds surface at source rather than at milestone audit
+- [x] **BUILD-01**: A wave-level build gate runs `xcodebuild` across all 3 targets (Main App, ShareExtension, PhotoEditExtension) after each execution wave — replacing file-existence-only self-checks — so broken builds surface at source rather than at milestone audit
 
 ## Future Requirements
 
@@ -71,9 +71,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | TRACE-01 | Phase 8 | Complete |
 | TRACE-02 | Phase 8 | Complete |
-| REFA-01 | Phase 10 | Pending |
+| REFA-01 | Phase 10 | Complete |
 | PHDR-01 | Phase 11 | Pending |
-| BUILD-01 | Phase 9 | Pending |
+| BUILD-01 | Phase 9 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 5 total
