@@ -111,7 +111,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Complete Photo Editing Extension: Xcode targets (PhotoEdit + ShareExtension), PHContentEditingController, photo watermarking via WatermarkEngine, PHAdjustmentData undo/re-edit, automated tests
+- [x] 04-01-PLAN.md — Complete Photo Editing Extension: Xcode targets (PhotoEdit + ShareExtension), PHContentEditingController, photo watermarking via WatermarkEngine, PHAdjustmentData undo/re-edit, automated tests
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -175,7 +175,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Core Engine & Photo Pipeline | 3/3 | Complete   | 2026-06-17 |
 | 2. Main App (Photo Watermark & Share) | 2/2 | Complete   | 2026-06-17 |
 | 3. Video Processing & Share Extension | 3/3 | Complete   | 2026-06-17 |
-| 4. Photos Edit Extension & Polish | 0/? | Not started | - |
+| 4. Photos Edit Extension & Polish | 1/2 | In Progress|  |
 | 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 0/? | Not started | - |
 | 6. Export Control & UX Polish | 0/? | Not started | - |
 | 7. Additional Inputs & System Integration (v2) | 0/? | Not started | - |
