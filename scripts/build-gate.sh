@@ -18,6 +18,7 @@ xcodebuild \
   -scheme WatermarkApp \
   -configuration Debug \
   -destination 'generic/platform=iOS' \
+  CODE_SIGNING_ALLOWED=NO \
   build
 
 BUILD_EXIT=$?
