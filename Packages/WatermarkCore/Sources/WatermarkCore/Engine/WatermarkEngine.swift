@@ -164,6 +164,7 @@ public actor WatermarkEngine {
     /// - Returns: `ProcessingResult` with the watermarked still output URL
     ///            and the watermarked video URL in `livePhotoVideoURL`
     /// - Throws: `PipelineError` for any pipeline stage failure
+    @available(iOS 18, macOS 15, *)
     public func processLivePhoto(
         stillImageURL: URL,
         videoURL: URL,

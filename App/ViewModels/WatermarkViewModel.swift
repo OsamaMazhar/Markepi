@@ -77,17 +77,106 @@ final class WatermarkViewModel: WatermarkConfigurable {
         return parts.joined(separator: "-")
     }
 
+    /// Detects Live Photo pairs from a collection of PhotosPickerItems by
+    /// grouping items that share a base identifier (D-03: detect Live Photos
+    /// as paired assets).
+    ///
+    /// Per RESEARCH.md Pattern 1: PhotosPickerItem.itemIdentifier has format
+    /// `"BASEID/public.jpeg"` for the still image and `"BASEID/public.movie"`
+    /// for the video component. This method strips the `/public.*` suffix to
+    /// extract the shared base ID, then returns still+video pairs.
+    ///
+    /// Pitfall 1 guard: if string parsing fails for any item, the item is
+    /// excluded from pairing and treated as individual photo/video.
+    ///
+    /// - Parameter items: The PhotosPickerItems to group
+    /// - Returns: Array of paired still+video tuples
+    private func detectLivePhotoPairs(
+        _ items: [PhotosPickerItem]
+    ) -> [(still: PhotosPickerItem, video: PhotosPickerItem)] {
+        // Group items by base identifier (strip /public.* suffix)
+        var stillMap: [String: PhotosPickerItem] = [:]
+        var videoMap: [String: PhotosPickerItem] = [:]
+
+        for item in items {
+            guard let identifier = item.itemIdentifier else { continue }
+            // Pitfall 1: guard against malformed identifiers
+            guard let slashIndex = identifier.lastIndex(of: "/") else { continue }
+            let baseID = String(identifier[..<slashIndex])
+            let suffix = String(identifier[identifier.index(after: slashIndex)...])
+
+            if suffix == "public.jpeg" || suffix == "public.heic" {
+                stillMap[baseID] = item
+            } else if suffix == "public.movie" {
+                videoMap[baseID] = item
+            }
+            // Unknown suffixes are intentionally ignored — treated as individual items
+        }
+
+        // Pair items where both still and video exist for the same base ID
+        var pairs: [(still: PhotosPickerItem, video: PhotosPickerItem)] = []
+        for (baseID, stillItem) in stillMap {
+            if let videoItem = videoMap[baseID] {
+                pairs.append((still: stillItem, video: videoItem))
+                // Remove paired items from maps so they're not double-counted
+                videoMap.removeValue(forKey: baseID)
+            }
+        }
+        return pairs
+    }
+
     func handleSelection(_ items: [PhotosPickerItem]) {
         Task {
             var loaded: [PhotoItem] = []
-            for item in items {
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    let thumb = createThumbnail(from: data, maxPixelSize: 200)
-                    let sourceURL = await copyToTemp(data: data)
+
+            // D-03: Detect Live Photo pairs before processing
+            let livePhotoPairs = detectLivePhotoPairs(items)
+
+            // Track paired item identifiers to skip in individual loop
+            var pairedItemIDs: Set<String?> = []
+            for pair in livePhotoPairs {
+                pairedItemIDs.insert(pair.still.itemIdentifier)
+                pairedItemIDs.insert(pair.video.itemIdentifier)
+            }
+
+            // Process Live Photo pairs first
+            for pair in livePhotoPairs {
+                if let stillData = try? await pair.still.loadTransferable(type: Data.self),
+                   let videoData = try? await pair.video.loadTransferable(type: Data.self) {
+                    let thumb = createThumbnail(from: stillData, maxPixelSize: 200)
+                    let stillURL = await copyToTemp(data: stillData)
+                    let videoURL = await copyToTemp(data: videoData)
                     loaded.append(PhotoItem(
                         id: UUID(),
                         thumbnail: thumb,
-                        sourceURL: sourceURL
+                        sourceURL: stillURL,
+                        videoSourceURL: videoURL,
+                        mediaType: .livePhoto
+                    ))
+                    // D-01: Detect HDR source for warning dialog
+                    if !sourceHasHDR {
+                        sourceHasHDR = detectHDRSource(from: stillData)
+                    }
+                    if sourceFormatLabel == nil {
+                        sourceFormatLabel = detectSourceFormatLabel(from: stillData)
+                    }
+                }
+            }
+
+            // Process unpaired items individually
+            for item in items {
+                // Skip items that were processed as part of a Live Photo pair
+                if pairedItemIDs.contains(item.itemIdentifier) { continue }
+
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    let thumb = createThumbnail(from: data, maxPixelSize: 200)
+                    let sourceURL = await copyToTemp(data: data)
+                    let mediaType = WatermarkEngine.mediaType(for: sourceURL)
+                    loaded.append(PhotoItem(
+                        id: UUID(),
+                        thumbnail: thumb,
+                        sourceURL: sourceURL,
+                        mediaType: mediaType
                     ))
                     // D-01: Detect HDR source for warning dialog
                     if !sourceHasHDR {
@@ -141,6 +230,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
     }
 
     func generatePreview() async {
+        // Live Photo: generate preview from still image source URL
+        // (video frame extraction is unnecessary for thumbnail strip)
         guard let sourceURL = currentPhoto?.sourceURL else { return }
         isGeneratingPreview = true
         defer { isGeneratingPreview = false }
@@ -161,13 +252,15 @@ final class WatermarkViewModel: WatermarkConfigurable {
     /// across all watermark config changes and is only cleared on media unload.
     func loadSourceForComparison() async {
         guard let sourceURL = currentPhoto?.sourceURL else { return }
-        let type = WatermarkEngine.mediaType(for: sourceURL)
+        // Live Photo: use still image for comparison source
+        // (video frame extraction is unnecessary for preview comparison)
+        let type = currentPhoto?.mediaType ?? WatermarkEngine.mediaType(for: sourceURL)
         switch type {
         case .video:
             if let frame = try? await VideoFrameExtractor.extract(from: sourceURL) {
                 originalSourceImage = UIImage(cgImage: frame)
             }
-        case .photo:
+        case .photo, .livePhoto:
             if let data = try? Data(contentsOf: sourceURL),
                let image = UIImage(data: data) {
                 originalSourceImage = image
@@ -178,16 +271,24 @@ final class WatermarkViewModel: WatermarkConfigurable {
     }
 
     func renderAndPrepareShare() async {
-        guard let sourceURL = currentPhoto?.sourceURL else { return }
+        guard let photo = currentPhoto else { return }
 
-        // D-13: Branch by media type — video uses progress-tracked export
-        let mediaType = WatermarkEngine.mediaType(for: sourceURL)
-        if mediaType == .video {
+        // D-13: Branch by media type
+        switch photo.mediaType {
+        case .video:
             await renderAndShareVideo()
             return
+
+        case .livePhoto:
+            await renderAndShareLivePhoto()
+            return
+
+        case .photo, .unknown:
+            break
         }
 
-        // Photo rendering path (unchanged)
+        // Photo rendering path
+        guard let sourceURL = currentPhoto?.sourceURL else { return }
         renderingState = .rendering
 
         do {
@@ -266,6 +367,60 @@ final class WatermarkViewModel: WatermarkConfigurable {
             }
         }
         videoExportTask = task
+    }
+
+    /// Processes a Live Photo pair by watermarking both the still image
+    /// and video component, then presenting the pair for sharing (D-02).
+    ///
+    /// Falls back to still-only watermarking with a user alert if
+    /// LivePhotoProcessor fails (Pitfall 2: iCloud asset missing or
+    /// format unsupported).
+    func renderAndShareLivePhoto() async {
+        guard let stillURL = currentPhoto?.sourceURL,
+              let videoURL = currentPhoto?.videoSourceURL else {
+            renderingState = .error(PipelineError.livePhotoUnsupported)
+            errorMessage = PipelineError.livePhotoUnsupported.errorDescription
+            showError = true
+            return
+        }
+
+        renderingState = .rendering
+
+        do {
+            let result = try await engine.processLivePhoto(
+                stillImageURL: stillURL,
+                videoURL: videoURL,
+                config: config
+            )
+            fullResResult = result
+            renderingState = .done
+            if let url = result.url,
+               let data = try? Data(contentsOf: url),
+               let uiImage = UIImage(data: data) {
+                previewImage = uiImage
+            }
+        } catch {
+            // Pitfall 2: Fall back to still-only watermarking with user alert
+            do {
+                let stillResult = try await engine.process(
+                    sourceURL: stillURL,
+                    config: config
+                )
+                fullResResult = stillResult
+                renderingState = .done
+                errorMessage = "Live Photo animation could not be preserved. The still image has been watermarked."
+                showError = true
+                if let url = stillResult.url,
+                   let data = try? Data(contentsOf: url),
+                   let uiImage = UIImage(data: data) {
+                    previewImage = uiImage
+                }
+            } catch {
+                renderingState = .error(error)
+                errorMessage = error.localizedDescription
+                showError = true
+            }
+        }
     }
 
     /// Schedules a local notification for video export completion/failure (D-14).
