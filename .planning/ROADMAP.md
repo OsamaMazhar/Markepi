@@ -140,8 +140,8 @@ Plans:
 
 **Wave 1** *(parallel — no file overlap)*
 
-- [ ] 05-02-PLAN.md — EXIF Token System: EXIFTokenParser utility, TextWatermarkRenderer/WhiteFrameRenderer integration, 8 token types with formatting, comprehensive tests
-- [ ] 05-03-PLAN.md — ProRAW DNG Pipeline: FormatDetector DNG UTI, ImageLoader DNG metadata extraction, ImageWriter DNG metadata preservation, MediaMetadata extension, ProRAW tests
+- [x] 05-02-PLAN.md — EXIF Token System: EXIFTokenParser utility, TextWatermarkRenderer/WhiteFrameRenderer integration, 8 token types with formatting, comprehensive tests
+- [x] 05-03-PLAN.md — ProRAW DNG Pipeline: FormatDetector DNG UTI, ImageLoader DNG metadata extraction, ImageWriter DNG metadata preservation, MediaMetadata extension, ProRAW tests
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -190,6 +190,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. Main App (Photo Watermark & Share) | 2/2 | Complete   | 2026-06-17 |
 | 3. Video Processing & Share Extension | 3/3 | Complete   | 2026-06-17 |
 | 4. Photos Edit Extension & Polish | 2/2 | Complete   | 2026-06-18 |
-| 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 1/4 | In Progress|  |
+| 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 3/4 | In Progress|  |
 | 6. Export Control & UX Polish | 0/? | Not started | - |
 | 7. Additional Inputs & System Integration (v2) | 0/? | Not started | - |
