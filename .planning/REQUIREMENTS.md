@@ -21,7 +21,7 @@ Requirements for the v1.1 tech-debt milestone. Each maps to a roadmap phase.
 
 ### Photos HDR (PHDR)
 
-- [ ] **PHDR-01**: `PhotosExtensionViewModel` populates `sourceHasHDR` and `sourceFormatLabel` from the `PHContentEditingInput` asset so the HDR→JPEG format-conversion warning fires correctly in the Photos extension context
+- [x] **PHDR-01**: `PhotosExtensionViewModel` populates `sourceHasHDR` and `sourceFormatLabel` from the `PHContentEditingInput` asset so the HDR→JPEG format-conversion warning fires correctly in the Photos extension context
 
 ### Build Gate (BUILD)
 
@@ -72,7 +72,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRACE-01 | Phase 8 | Complete |
 | TRACE-02 | Phase 8 | Complete |
 | REFA-01 | Phase 10 | Complete |
-| PHDR-01 | Phase 11 | Pending |
+| PHDR-01 | Phase 11 | Complete |
 | BUILD-01 | Phase 9 | Complete |
 
 **Coverage:**
