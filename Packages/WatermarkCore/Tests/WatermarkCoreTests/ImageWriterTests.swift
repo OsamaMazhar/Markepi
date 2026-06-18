@@ -33,7 +33,8 @@ struct ImageWriterTests {
                 metadata: metadata,
                 gainMapAuxData: nil,
                 dngMetadata: nil,
-                sourceUTI: sourceUTI
+                destinationUTI: sourceUTI,
+                quality: 1.0
             )
             // GREEN assertion: data should be non-empty
             #expect(!outputData.isEmpty)
@@ -75,7 +76,8 @@ struct ImageWriterTests {
                 metadata: metadata,
                 gainMapAuxData: nil,
                 dngMetadata: nil,
-                sourceUTI: "public.jpeg"
+                destinationUTI: "public.jpeg",
+                quality: 1.0
             )
             #expect(!outputData.isEmpty)
 
@@ -113,7 +115,8 @@ struct ImageWriterTests {
                 metadata: metadata,
                 gainMapAuxData: nil,
                 dngMetadata: nil,
-                sourceUTI: "public.jpeg",
+                destinationUTI: "public.jpeg",
+                quality: 1.0,
                 to: tempURL
             )
             // GREEN: verify file exists and is readable

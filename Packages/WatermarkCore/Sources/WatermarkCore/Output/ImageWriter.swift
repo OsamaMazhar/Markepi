@@ -21,7 +21,8 @@ public struct ImageWriter {
     ///   - metadata: Full metadata dictionary (with String keys, converted back to CFString for output)
     ///   - gainMapAuxData: Optional HDR gain map auxiliary data (with String keys)
     ///   - dngMetadata: Optional DNG-specific metadata dictionary (kCGImagePropertyDNGDictionary)
-    ///   - sourceUTI: Source format UTI as String (e.g., "public.heic")
+    ///   - destinationUTI: Target format UTI as String (e.g., "public.heic", "public.tiff")
+    ///   - quality: Compression quality 0.0–1.0 (maps to kCGImageDestinationLossyCompressionQuality; ignored by lossless formats)
     ///   - url: Output file URL
     /// - Throws: `PipelineError.failedToCreateDestination` or `.failedToFinalize`
     public static func write(
@@ -29,11 +30,12 @@ public struct ImageWriter {
         metadata: [String: Any],
         gainMapAuxData: [String: Any]?,
         dngMetadata: [String: Any]?,
-        sourceUTI: String,
+        destinationUTI: String,
+        quality: Float = 1.0,
         to url: URL
     ) throws {
         guard let destination = CGImageDestinationCreateWithURL(
-            url as CFURL, sourceUTI as CFString, 1, nil
+            url as CFURL, destinationUTI as CFString, 1, nil
         ) else {
             throw PipelineError.failedToCreateDestination
         }
@@ -43,6 +45,10 @@ public struct ImageWriter {
         if let dng = dngMetadata {
             combinedMetadata[kCGImagePropertyDNGDictionary as String] = dng
         }
+
+        // Merge quality into combinedMetadata BEFORE CGImageDestinationAddImage
+        // (Pitfall 5: single properties dict avoids overwriting metadata)
+        combinedMetadata[kCGImageDestinationLossyCompressionQuality as String] = quality
 
         // Re-attach metadata (Pattern 2)
         CGImageDestinationAddImage(destination, cgImage, combinedMetadata as CFDictionary)
@@ -71,11 +77,12 @@ public struct ImageWriter {
         metadata: [String: Any],
         gainMapAuxData: [String: Any]?,
         dngMetadata: [String: Any]?,
-        sourceUTI: String
+        destinationUTI: String,
+        quality: Float = 1.0
     ) throws -> Data {
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(
-            data, sourceUTI as CFString, 1, nil
+            data, destinationUTI as CFString, 1, nil
         ) else {
             throw PipelineError.failedToCreateDestination
         }
@@ -85,6 +92,10 @@ public struct ImageWriter {
         if let dng = dngMetadata {
             combinedMetadata[kCGImagePropertyDNGDictionary as String] = dng
         }
+
+        // Merge quality into combinedMetadata BEFORE CGImageDestinationAddImage
+        // (Pitfall 5: single properties dict avoids overwriting metadata)
+        combinedMetadata[kCGImageDestinationLossyCompressionQuality as String] = quality
 
         CGImageDestinationAddImage(destination, cgImage, combinedMetadata as CFDictionary)
 

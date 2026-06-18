@@ -96,18 +96,20 @@ public actor WatermarkEngine {
         }
 
         // 5. Write to temp file with metadata + HDR re-attached
-        let outputURL = try TempFileManager.createTempFile(uti: loaded.sourceUTI as CFString)
+        let destinationUTI = config.outputFormat.uti ?? loaded.sourceUTI
+        let outputURL = try TempFileManager.createTempFile(uti: destinationUTI as CFString)
         try ImageWriter.write(
             cgImage: cgImage,
             metadata: loaded.metadata,
             gainMapAuxData: loaded.gainMapAuxData,
             dngMetadata: loaded.dngMetadata,
-            sourceUTI: loaded.sourceUTI,
+            destinationUTI: destinationUTI,
+            quality: config.outputQuality,
             to: outputURL
         )
 
         // 6. Return result
-        return ProcessingResult(url: outputURL, data: nil, outputUTI: loaded.sourceUTI)
+        return ProcessingResult(url: outputURL, data: nil, outputUTI: destinationUTI)
     }
 
     /// Processes a video file, applying watermark via AVFoundation CALayer overlay.
