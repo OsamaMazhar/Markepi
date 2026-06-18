@@ -659,6 +659,9 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
         activeLayerIndex = config.watermarks.count - 1
     }
 
+    // Signature capture not supported in share extension context.
+    func addSignatureLayer(strokeData: Data, inkColor: CGColor, strokeWidth: CGFloat) { }
+
     /// Removes a watermark layer at the specified index.
     /// - Parameter index: The layer index to remove
     func removeLayer(at index: Int) {

@@ -24,6 +24,7 @@ public protocol WatermarkConfigurable: AnyObject {
     var sourceFormatLabel: String? { get }
 
     func addLogoLayer(pngData: Data)
+    func addSignatureLayer(strokeData: Data, inkColor: CGColor, strokeWidth: CGFloat)
     func removeLayer(at index: Int)
     func updateLayerPosition(at index: Int, position: WatermarkPosition)
     func updateLayerScale(at index: Int, scale: CGFloat)

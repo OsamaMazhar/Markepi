@@ -34,6 +34,7 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                 PositionGridView(viewModel: viewModel)
                 ScaleStepperView(viewModel: viewModel)
                 LogoPickerView(viewModel: viewModel)
+                SignatureCaptureView(viewModel: viewModel)
                 WhiteFrameToggleView(viewModel: viewModel)
                 LayerListView(viewModel: viewModel)
 

@@ -354,6 +354,12 @@ final class WatermarkViewModel: WatermarkConfigurable {
         activeLayerIndex = config.watermarks.count - 1
     }
 
+    func addSignatureLayer(strokeData: Data, inkColor: CGColor, strokeWidth: CGFloat) {
+        let input = SignatureInput(strokeData: strokeData, inkColor: inkColor, strokeWidth: strokeWidth)
+        config.watermarks.append(.signature(input, position: .bottomRight, scale: 0.15))
+        activeLayerIndex = config.watermarks.count - 1
+    }
+
     func removeLayer(at index: Int) {
         guard index >= 0, index < config.watermarks.count else { return }
         config.watermarks.remove(at: index)
