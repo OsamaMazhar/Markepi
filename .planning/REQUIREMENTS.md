@@ -38,7 +38,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### ProRAW (PROR)
 
-- [ ] **PROR-01**: User can process Apple ProRAW DNG files at full resolution (48MP) without downsampling or quality loss
+- [x] **PROR-01**: User can process Apple ProRAW DNG files at full resolution (48MP) without downsampling or quality loss
 - [ ] **PROR-02**: ProRAW HDR gain maps and DNG metadata are preserved through the watermark pipeline
 
 ### Dynamic EXIF Tokens (EXIF)
@@ -137,7 +137,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | QUAL-02 | Phase 1 | Complete |
 | QUAL-03 | Phase 1 | Complete |
 | QUAL-04 | Phase 3 | Complete |
-| PROR-01 | Phase 5 | Pending |
+| PROR-01 | Phase 5 | Complete |
 | PROR-02 | Phase 5 | Pending |
 | EXIF-01 | Phase 5 | Pending |
 | EXIF-02 | Phase 5 | Pending |

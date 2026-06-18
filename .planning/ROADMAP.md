@@ -136,7 +136,7 @@ Plans:
 Plans:
 **Wave 0** *(spike — DNG write path verification)*
 
-- [ ] 05-01-PLAN.md — DNG Write Path Verification Spike: empirical test of whether CGImageDestination supports DNG as a write destination format
+- [x] 05-01-PLAN.md — DNG Write Path Verification Spike: empirical test of whether CGImageDestination supports DNG as a write destination format
 
 **Wave 1** *(parallel — no file overlap)*
 
@@ -190,6 +190,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. Main App (Photo Watermark & Share) | 2/2 | Complete   | 2026-06-17 |
 | 3. Video Processing & Share Extension | 3/3 | Complete   | 2026-06-17 |
 | 4. Photos Edit Extension & Polish | 2/2 | Complete   | 2026-06-18 |
-| 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 0/? | Not started | - |
+| 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 1/4 | In Progress|  |
 | 6. Export Control & UX Polish | 0/? | Not started | - |
 | 7. Additional Inputs & System Integration (v2) | 0/? | Not started | - |
