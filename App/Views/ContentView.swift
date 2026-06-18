@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import WatermarkCore
 
 struct ContentView: View {
     @State var viewModel: WatermarkViewModel

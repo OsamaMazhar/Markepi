@@ -76,6 +76,22 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
     /// Detailed HDR warning text.
     var hdrWarningMessage: String?
 
+    // MARK: - Export Settings
+
+    var outputFormat: OutputFormat {
+        get { config.outputFormat }
+        set { config.outputFormat = newValue }
+    }
+
+    var outputQuality: Float {
+        get { config.outputQuality }
+        set { config.outputQuality = newValue }
+    }
+
+    public var sourceHasHDR: Bool = false
+
+    public var sourceFormatLabel: String? = nil
+
     // MARK: - Layer Management
 
     /// Index of the currently active watermark layer for editing.
@@ -109,7 +125,9 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
             .text(
                 TextWatermarkInput(text: "", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
                 position: .bottomRight,
-                scale: 0.15
+                scale: 0.15,
+                opacity: 1.0,
+                isVisible: true
             )
         ])
         self.config = AppGroupConfigSync.load() ?? defaultConfig
@@ -369,11 +387,11 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
         var parts: [String] = ["\(sourceURL?.lastPathComponent ?? "nil")"]
         for layer in config.watermarks {
             switch layer {
-            case .text(let input, let pos, let scl):
+            case .text(let input, let pos, let scl, _, _):
                 parts.append("t:\(input.text)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
-            case .image(let input, let pos, let scl):
+            case .image(let input, let pos, let scl, _, _):
                 parts.append("im:\(input.pngData.hashValue)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
-            case .signature(let input, let pos, let scl):
+            case .signature(let input, let pos, let scl, _, _):
                 parts.append("sig:\(input.strokeData.hashValue)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
             }
         }
@@ -398,7 +416,7 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
             showError = true
             return
         }
-        config.watermarks.append(.image(input, position: .bottomRight, scale: 0.15))
+        config.watermarks.append(.image(input, position: .bottomRight, scale: 0.15, opacity: 1.0, isVisible: true))
         activeLayerIndex = config.watermarks.count - 1
     }
 
@@ -423,10 +441,10 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
         guard index >= 0, index < config.watermarks.count else { return }
         let scale = config.watermarks[index].scale
         switch config.watermarks[index] {
-        case .text(let input, _, _):
-            config.watermarks[index] = .text(input, position: position, scale: scale)
-        case .image(let input, _, _):
-            config.watermarks[index] = .image(input, position: position, scale: scale)
+        case .text(let input, _, _, let opacity, let isVisible):
+            config.watermarks[index] = .text(input, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
+        case .image(let input, _, _, let opacity, let isVisible):
+            config.watermarks[index] = .image(input, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
         case .signature(let input, _, _, let opacity, let isVisible):
             config.watermarks[index] = .signature(input, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
         }
@@ -441,10 +459,10 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
         let clamped = min(max(scaleInput, 0.01), 0.90)
         let position = config.watermarks[index].position
         switch config.watermarks[index] {
-        case .text(let input, _, _):
-            config.watermarks[index] = .text(input, position: position, scale: clamped)
-        case .image(let input, _, _):
-            config.watermarks[index] = .image(input, position: position, scale: clamped)
+        case .text(let input, _, _, let opacity, let isVisible):
+            config.watermarks[index] = .text(input, position: position, scale: clamped, opacity: opacity, isVisible: isVisible)
+        case .image(let input, _, _, let opacity, let isVisible):
+            config.watermarks[index] = .image(input, position: position, scale: clamped, opacity: opacity, isVisible: isVisible)
         case .signature(let input, _, _, let opacity, let isVisible):
             config.watermarks[index] = .signature(input, position: position, scale: clamped, opacity: opacity, isVisible: isVisible)
         }

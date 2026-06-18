@@ -147,9 +147,6 @@ struct ShareExtensionRootView: View {
     }
 
     // MARK: - Multi-Item Progress (D-14)
-}
-
-    // MARK: - Multi-Item Progress (D-14)
 
     private var multiItemProgressBar: some View {
         VStack(spacing: 4) {
@@ -214,7 +211,9 @@ struct ShareExtensionRootView: View {
         .background(Color.orange.opacity(0.15))
     }
 
-    // MARK: - Array Safe Subscript
+}
+
+// MARK: - Array Safe Subscript
 
 extension Array {
     subscript(safe index: Index) -> Element? {

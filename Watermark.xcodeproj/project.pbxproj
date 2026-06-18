@@ -399,20 +399,13 @@
 			files = (
 				001 /* AsyncButton.swift in Sources */,
 				002 /* ContentView.swift in Sources */,
-				003 /* ControlsView.swift in Sources */,
 				004 /* ErrorAlertModifier.swift in Sources */,
 				005 /* PhotoItem.swift in Sources */,
-				006 /* PositionGridView.swift in Sources */,
 				007 /* PreviewView.swift in Sources */,
-				008 /* ScaleStepperView.swift in Sources */,
 				009 /* ShareSheetView.swift in Sources */,
-				00A /* TextWatermarkInputView.swift in Sources */,
 				00B /* ThumbnailStripView.swift in Sources */,
 				00C /* WatermarkApp.swift in Sources */,
 				00D /* WatermarkViewModel.swift in Sources */,
-				00F /* LogoPickerView.swift in Sources */,
-				010 /* LayerListView.swift in Sources */,
-				011 /* WhiteFrameToggleView.swift in Sources */,
 				012 /* ScaleLabelView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
