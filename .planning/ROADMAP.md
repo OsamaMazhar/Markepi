@@ -193,7 +193,7 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 07-01-PLAN.md — Signature Capture (SIGN-01): SignatureInput model, WatermarkLayer.signature case, SignatureRenderer, SignatureCaptureView PKCanvasView UI, engine integration, ViewModel/Controls/LayerList updates
+- [x] 07-01-PLAN.md — Signature Capture (SIGN-01): SignatureInput model, WatermarkLayer.signature case, SignatureRenderer, SignatureCaptureView PKCanvasView UI, engine integration, ViewModel/Controls/LayerList updates
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 07-02-PLAN.md — Live Photos (LIVE-01, LIVE-02): LivePhotoProcessor via PHLivePhotoEditingContext, PipelineError.livePhotoUnsupported, PhotosPicker Live Photo pair detection, still+video watermarking with graceful fallback
@@ -217,4 +217,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Photos Edit Extension & Polish | 2/2 | Complete   | 2026-06-18 |
 | 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 4/4 | Complete   | 2026-06-18 |
 | 6. Export Control & UX Polish | 3/3 | Complete   | 2026-06-18 |
-| 7. Additional Inputs & System Integration (v2) | 0/3 | Not started | - |
+| 7. Additional Inputs & System Integration (v2) | 1/3 | In Progress|  |
