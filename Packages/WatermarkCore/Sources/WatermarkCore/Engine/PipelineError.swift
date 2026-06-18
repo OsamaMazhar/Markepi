@@ -82,6 +82,11 @@ public enum PipelineError: Error, LocalizedError, Sendable, Equatable {
     /// Export was cancelled by user
     case videoCancelled
 
+    // MARK: - Forward-declared Live Photo Errors
+
+    /// Live Photo could not be processed (format unsupported or iCloud asset missing)
+    case livePhotoUnsupported
+
     // MARK: - LocalizedError
 
     public var errorDescription: String? {
@@ -134,6 +139,8 @@ public enum PipelineError: Error, LocalizedError, Sendable, Equatable {
             return "Unsupported video codec: \(codec)."
         case .videoCancelled:
             return "Video export was cancelled."
+        case .livePhotoUnsupported:
+            return "This Live Photo could not be processed. The format may be unsupported."
         }
     }
 
@@ -183,6 +190,7 @@ public enum PipelineError: Error, LocalizedError, Sendable, Equatable {
         case (.videoValidationFailed(let a), .videoValidationFailed(let b)): return a == b
         case (.videoUnsupportedCodec(let a), .videoUnsupportedCodec(let b)): return a == b
         case (.videoCancelled, .videoCancelled): return true
+        case (.livePhotoUnsupported, .livePhotoUnsupported): return true
         default: return false
         }
     }

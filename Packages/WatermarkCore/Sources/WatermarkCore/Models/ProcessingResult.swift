@@ -24,16 +24,24 @@ public struct ProcessingResult: Sendable {
     /// and any warnings from post-export inspection.
     public let videoValidation: ExportValidator.ExportValidationResult?
 
+    /// When non-nil, the processing result represents a Live Photo pair.
+    /// This URL points to the watermarked video component of the Live Photo.
+    /// The `url` property points to the watermarked still image.
+    /// Nil for non-Live-Photo results.
+    public let livePhotoVideoURL: URL?
+
     public init(
         url: URL?,
         data: Data?,
         outputUTI: String,
-        videoValidation: ExportValidator.ExportValidationResult? = nil
+        videoValidation: ExportValidator.ExportValidationResult? = nil,
+        livePhotoVideoURL: URL? = nil
     ) {
         self.url = url
         self.data = data
         self.outputUTI = outputUTI
         self.videoValidation = videoValidation
+        self.livePhotoVideoURL = livePhotoVideoURL
     }
 }
 

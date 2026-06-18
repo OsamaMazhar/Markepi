@@ -29,6 +29,7 @@ public actor WatermarkEngine {
     public enum MediaType: Sendable {
         case photo
         case video
+        case livePhoto
         case unknown
     }
 
@@ -145,6 +146,42 @@ public actor WatermarkEngine {
             data: nil,
             outputUTI: sourceUTI,
             videoValidation: validation
+        )
+    }
+
+    /// Processes a Live Photo pair (still image + video component),
+    /// applying watermark to both via the existing photo and video pipelines.
+    ///
+    /// Delegates to `LivePhotoProcessor.process(stillImageURL:videoURL:config:)`
+    /// for coordinated processing of the paired assets. Returns a
+    /// `ProcessingResult` with both the watermarked still URL and a reference
+    /// to the watermarked video URL via `livePhotoVideoURL`.
+    ///
+    /// - Parameters:
+    ///   - stillImageURL: File URL to the still image component of the Live Photo
+    ///   - videoURL: File URL to the video component of the Live Photo
+    ///   - config: Watermark configuration
+    /// - Returns: `ProcessingResult` with the watermarked still output URL
+    ///            and the watermarked video URL in `livePhotoVideoURL`
+    /// - Throws: `PipelineError` for any pipeline stage failure
+    public func processLivePhoto(
+        stillImageURL: URL,
+        videoURL: URL,
+        config: WatermarkConfiguration
+    ) async throws -> ProcessingResult {
+        let pair = try await LivePhotoProcessor.process(
+            stillImageURL: stillImageURL,
+            videoURL: videoURL,
+            config: config
+        )
+        // Determine source UTI from still image
+        let sourceUTI = (try? stillImageURL.resourceValues(forKeys: [.typeIdentifierKey]).typeIdentifier)
+            ?? pair.stillOutputUTI
+        return ProcessingResult(
+            url: pair.watermarkedStillURL,
+            data: nil,
+            outputUTI: sourceUTI,
+            livePhotoVideoURL: pair.watermarkedVideoURL
         )
     }
 
