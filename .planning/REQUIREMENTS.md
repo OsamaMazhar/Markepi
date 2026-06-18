@@ -48,8 +48,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Multi-Layer Compositing (MULT)
 
-- [ ] **MULT-01**: User can apply text watermark, image/logo watermark, and white frame simultaneously in a single render pass
-- [ ] **MULT-02**: Each layer (text, image, frame) has independent position, opacity, and visibility controls
+- [x] **MULT-01**: User can apply text watermark, image/logo watermark, and white frame simultaneously in a single render pass
+- [x] **MULT-02**: Each layer (text, image, frame) has independent position, opacity, and visibility controls
 
 ### Export Control (EXPT)
 
@@ -141,8 +141,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | PROR-02 | Phase 5 | Complete |
 | EXIF-01 | Phase 5 | Complete |
 | EXIF-02 | Phase 5 | Complete |
-| MULT-01 | Phase 5 | Pending |
-| MULT-02 | Phase 5 | Pending |
+| MULT-01 | Phase 5 | Complete |
+| MULT-02 | Phase 5 | Complete |
 | EXPT-01 | Phase 6 | Pending |
 | EXPT-02 | Phase 6 | Pending |
 | EXPT-03 | Phase 6 | Pending |

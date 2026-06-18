@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: verifying
 stopped_at: Phase 5 context gathered
-last_updated: "2026-06-18T08:35:06.271Z"
+last_updated: "2026-06-18T08:43:28.159Z"
 last_activity: 2026-06-18
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 14
-  completed_plans: 13
-  percent: 57
+  completed_plans: 14
+  percent: 71
 ---
 
 # Project State
@@ -30,7 +30,7 @@ Plan: 2 of 2
 Status: Phase complete — ready for verification
 Last activity: 2026-06-18
 
-Progress: [█████████░] 93%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [█████████░] 93%
 | Phase 05-extended-engine-proraw-exif-tokens-multi-layer P01 | 120 | 2 tasks | 4 files |
 | Phase 05 P03 | 3 | 3 tasks | 6 files |
 | Phase 05 P02 | 296 | 2 tasks | 7 files |
+| Phase 05 P04 | 373 | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,10 @@ Recent decisions affecting current work:
 - [Phase ?]: DNG write is UNSUPPORTED — CGImageDestinationCreateWithData returns nil for DNG UTI (com.adobe.raw-image). Plan 05-03 must use HEIC fallback for ProRAW output with os_log warning.
 - [Phase ?]: Used simple String.replacingOccurrences over regex — 8 tokens have no substring overlap (Pitfall 4 prevention)
 - [Phase ?]: Token substitution is preprocessing step BEFORE NSAttributedString creation per D-07
+- [Phase ?]: Per-layer opacity via CIFilter.colorMatrix.aVector — separate from per-element opacity (text rendering alpha, PNG pixel alpha)
+- [Phase ?]: D-12 compositing order: text (bottom) → image (middle) → white frame (outermost/top) enforced in buildFilterGraph
+- [Phase ?]: Backward-compatible Codable: decodeIfPresent with defaults (opacity: 1.0, isVisible: true) for old JSON payloads
+- [Phase ?]: Per-layer visibility guard skips hidden layers before any rendering work (MULT-02)
 
 ### Pending Todos
 
@@ -114,6 +119,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T08:34:35.423Z
+Last session: 2026-06-18T08:42:56.915Z
 Stopped at: Phase 5 context gathered
 Resume file: None
