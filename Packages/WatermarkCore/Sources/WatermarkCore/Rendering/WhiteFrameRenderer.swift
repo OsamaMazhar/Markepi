@@ -51,7 +51,7 @@ public struct WhiteFrameRenderer {
         let attributionText: String?
         if config.metadataTextEnabled {
             if let customText = config.customAttributionText {
-                attributionText = customText
+                attributionText = EXIFTokenParser.substitute(customText, metadata: metadata)
             } else {
                 attributionText = DeviceMetadataProvider.attributionText(from: metadata)
             }

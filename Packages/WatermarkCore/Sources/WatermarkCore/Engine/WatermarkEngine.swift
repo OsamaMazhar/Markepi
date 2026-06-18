@@ -202,7 +202,8 @@ public actor WatermarkEngine {
 
             switch watermark {
             case .text(let textConfig, _, _):
-                watermarkImage = TextWatermarkRenderer.render(config: textConfig)
+                // Token substitution happens BEFORE NSAttributedString creation (D-07)
+                watermarkImage = TextWatermarkRenderer.render(config: textConfig, metadata: metadata)
 
             case .image(let imageConfig, _, _):
                 watermarkImage = try ImageWatermarkRenderer.render(config: imageConfig)

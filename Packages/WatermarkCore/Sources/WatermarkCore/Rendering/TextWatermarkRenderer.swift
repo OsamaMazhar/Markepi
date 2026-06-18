@@ -42,6 +42,23 @@ public struct TextWatermarkRenderer {
         return filter.outputImage!
     }
 
+    /// Renders a text watermark with EXIF token substitution applied to the text string.
+    /// Token substitution happens BEFORE NSAttributedString creation per D-07.
+    /// - Parameters:
+    ///   - config: Text watermark configuration (text may contain {tokens})
+    ///   - metadata: Source image metadata dictionary (for token resolution via EXIFTokenParser)
+    /// - Returns: A CIImage with token-substituted text rendered at the configured position
+    public static func render(config: TextWatermarkInput, metadata: [String: Any]) -> CIImage {
+        let substitutedText = EXIFTokenParser.substitute(config.text, metadata: metadata)
+        let substitutedConfig = TextWatermarkInput(
+            text: substitutedText,
+            fontSize: config.fontSize,
+            color: config.color,
+            opacity: config.opacity
+        )
+        return render(config: substitutedConfig)
+    }
+
     /// Builds the NSAttributedString attributes dictionary from watermark config.
     private static func buildAttributes(config: TextWatermarkInput) -> [NSAttributedString.Key: Any] {
         let paragraphStyle = NSMutableParagraphStyle()
