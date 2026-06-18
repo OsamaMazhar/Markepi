@@ -28,7 +28,10 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
     ///
     /// Loads saved config on init. Saves on every mutation via `didSet`.
     var config: WatermarkConfiguration {
-        didSet { AppGroupConfigSync.save(config) }
+        didSet {
+            AppGroupConfigSync.save(config)
+            hasUnsavedChanges = true
+        }
     }
 
     // MARK: - Media State
@@ -186,11 +189,73 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
     /// Renders the watermarked output at full resolution and commits the edit
     /// to Photos via `PHContentEditingOutput` with `PHAdjustmentData`.
     ///
-    /// Full implementation in Task 3. Current stub returns nil to signal
-    /// no edit committed.
+    /// Pipeline:
+    ///   1. Guard: input and sourceURL must be non-nil
+    ///   2. Detect media type via `WatermarkEngine.mediaType(for:)`
+    ///   3. For videos: skip for now (will be Plan 04-02)
+    ///   4. For photos: call `engine.process(sourceURL:config:)` (D-06)
+    ///   5. Create `PHContentEditingOutput` from the input
+    ///   6. Copy rendered data to `renderedContentURL`
+    ///   7. Attach `PHAdjustmentData` with JSON-encoded config (D-04)
+    ///   8. Call `finishHandler` with the output
+    ///   9. On error: set error state and call `finishHandler(nil)`
+    ///
+    /// Source format preservation (D-07): `engine.process()` uses the
+    /// default `.preserveSource` output format, which matches the source
+    /// format (HEIC→HEIC, JPEG→JPEG, PNG→PNG). Non-destructive editing
+    /// via `PHAdjustmentData` + undo means the original format is always
+    /// recoverable via "Revert to Original" in the Photos app.
     private func renderAndCommit() async {
-        // Stub: full implementation in Task 3
-        finishHandler?(nil)
+        guard let input = input, let sourceURL = sourceURL else {
+            finishHandler?(nil)
+            return
+        }
+
+        // Video processing deferred to Plan 04-02
+        let mediaType = WatermarkEngine.mediaType(for: sourceURL)
+        if mediaType == .video || isVideo {
+            renderingState = .idle
+            finishHandler?(nil)
+            return
+        }
+
+        renderingState = .rendering
+
+        do {
+            // D-06: Render via existing WatermarkEngine pipeline
+            // D-07: Uses .preserveSource output format by default
+            let result = try await engine.process(sourceURL: sourceURL, config: config)
+
+            // D-06: Create PHContentEditingOutput from the input
+            let output = PHContentEditingOutput(contentEditingInput: input)
+
+            // Copy rendered data to renderedContentURL
+            if let renderedURL = result.url {
+                let renderedData = try Data(contentsOf: renderedURL)
+                try renderedData.write(to: output.renderedContentURL, options: .atomic)
+
+                // Cleanup engine temp file after writing to Photos output path
+                try? TempFileManager.cleanup(url: renderedURL)
+            }
+
+            // D-04: Attach PHAdjustmentData (config as JSON for undo/re-edit)
+            if let adjustmentPayload = encodeAdjustmentData(config) {
+                output.adjustmentData = PHAdjustmentData(
+                    formatIdentifier: AdjustmentConstants.formatIdentifier,
+                    formatVersion: AdjustmentConstants.formatVersion,
+                    data: adjustmentPayload
+                )
+            }
+
+            hasUnsavedChanges = false
+            renderingState = .done
+            finishHandler?(output)
+        } catch {
+            renderingState = .error(error)
+            errorMessage = error.localizedDescription
+            showError = true
+            finishHandler?(nil)
+        }
     }
 
     // MARK: - Preview Generation
