@@ -193,6 +193,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
         showShareSheet = true
     }
 
+    func cancelVideoExport() {
+        // Stub — full implementation in Task 3
+    }
+
     func cleanupTempFile() {
         if let url = fullResResult?.url {
             try? TempFileManager.cleanup(url: url)

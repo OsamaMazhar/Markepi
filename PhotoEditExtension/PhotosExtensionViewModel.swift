@@ -479,6 +479,11 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
         // No-op: Photos extension doesn't have a share sheet
     }
 
+    /// Cancels an in-progress video export (no-op for Photos extension).
+    func cancelVideoExport() {
+        // No-op: Photos extension doesn't support video export
+    }
+
     // MARK: - PHAdjustmentData Encode/Decode
 
     /// Canonical adjustment data constants for the Watermark Photos extension.

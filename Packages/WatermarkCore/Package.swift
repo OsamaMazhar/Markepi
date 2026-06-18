@@ -5,7 +5,7 @@ let package = Package(
     name: "WatermarkCore",
     platforms: [
         .iOS(.v18),
-        .macOS(.v14),  // Needed for expandToHDR and UTType availability when running tests on macOS
+        .macOS(.v15),  // Needed for states(updateInterval:) and export(to:as:) APIs
     ],
     products: [
         .library(

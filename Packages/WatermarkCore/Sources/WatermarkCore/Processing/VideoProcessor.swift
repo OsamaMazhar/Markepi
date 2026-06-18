@@ -42,12 +42,17 @@ public struct VideoProcessor {
     /// - Parameters:
     ///   - sourceURL: File URL to the source video
     ///   - config: Watermark configuration (layers, position, scale, white frame)
+    ///   - onProgress: Optional callback receiving progress (0.0–1.0) and
+    ///     estimated time remaining in seconds (nil when progress < 0.01).
+    ///     Default nil for backward compatibility.
     /// - Returns: A tuple containing the output temp file URL and the post-export
     ///   validation result for surfacing HDR/audio warnings to the caller
     /// - Throws: `PipelineError` for any pipeline stage failure
+    @available(iOS 18, macOS 15, *)
     public static func process(
         sourceURL: URL,
-        config: WatermarkConfiguration
+        config: WatermarkConfiguration,
+        onProgress: (@Sendable (Double, TimeInterval?) -> Void)? = nil
     ) async throws -> (outputURL: URL, validation: ExportValidator.ExportValidationResult) {
         let asset = AVURLAsset(url: sourceURL)
 
@@ -173,18 +178,45 @@ public struct VideoProcessor {
         // Match source container type (D-04)
         await matchSourceFormat(asset: asset, exportSession: exportSession)
 
-        // Run export
-        await exportSession.export()
+        // Step 6: Export with progress tracking via iOS 18 async API (D-11, D-12)
+        let outputFileType: AVFileType = exportSession.outputFileType ?? .mp4
 
-        switch exportSession.status {
-        case .completed:
-            break
-        case .failed:
-            throw PipelineError.videoExportFailed(exportSession.error)
-        case .cancelled:
-            throw PipelineError.videoCancelled
-        default:
-            throw PipelineError.videoExportFailed(exportSession.error)
+        if let onProgress = onProgress {
+            nonisolated(unsafe) let callback = onProgress
+            let startTime = Date()
+
+            // Create states sequence before spawning concurrent work
+            let states = exportSession.states(updateInterval: 0.1)
+            let statesTask = Task {
+                do {
+                    for try await state in states {
+                        if case .exporting(let progress) = state {
+                            let fraction = progress.fractionCompleted
+                            let elapsed = Date().timeIntervalSince(startTime)
+                            let eta: TimeInterval? = fraction > 0.01
+                                ? elapsed / max(fraction, 0.01) - elapsed
+                                : nil
+                            callback(fraction, eta)
+                        }
+                    }
+                } catch {
+                    // States sequence ends when export completes, fails, or is cancelled
+                }
+            }
+
+            // Execute export (throws on failure/cancellation)
+            do {
+                try await exportSession.export(to: outputURL, as: outputFileType)
+            } catch {
+                statesTask.cancel()
+                throw error
+            }
+
+            // Ensure states task completes
+            _ = await statesTask.value
+        } else {
+            // Backward compat: no progress reporting, but still use new API
+            try await exportSession.export(to: outputURL, as: outputFileType)
         }
 
         // Step 7: Post-export validation (D-12)

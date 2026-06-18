@@ -35,4 +35,9 @@ public protocol WatermarkConfigurable: AnyObject {
 
     /// Presents the share sheet (sets internal showShareSheet flag).
     func presentShareSheet()
+
+    /// Cancels an in-progress video export.
+    /// Called by ControlsView's Cancel button during .renderingVideo state.
+    /// The ViewModel cancels the export task and cleans up the incomplete temp file.
+    func cancelVideoExport()
 }

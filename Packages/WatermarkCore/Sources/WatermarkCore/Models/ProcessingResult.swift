@@ -51,6 +51,11 @@ public enum RenderingState: Equatable, Sendable {
     /// Rendering is in progress; UI should show progress indicator
     case rendering
 
+    /// Video rendering in progress with progress tracking.
+    /// - Parameter progress: Export progress from 0.0 to 1.0
+    /// - Parameter estimatedTimeRemaining: ETA in seconds, or nil when insufficient data
+    case renderingVideo(progress: Double, estimatedTimeRemaining: TimeInterval?)
+
     /// Rendering completed successfully; ready to present share sheet
     case done
 
@@ -61,6 +66,8 @@ public enum RenderingState: Equatable, Sendable {
         switch (lhs, rhs) {
         case (.idle, .idle), (.rendering, .rendering), (.done, .done):
             return true
+        case (.renderingVideo(let p1, let e1), .renderingVideo(let p2, let e2)):
+            return p1 == p2 && e1 == e2
         case (.error, .error):
             return true
         default:

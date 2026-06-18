@@ -141,6 +141,39 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                 .disabled(true)
                 .transition(.opacity.combined(with: .scale))
 
+            case .renderingVideo(let progress, let eta):
+                VStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        ProgressView(value: progress, total: 1.0)
+                            .progressViewStyle(.linear)
+                            .tint(.blue)
+                        Text("\(Int(progress * 100))%")
+                            .font(.caption.weight(.medium))
+                            .monospacedDigit()
+                            .frame(width: 36, alignment: .trailing)
+                    }
+                    if let eta = eta {
+                        Text("~\(Int(eta))s remaining")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("--")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Button(role: .destructive) {
+                        viewModel.cancelVideoExport()
+                    } label: {
+                        Text("Cancel")
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 36)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+
             case .done:
                 Button {
                     if !reduceMotion {

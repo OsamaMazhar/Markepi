@@ -513,6 +513,11 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
         showShareSheet = true
     }
 
+    /// Cancels an in-progress video export.
+    func cancelVideoExport() {
+        // Stub — full implementation in Task 3
+    }
+
     /// Handles share sheet dismissal — cleans up temp files and closes the
     /// extension via `completeRequest()` (D-07 one-shot workflow).
     func handleShareDismiss() {
