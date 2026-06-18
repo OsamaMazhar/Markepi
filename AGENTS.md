@@ -196,6 +196,34 @@ This self-contained fixture test validates three branches (happy path, not_found
 
 <!-- GSD:post-plan-end -->
 
+<!-- GSD:post-wave-start source=Phase 9 -->
+## GSD Post-Wave Build Gate
+
+After all plans in an execution wave complete (all SUMMARY.md files written) and before the next wave begins, the gsd-executor MUST run:
+
+```
+bash scripts/build-gate.sh
+```
+
+This gate replaces file-existence-only self-checks as the source of truth for "build PASSED" in the execute workflow. It runs `xcodebuild` across all 3 targets (WatermarkApp, ShareExtension, PhotoEditExtension) via the single WatermarkApp scheme.
+
+### Exit Codes and Resolution
+
+| Exit | Meaning | Action |
+|------|---------|--------|
+| 0 | All targets compiled successfully. "BUILD GATE: PASSED" | Proceed to next wave. |
+| non-zero | At least one target failed compilation. "BUILD GATE: FAILED" | **BLOCKER.** Resolve build errors before proceeding. Compilation errors appear inline in the xcodebuild output above. If xcodebuild reports errors that don't appear in Xcode IDE, run `xcodebuild -project Watermark.xcodeproj -scheme WatermarkApp clean` and retry. |
+
+### Regression Check
+
+Verify the gate works:
+
+```bash
+bash scripts/test-build-gate.sh
+```
+
+This self-contained fixture test validates three branches (clean build, broken build caught, gate blocks wave progression) and exits non-zero on failure. Run after any change to `build-gate.sh` or the Xcode project structure.
+<!-- GSD:post-wave-end -->
 
 <!-- GSD:profile-start -->
 ## Developer Profile
