@@ -1,3 +1,4 @@
+import CoreImage
 import Foundation
 import SwiftUI
 import WatermarkCore
@@ -22,6 +23,8 @@ public protocol WatermarkConfigurable: AnyObject {
     var outputQuality: Float { get set }
     var sourceHasHDR: Bool { get }
     var sourceFormatLabel: String? { get }
+    var errorMessage: String? { get set }
+    var showError: Bool { get set }
 
     func addLogoLayer(pngData: Data)
     func addSignatureLayer(strokeData: Data, inkColor: CGColor, strokeWidth: CGFloat)
@@ -41,4 +44,91 @@ public protocol WatermarkConfigurable: AnyObject {
     /// Called by ControlsView's Cancel button during .renderingVideo state.
     /// The ViewModel cancels the export task and cleans up the incomplete temp file.
     func cancelVideoExport()
+}
+
+// MARK: - Default Implementations
+
+extension WatermarkConfigurable {
+
+    // MARK: Layer Management
+
+    func addLogoLayer(pngData: Data) {
+        guard let _ = CIImage(data: pngData) else {
+            errorMessage = "The selected image is not a valid PNG file."
+            showError = true
+            return
+        }
+        guard let input = try? ImageWatermarkInput(pngData: pngData) else {
+            errorMessage = "The selected image is not a valid PNG file."
+            showError = true
+            return
+        }
+        config.watermarks.append(.image(input, position: .bottomRight, scale: 0.15, opacity: 1.0, isVisible: true))
+        activeLayerIndex = config.watermarks.count - 1
+    }
+
+    func addSignatureLayer(strokeData: Data, inkColor: CGColor, strokeWidth: CGFloat) {
+        // Default: no-op. Overridden by WatermarkViewModel with PencilKit implementation.
+    }
+
+    func removeLayer(at index: Int) {
+        guard index >= 0, index < config.watermarks.count else { return }
+        config.watermarks.remove(at: index)
+        if activeLayerIndex >= config.watermarks.count {
+            activeLayerIndex = max(0, config.watermarks.count - 1)
+        }
+    }
+
+    func updateLayerPosition(at index: Int, position: WatermarkPosition) {
+        guard index >= 0, index < config.watermarks.count else { return }
+        let scale = config.watermarks[index].scale
+        switch config.watermarks[index] {
+        case .text(let input, _, _, let opacity, let isVisible):
+            config.watermarks[index] = .text(input, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
+        case .image(let input, _, _, let opacity, let isVisible):
+            config.watermarks[index] = .image(input, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
+        case .signature(let input, _, _, let opacity, let isVisible):
+            config.watermarks[index] = .signature(input, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
+        }
+    }
+
+    func updateLayerScale(at index: Int, scale scaleInput: CGFloat) {
+        guard index >= 0, index < config.watermarks.count else { return }
+        let clamped = min(max(scaleInput, 0.01), 0.90)
+        let position = config.watermarks[index].position
+        switch config.watermarks[index] {
+        case .text(let input, _, _, let opacity, let isVisible):
+            config.watermarks[index] = .text(input, position: position, scale: clamped, opacity: opacity, isVisible: isVisible)
+        case .image(let input, _, _, let opacity, let isVisible):
+            config.watermarks[index] = .image(input, position: position, scale: clamped, opacity: opacity, isVisible: isVisible)
+        case .signature(let input, _, _, let opacity, let isVisible):
+            config.watermarks[index] = .signature(input, position: position, scale: clamped, opacity: opacity, isVisible: isVisible)
+        }
+    }
+
+    // MARK: White Frame
+
+    func toggleWhiteFrame() {
+        if config.whiteFrame?.isEnabled == true {
+            config.whiteFrame = nil
+        } else {
+            config.whiteFrame = WhiteFrameConfig(isEnabled: true)
+        }
+    }
+
+    var whiteFrameEnabled: Bool {
+        config.whiteFrame?.isEnabled ?? false
+    }
+
+    // MARK: Export Settings
+
+    var outputFormat: OutputFormat {
+        get { config.outputFormat }
+        set { config.outputFormat = newValue }
+    }
+
+    var outputQuality: Float {
+        get { config.outputQuality }
+        set { config.outputQuality = newValue }
+    }
 }
