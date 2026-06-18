@@ -42,6 +42,17 @@ public enum PipelineError: Error, LocalizedError, Sendable, Equatable {
     /// Empty data was provided where image data was expected
     case emptyData
 
+    /// Token substitution failed unexpectedly
+    case tokenSubstitutionFailed(String)
+
+    // MARK: - Forward-declared ProRAW errors (Plan 05-03)
+
+    /// ProRAW gain map was expected but not found in DNG file
+    case proRawGainMapMissing
+
+    /// DNG/ProRAW output write failed
+    case proRawWriteFailed
+
     // MARK: - Video Pipeline Errors
 
     /// No video track found in source asset
@@ -99,6 +110,12 @@ public enum PipelineError: Error, LocalizedError, Sendable, Equatable {
             return "Unsupported image format: \(uti). Supported formats are HEIC, JPEG, and PNG."
         case .emptyData:
             return "No image data was provided."
+        case .tokenSubstitutionFailed(let token):
+            return "Failed to substitute token in watermark text: \(token)"
+        case .proRawGainMapMissing:
+            return "ProRAW gain map was expected but not found in the DNG file."
+        case .proRawWriteFailed:
+            return "Failed to write ProRAW/DNG output."
         case .videoTrackNotFound:
             return "The source video does not contain a video track."
         case .videoAudioTrackInsertionFailed:
@@ -154,6 +171,9 @@ public enum PipelineError: Error, LocalizedError, Sendable, Equatable {
         case (.frameRenderFailed, .frameRenderFailed): return true
         case (.unsupportedFormat(let a), .unsupportedFormat(let b)): return a == b
         case (.emptyData, .emptyData): return true
+        case (.tokenSubstitutionFailed(let a), .tokenSubstitutionFailed(let b)): return a == b
+        case (.proRawGainMapMissing, .proRawGainMapMissing): return true
+        case (.proRawWriteFailed, .proRawWriteFailed): return true
         case (.videoTrackNotFound, .videoTrackNotFound): return true
         case (.videoAudioTrackInsertionFailed, .videoAudioTrackInsertionFailed): return true
         case (.videoExportSessionCreationFailed, .videoExportSessionCreationFailed): return true
