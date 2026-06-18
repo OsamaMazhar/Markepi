@@ -1,5 +1,6 @@
 import CoreImage
 import Foundation
+import ImageIO
 import Observation
 import PhotosUI
 import SwiftUI
@@ -235,6 +236,10 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
                 await setError("This photo is too large to process.")
                 return
             }
+
+            // D-01: Detect HDR source for JPEG warning dialog
+            sourceHasHDR = detectHDRSource(from: data)
+            sourceFormatLabel = detectSourceFormatLabel(from: data)
 
             // Write to extension temp directory
             let destURL = FileManager.default.temporaryDirectory
@@ -643,6 +648,19 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
         config.whiteFrame?.isEnabled ?? false
     }
 
+    var outputFormat: OutputFormat {
+        get { config.outputFormat }
+        set { config.outputFormat = newValue }
+    }
+
+    var outputQuality: Float {
+        get { config.outputQuality }
+        set { config.outputQuality = newValue }
+    }
+
+    public var sourceHasHDR: Bool = false
+    public var sourceFormatLabel: String? = nil
+
     // MARK: - URL Scheme Fallback (D-16)
 
     /// Opens the containing main app via URL scheme when an unsupported media
@@ -679,6 +697,31 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
     }
 
     // MARK: - Private Helpers
+
+    /// Detects whether the source data is HEIC (potential HDR carrier).
+    /// Heuristic: checks UTI via CGImageSource. Full HDR gain map detection is deferred.
+    private func detectHDRSource(from data: Data) -> Bool {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let uti = CGImageSourceGetType(source) else {
+            return false
+        }
+        return (uti as String) == "public.heic"
+    }
+
+    /// Detects the source format label (e.g., "HEIC", "JPEG") from data for display.
+    private func detectSourceFormatLabel(from data: Data) -> String? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let uti = CGImageSourceGetType(source) else {
+            return nil
+        }
+        switch uti as String {
+        case "public.heic": return "HEIC"
+        case "public.jpeg": return "JPEG"
+        case "public.png": return "PNG"
+        case "public.tiff": return "TIFF"
+        default: return nil
+        }
+    }
 
     @MainActor
     private func setError(_ message: String) {

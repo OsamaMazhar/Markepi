@@ -1,5 +1,6 @@
 import CoreImage
 import Foundation
+import ImageIO
 import Observation
 import PhotosUI
 import SwiftUI
@@ -78,11 +79,43 @@ final class WatermarkViewModel: WatermarkConfigurable {
                         thumbnail: thumb,
                         sourceURL: sourceURL
                     ))
+                    // D-01: Detect HDR source for warning dialog
+                    if !sourceHasHDR {
+                        sourceHasHDR = detectHDRSource(from: data)
+                    }
+                    if sourceFormatLabel == nil {
+                        sourceFormatLabel = detectSourceFormatLabel(from: data)
+                    }
                 }
             }
             photos = loaded
             currentIndex = 0
             showPicker = false
+        }
+    }
+
+    /// Detects whether the source data is HEIC (potential HDR carrier).
+    /// Heuristic: checks UTI via CGImageSource. Full HDR gain map detection is deferred.
+    private func detectHDRSource(from data: Data) -> Bool {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let uti = CGImageSourceGetType(source) else {
+            return false
+        }
+        return (uti as String) == "public.heic"
+    }
+
+    /// Detects the source format label (e.g., "HEIC", "JPEG") from data for display.
+    private func detectSourceFormatLabel(from data: Data) -> String? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let uti = CGImageSourceGetType(source) else {
+            return nil
+        }
+        switch uti as String {
+        case "public.heic": return "HEIC"
+        case "public.jpeg": return "JPEG"
+        case "public.png": return "PNG"
+        case "public.tiff": return "TIFF"
+        default: return nil
         }
     }
 
@@ -214,6 +247,19 @@ final class WatermarkViewModel: WatermarkConfigurable {
     var whiteFrameEnabled: Bool {
         config.whiteFrame?.isEnabled ?? false
     }
+
+    var outputFormat: OutputFormat {
+        get { config.outputFormat }
+        set { config.outputFormat = newValue }
+    }
+
+    var outputQuality: Float {
+        get { config.outputQuality }
+        set { config.outputQuality = newValue }
+    }
+
+    public var sourceHasHDR: Bool = false
+    public var sourceFormatLabel: String? = nil
 
     private func copyToTemp(data: Data) async -> URL {
         let tempDir = FileManager.default.temporaryDirectory

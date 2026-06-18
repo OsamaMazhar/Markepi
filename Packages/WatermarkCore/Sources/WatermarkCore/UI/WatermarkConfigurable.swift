@@ -21,6 +21,7 @@ public protocol WatermarkConfigurable: AnyObject {
     var outputFormat: OutputFormat { get set }
     var outputQuality: Float { get set }
     var sourceHasHDR: Bool { get }
+    var sourceFormatLabel: String? { get }
 
     func addLogoLayer(pngData: Data)
     func removeLayer(at index: Int)
