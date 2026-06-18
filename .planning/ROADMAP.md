@@ -131,7 +131,21 @@ Plans:
   2. Dynamic EXIF tokens ({camera_model}, {lens}, {aperture}, {focal_length}, {shutter_speed}, {iso}, {date}, {gps}) render correctly in watermarks and frame text for all supported photo formats
   3. Text watermark, image/logo watermark, and white frame can all be active and rendered in a single compositing pass with independent position/opacity/visibility per layer
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 0** *(spike — DNG write path verification)*
+
+- [ ] 05-01-PLAN.md — DNG Write Path Verification Spike: empirical test of whether CGImageDestination supports DNG as a write destination format
+
+**Wave 1** *(parallel — no file overlap)*
+
+- [ ] 05-02-PLAN.md — EXIF Token System: EXIFTokenParser utility, TextWatermarkRenderer/WhiteFrameRenderer integration, 8 token types with formatting, comprehensive tests
+- [ ] 05-03-PLAN.md — ProRAW DNG Pipeline: FormatDetector DNG UTI, ImageLoader DNG metadata extraction, ImageWriter DNG metadata preservation, MediaMetadata extension, ProRAW tests
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 05-04-PLAN.md — Multi-Layer Compositing + Engine Integration: WatermarkLayer opacity/visibility model, buildFilterGraph D-12 order enforcement (text→image→frame), per-layer opacity via CIFilter.colorMatrix, ProRAW dngMetadata engine passthrough, comprehensive multi-layer tests
 
 ### Phase 6: Export Control & UX Polish
 
