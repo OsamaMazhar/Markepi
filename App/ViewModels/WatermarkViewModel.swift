@@ -499,82 +499,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
         showPicker = true
     }
 
-    func addLogoLayer(pngData: Data) {
-        guard let _ = CIImage(data: pngData) else {
-            errorMessage = "The selected image is not a valid PNG file."
-            showError = true
-            return
-        }
-        guard let input = try? ImageWatermarkInput(pngData: pngData) else {
-            errorMessage = "The selected image is not a valid PNG file."
-            showError = true
-            return
-        }
-        config.watermarks.append(.image(input, position: .bottomRight, scale: 0.15, opacity: 1.0, isVisible: true))
-        activeLayerIndex = config.watermarks.count - 1
-    }
-
     func addSignatureLayer(strokeData: Data, inkColor: CGColor, strokeWidth: CGFloat) {
         let input = SignatureInput(strokeData: strokeData, inkColor: inkColor, strokeWidth: strokeWidth)
         config.watermarks.append(.signature(input, position: .bottomRight, scale: 0.15, opacity: 1.0, isVisible: true))
         activeLayerIndex = config.watermarks.count - 1
-    }
-
-    func removeLayer(at index: Int) {
-        guard index >= 0, index < config.watermarks.count else { return }
-        config.watermarks.remove(at: index)
-        if activeLayerIndex >= config.watermarks.count {
-            activeLayerIndex = max(0, config.watermarks.count - 1)
-        }
-    }
-
-    func updateLayerPosition(at index: Int, position: WatermarkPosition) {
-        guard index >= 0, index < config.watermarks.count else { return }
-        let scale = config.watermarks[index].scale
-        switch config.watermarks[index] {
-        case .text(let input, _, _, let opacity, let isVisible):
-            config.watermarks[index] = .text(input, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
-        case .image(let input, _, _, let opacity, let isVisible):
-            config.watermarks[index] = .image(input, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
-        case .signature(let input, _, _, let opacity, let isVisible):
-            config.watermarks[index] = .signature(input, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
-        }
-    }
-
-    func updateLayerScale(at index: Int, scale scaleInput: CGFloat) {
-        guard index >= 0, index < config.watermarks.count else { return }
-        let clamped = min(max(scaleInput, 0.01), 0.90)
-        let position = config.watermarks[index].position
-        switch config.watermarks[index] {
-        case .text(let input, _, _, let opacity, let isVisible):
-            config.watermarks[index] = .text(input, position: position, scale: clamped, opacity: opacity, isVisible: isVisible)
-        case .image(let input, _, _, let opacity, let isVisible):
-            config.watermarks[index] = .image(input, position: position, scale: clamped, opacity: opacity, isVisible: isVisible)
-        case .signature(let input, _, _, let opacity, let isVisible):
-            config.watermarks[index] = .signature(input, position: position, scale: clamped, opacity: opacity, isVisible: isVisible)
-        }
-    }
-
-    func toggleWhiteFrame() {
-        if config.whiteFrame?.isEnabled == true {
-            config.whiteFrame = nil
-        } else {
-            config.whiteFrame = WhiteFrameConfig(isEnabled: true)
-        }
-    }
-
-    var whiteFrameEnabled: Bool {
-        config.whiteFrame?.isEnabled ?? false
-    }
-
-    var outputFormat: OutputFormat {
-        get { config.outputFormat }
-        set { config.outputFormat = newValue }
-    }
-
-    var outputQuality: Float {
-        get { config.outputQuality }
-        set { config.outputQuality = newValue }
     }
 
     public var sourceHasHDR: Bool = false

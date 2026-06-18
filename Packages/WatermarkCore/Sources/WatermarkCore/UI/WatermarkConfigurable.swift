@@ -52,7 +52,7 @@ extension WatermarkConfigurable {
 
     // MARK: Layer Management
 
-    func addLogoLayer(pngData: Data) {
+    public func addLogoLayer(pngData: Data) {
         guard let _ = CIImage(data: pngData) else {
             errorMessage = "The selected image is not a valid PNG file."
             showError = true
@@ -67,11 +67,11 @@ extension WatermarkConfigurable {
         activeLayerIndex = config.watermarks.count - 1
     }
 
-    func addSignatureLayer(strokeData: Data, inkColor: CGColor, strokeWidth: CGFloat) {
+    public func addSignatureLayer(strokeData: Data, inkColor: CGColor, strokeWidth: CGFloat) {
         // Default: no-op. Overridden by WatermarkViewModel with PencilKit implementation.
     }
 
-    func removeLayer(at index: Int) {
+    public func removeLayer(at index: Int) {
         guard index >= 0, index < config.watermarks.count else { return }
         config.watermarks.remove(at: index)
         if activeLayerIndex >= config.watermarks.count {
@@ -79,7 +79,7 @@ extension WatermarkConfigurable {
         }
     }
 
-    func updateLayerPosition(at index: Int, position: WatermarkPosition) {
+    public func updateLayerPosition(at index: Int, position: WatermarkPosition) {
         guard index >= 0, index < config.watermarks.count else { return }
         let scale = config.watermarks[index].scale
         switch config.watermarks[index] {
@@ -92,7 +92,7 @@ extension WatermarkConfigurable {
         }
     }
 
-    func updateLayerScale(at index: Int, scale scaleInput: CGFloat) {
+    public func updateLayerScale(at index: Int, scale scaleInput: CGFloat) {
         guard index >= 0, index < config.watermarks.count else { return }
         let clamped = min(max(scaleInput, 0.01), 0.90)
         let position = config.watermarks[index].position
@@ -108,7 +108,7 @@ extension WatermarkConfigurable {
 
     // MARK: White Frame
 
-    func toggleWhiteFrame() {
+    public func toggleWhiteFrame() {
         if config.whiteFrame?.isEnabled == true {
             config.whiteFrame = nil
         } else {
@@ -116,18 +116,18 @@ extension WatermarkConfigurable {
         }
     }
 
-    var whiteFrameEnabled: Bool {
+    public var whiteFrameEnabled: Bool {
         config.whiteFrame?.isEnabled ?? false
     }
 
     // MARK: Export Settings
 
-    var outputFormat: OutputFormat {
+    public var outputFormat: OutputFormat {
         get { config.outputFormat }
         set { config.outputFormat = newValue }
     }
 
-    var outputQuality: Float {
+    public var outputQuality: Float {
         get { config.outputQuality }
         set { config.outputQuality = newValue }
     }
