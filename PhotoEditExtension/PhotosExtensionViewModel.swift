@@ -1,0 +1,389 @@
+import CoreImage
+import Foundation
+import Observation
+import PhotosUI
+import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
+import WatermarkCore
+
+/// @Observable ViewModel for the Photo Editing extension's watermarking flow.
+///
+/// Handles `PHContentEditingInput` media loading, `WatermarkEngine` delegation
+/// for preview + full-resolution rendering, `PHAdjustmentData` serialization
+/// for undo/re-edit support, and App Group config sync.
+///
+/// Follows the same `@Observable @MainActor` + `WatermarkConfigurable` pattern
+/// as `WatermarkViewModel` (main app) and `ShareExtensionViewModel` (share
+/// extension). Key differences: uses `PHContentEditingInput` instead of
+/// `PhotosPickerItem` or `NSItemProvider`, has a "Done" commit flow instead
+/// of a share sheet, and handles `PHAdjustmentData` for non-destructive editing.
+@Observable @MainActor
+final class PhotosExtensionViewModel: WatermarkConfigurable {
+
+    // MARK: - Configuration
+
+    /// Watermark configuration, synced bidirectionally with the main app
+    /// via App Group UserDefaults.
+    ///
+    /// Loads saved config on init. Saves on every mutation via `didSet`.
+    var config: WatermarkConfiguration {
+        didSet { AppGroupConfigSync.save(config) }
+    }
+
+    // MARK: - Media State
+
+    /// File URL of the source photo from `PHContentEditingInput.fullSizeImageURL`.
+    var sourceURL: URL?
+
+    /// Whether the source media is a video (set during `startEditing`).
+    var isVideo: Bool = false
+
+    /// True while loading media from the `PHContentEditingInput`.
+    var isLoadingMedia: Bool = true
+
+    // MARK: - Preview State
+
+    /// Watermarked preview image displayed in the preview area.
+    /// Updated after each debounced preview generation.
+    var previewImage: UIImage?
+
+    /// Guards against overlapping preview generation calls.
+    var isGeneratingPreview: Bool = false
+
+    // MARK: - Rendering State
+
+    /// Tracks the full-resolution rendering lifecycle for UI feedback.
+    var renderingState: RenderingState = .idle
+
+    // MARK: - Error State
+
+    /// Error message displayed in the alert when `showError` is true.
+    var errorMessage: String?
+
+    /// When true, an error alert is presented to the user.
+    var showError: Bool = false
+
+    // MARK: - HDR Warning State
+
+    /// D-10: HDR could not be preserved in the output.
+    var showHDRWarning: Bool = false
+
+    /// Detailed HDR warning text.
+    var hdrWarningMessage: String?
+
+    // MARK: - Layer Management
+
+    /// Index of the currently active watermark layer for editing.
+    var activeLayerIndex: Int = 0
+
+    /// When true, presents the PhotosPicker for selecting a logo image.
+    var showLogoPicker: Bool = false
+
+    // MARK: - Unsaved Changes
+
+    /// Drives `shouldShowCancelConfirmation` in the ViewController (Pitfall 5).
+    var hasUnsavedChanges: Bool = false
+
+    // MARK: - Private
+
+    /// Shared engine instance for photo processing.
+    private let engine = WatermarkEngine.shared
+
+    /// The `PHContentEditingInput` provided by Photos at the start of editing.
+    private var input: PHContentEditingInput?
+
+    /// Completion handler stored from `finishContentEditing`, called after
+    /// rendering completes with the `PHContentEditingOutput`.
+    private var finishHandler: ((PHContentEditingOutput?) -> Void)?
+
+    // MARK: - Init
+
+    init() {
+        // Load saved config from App Group, or use default text watermark
+        let defaultConfig = WatermarkConfiguration(watermarks: [
+            .text(
+                TextWatermarkInput(text: "", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
+                position: .bottomRight,
+                scale: 0.15
+            )
+        ])
+        self.config = AppGroupConfigSync.load() ?? defaultConfig
+    }
+
+    // MARK: - PHContentEditingController Lifecycle
+
+    /// Returns whether this extension can handle the given `PHAdjustmentData`.
+    ///
+    /// Validates the `formatIdentifier` and `formatVersion` against our
+    /// canonical constants (D-09). Returns `false` for foreign adjustment
+    /// data to prevent Photos from presenting our extension for uneditable
+    /// content.
+    func canHandle(_ adjustmentData: PHAdjustmentData) -> Bool {
+        return adjustmentData.formatIdentifier == AdjustmentConstants.formatIdentifier
+            && adjustmentData.formatVersion == AdjustmentConstants.formatVersion
+    }
+
+    /// Called when Photos presents the extension for editing.
+    ///
+    /// Sets up the source media from `PHContentEditingInput`, displays the
+    /// `placeholderImage`, and starts preview generation. If the input
+    /// contains prior `adjustmentData` (re-edit scenario), decodes it to
+    /// restore the previous watermark configuration (D-05).
+    ///
+    /// - Parameters:
+    ///   - input: The `PHContentEditingInput` with source media and adjustment data
+    ///   - placeholderImage: Low-resolution thumbnail for initial display
+    func startEditing(with input: PHContentEditingInput, placeholderImage: UIImage) {
+        self.input = input
+        self.previewImage = placeholderImage
+
+        // D-06: Source URL from PHContentEditingInput
+        if let imageURL = input.fullSizeImageURL {
+            self.sourceURL = imageURL
+            self.isVideo = false
+        } else if let avAsset = input.audiovisualAsset {
+            // D-08: Video source — AVAsset may be URL-based
+            if let urlAsset = avAsset as? AVURLAsset {
+                self.sourceURL = urlAsset.url
+            }
+            self.isVideo = true
+        }
+
+        self.isLoadingMedia = false
+
+        // D-05: Re-load config from prior adjustment data (re-edit scenario)
+        if let adjustmentData = input.adjustmentData,
+           canHandle(adjustmentData),
+           let savedConfig = decodeAdjustmentData(adjustmentData) {
+            self.config = savedConfig
+        }
+
+        // Trigger debounced preview generation
+        Task { await generatePreview() }
+    }
+
+    /// Called when the user taps Done. Stores the completion handler and
+    /// begins the render-and-commit pipeline.
+    ///
+    /// - Parameter completionHandler: The `finishContentEditing` callback
+    ///   to invoke with the `PHContentEditingOutput` (or nil on error)
+    func finishEditing(completionHandler: @escaping (PHContentEditingOutput?) -> Void) {
+        self.finishHandler = completionHandler
+        Task { await renderAndCommit() }
+    }
+
+    /// Cancels the editing session. Calls the finish handler with nil to
+    /// signal that no edit was committed, then resets state.
+    func cancelEditing() {
+        hasUnsavedChanges = false
+        finishHandler?(nil)
+        finishHandler = nil
+    }
+
+    // MARK: - Render and Commit
+
+    /// Renders the watermarked output at full resolution and commits the edit
+    /// to Photos via `PHContentEditingOutput` with `PHAdjustmentData`.
+    ///
+    /// Full implementation in Task 3. Current stub returns nil to signal
+    /// no edit committed.
+    private func renderAndCommit() async {
+        // Stub: full implementation in Task 3
+        finishHandler?(nil)
+    }
+
+    // MARK: - Preview Generation
+
+    /// Generates a debounced watermark preview for the loaded photo.
+    ///
+    /// Waits 350ms to debounce rapid config changes, then calls
+    /// `engine.process()` for a full pipeline preview. Errors are
+    /// silently ignored — preview is best-effort.
+    func generatePreview() async {
+        guard !isGeneratingPreview, sourceURL != nil else { return }
+        guard let sourceURL = sourceURL else { return }
+        isGeneratingPreview = true
+        defer { isGeneratingPreview = false }
+
+        // Debounce: wait 350ms to avoid rapid re-renders during config changes
+        try? await Task.sleep(for: .milliseconds(350))
+        guard !Task.isCancelled else { return }
+
+        // Best-effort preview — errors are silently ignored
+        let result = try? await engine.process(sourceURL: sourceURL, config: config)
+        if let url = result?.url,
+           let data = try? Data(contentsOf: url),
+           let uiImage = UIImage(data: data) {
+            previewImage = uiImage
+        }
+    }
+
+    // MARK: - Preview Identifier
+
+    /// Identifier that changes when config or source changes — drives
+    /// `.task(id:)` preview regeneration in the root view.
+    var previewIdentifier: String {
+        var parts: [String] = ["\(sourceURL?.lastPathComponent ?? "nil")"]
+        for layer in config.watermarks {
+            switch layer {
+            case .text(let input, let pos, let scl):
+                parts.append("t:\(input.text)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
+            case .image(let input, let pos, let scl):
+                parts.append("im:\(input.pngData.hashValue)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
+            }
+        }
+        parts.append("wf:\(config.whiteFrame?.isEnabled == true ? "1" : "0")")
+        return parts.joined(separator: "-")
+    }
+
+    // MARK: - WatermarkConfigurable Protocol
+
+    /// Adds a PNG logo/image watermark layer to the configuration.
+    ///
+    /// Validates the PNG data via `CIImage(data:)` before appending.
+    /// - Parameter pngData: Raw PNG image data
+    func addLogoLayer(pngData: Data) {
+        guard let _ = CIImage(data: pngData) else {
+            errorMessage = "The selected image is not a valid PNG file."
+            showError = true
+            return
+        }
+        guard let input = try? ImageWatermarkInput(pngData: pngData) else {
+            errorMessage = "The selected image is not a valid PNG file."
+            showError = true
+            return
+        }
+        config.watermarks.append(.image(input, position: .bottomRight, scale: 0.15))
+        activeLayerIndex = config.watermarks.count - 1
+    }
+
+    /// Removes a watermark layer at the specified index.
+    /// - Parameter index: The layer index to remove
+    func removeLayer(at index: Int) {
+        guard index >= 0, index < config.watermarks.count else { return }
+        config.watermarks.remove(at: index)
+        if activeLayerIndex >= config.watermarks.count {
+            activeLayerIndex = max(0, config.watermarks.count - 1)
+        }
+    }
+
+    /// Updates the position of a watermark layer.
+    /// - Parameters:
+    ///   - index: The layer index to update
+    ///   - position: The new position preset
+    func updateLayerPosition(at index: Int, position: WatermarkPosition) {
+        guard index >= 0, index < config.watermarks.count else { return }
+        let scale = config.watermarks[index].scale
+        switch config.watermarks[index] {
+        case .text(let input, _, _):
+            config.watermarks[index] = .text(input, position: position, scale: scale)
+        case .image(let input, _, _):
+            config.watermarks[index] = .image(input, position: position, scale: scale)
+        }
+    }
+
+    /// Updates the scale of a watermark layer (clamped to 0.01–0.90).
+    /// - Parameters:
+    ///   - index: The layer index to update
+    ///   - scale: The new scale factor (will be clamped)
+    func updateLayerScale(at index: Int, scale scaleInput: CGFloat) {
+        guard index >= 0, index < config.watermarks.count else { return }
+        let clamped = min(max(scaleInput, 0.01), 0.90)
+        let position = config.watermarks[index].position
+        switch config.watermarks[index] {
+        case .text(let input, _, _):
+            config.watermarks[index] = .text(input, position: position, scale: clamped)
+        case .image(let input, _, _):
+            config.watermarks[index] = .image(input, position: position, scale: clamped)
+        }
+    }
+
+    /// Toggles the white frame overlay on/off.
+    func toggleWhiteFrame() {
+        if config.whiteFrame?.isEnabled == true {
+            config.whiteFrame = nil
+        } else {
+            config.whiteFrame = WhiteFrameConfig(isEnabled: true)
+        }
+    }
+
+    /// Whether the white frame overlay is currently enabled.
+    var whiteFrameEnabled: Bool {
+        config.whiteFrame?.isEnabled ?? false
+    }
+
+    /// Triggers full-resolution rendering and commit to Photos.
+    ///
+    /// Adapted from `WatermarkConfigurable.renderAndPrepareShare()` —
+    /// in the Photos extension, this triggers the Done flow instead of
+    /// a share sheet. The actual rendering happens in `renderAndCommit()`
+    /// which creates `PHContentEditingOutput`.
+    func renderAndPrepareShare() async {
+        // In the Photos extension, "share" is replaced by "commit to Photos"
+        // This is called by ControlsView's action button; we trigger the
+        // finishEditing flow which the root view's Done button also calls.
+        // For now, delegates to the same render-and-commit path.
+        // Note: ControlsView in this context uses a "Done" button from
+        // the root view's toolbar, not the share button.
+        await renderAndCommit()
+    }
+
+    /// Presents the share sheet — not applicable to the Photos extension.
+    ///
+    /// The Photos extension commits edits directly to the Photos library
+    /// via `PHContentEditingOutput`. There is no share sheet step (D-02).
+    func presentShareSheet() {
+        // No-op: Photos extension doesn't have a share sheet
+    }
+
+    // MARK: - PHAdjustmentData Encode/Decode
+
+    /// Canonical adjustment data constants for the Watermark Photos extension.
+    private enum AdjustmentConstants {
+        static let formatIdentifier = "com.watermark.app.adjustment"
+        static let formatVersion = "1.0"
+    }
+
+    /// Encodes a `WatermarkConfiguration` for storage in `PHAdjustmentData`.
+    ///
+    /// Uses JSON encoding via the existing `Codable` conformance. Text-only
+    /// configs are small enough to stay well within PHAdjustmentData size
+    /// constraints (~2 MB effective limit — Pitfall 1).
+    ///
+    /// - Parameter config: The watermark configuration to encode
+    /// - Returns: JSON-encoded `Data`, or `nil` on encoding failure
+    private func encodeAdjustmentData(_ config: WatermarkConfiguration) -> Data? {
+        return try? JSONEncoder().encode(config)
+    }
+
+    /// Decodes a `PHAdjustmentData` back into a `WatermarkConfiguration`.
+    ///
+    /// Validates the `formatIdentifier` and `formatVersion` before decoding.
+    /// Returns `nil` if the adjustment data is from a foreign extension or
+    /// the JSON cannot be decoded (D-09).
+    ///
+    /// - Parameter adjustmentData: The `PHAdjustmentData` from the Photos library
+    /// - Returns: Decoded configuration, or `nil` if validation/decoding fails
+    private func decodeAdjustmentData(_ adjustmentData: PHAdjustmentData) -> WatermarkConfiguration? {
+        guard adjustmentData.formatIdentifier == AdjustmentConstants.formatIdentifier,
+              adjustmentData.formatVersion == AdjustmentConstants.formatVersion else { return nil }
+        return try? JSONDecoder().decode(WatermarkConfiguration.self, from: adjustmentData.data)
+    }
+
+    // MARK: - Logo Picker
+
+    /// Handles PhotosPicker selection for logo images.
+    ///
+    /// Loads the selected item's PNG data and delegates to `addLogoLayer(pngData:)`.
+    /// - Parameter items: Selected PhotosPicker items (expected single item)
+    func handleLogoSelection(_ items: [PhotosPickerItem]) {
+        guard let item = items.first else { return }
+        Task {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                addLogoLayer(pngData: data)
+            }
+            showLogoPicker = false
+        }
+    }
+}

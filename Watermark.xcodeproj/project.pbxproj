@@ -25,6 +25,15 @@
 		011 /* WhiteFrameToggleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111; };
 		012 /* ScaleLabelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112; };
 		00E /* WatermarkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 30E; };
+		013 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 600; };
+		014 /* ShareExtensionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601; };
+		015 /* ShareExtensionRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 602; };
+		016 /* ShareSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 603; };
+		017 /* PhotoEditingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 610; };
+		018 /* PhotosExtensionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 611; };
+		019 /* PhotosExtensionRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 612; };
+		01A /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 620; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		01B /* PhotoEditExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 621; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +57,19 @@
 		112 /* ScaleLabelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleLabelView.swift; sourceTree = "<group>"; };
 		10E /* WatermarkApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatermarkApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		20E /* WatermarkCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = WatermarkCore; path = Packages/WatermarkCore; sourceTree = SOURCE_ROOT; };
+		600 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		601 /* ShareExtensionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtensionViewModel.swift; sourceTree = "<group>"; };
+		602 /* ShareExtensionRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtensionRootView.swift; sourceTree = "<group>"; };
+		603 /* ShareSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSheetView.swift; sourceTree = "<group>"; };
+		604 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		605 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
+		610 /* PhotoEditingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoEditingViewController.swift; sourceTree = "<group>"; };
+		611 /* PhotosExtensionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotosExtensionViewModel.swift; sourceTree = "<group>"; };
+		612 /* PhotosExtensionRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotosExtensionRootView.swift; sourceTree = "<group>"; };
+		613 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		614 /* PhotoEditExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PhotoEditExtension.entitlements; sourceTree = "<group>"; };
+		620 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		621 /* PhotoEditExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PhotoEditExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -59,6 +81,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		405 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		406 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -66,6 +102,8 @@
 			isa = PBXGroup;
 			children = (
 				301 /* App */,
+				304 /* ShareExtension */,
+				305 /* PhotoEditExtension */,
 				302 /* Packages */,
 				303 /* Products */,
 			);
@@ -94,8 +132,35 @@
 			isa = PBXGroup;
 			children = (
 				10E /* WatermarkApp.app */,
+				620 /* ShareExtension.appex */,
+				621 /* PhotoEditExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		304 /* ShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				600 /* ShareViewController.swift */,
+				601 /* ShareExtensionViewModel.swift */,
+				602 /* ShareExtensionRootView.swift */,
+				603 /* ShareSheetView.swift */,
+				604 /* Info.plist */,
+				605 /* ShareExtension.entitlements */,
+			);
+			path = ShareExtension;
+			sourceTree = "<group>";
+		};
+		305 /* PhotoEditExtension */ = {
+			isa = PBXGroup;
+			children = (
+				610 /* PhotoEditingViewController.swift */,
+				611 /* PhotosExtensionViewModel.swift */,
+				612 /* PhotosExtensionRootView.swift */,
+				613 /* Info.plist */,
+				614 /* PhotoEditExtension.entitlements */,
+			);
+			path = PhotoEditExtension;
 			sourceTree = "<group>";
 		};
 		311 /* ViewModels */ = {
@@ -185,6 +250,7 @@
 				401 /* Sources */,
 				200 /* Frameworks */,
 				402 /* Resources */,
+				409 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
@@ -197,6 +263,46 @@
 			productName = WatermarkApp;
 			productReference = 10E /* WatermarkApp.app */;
 			productType = "com.apple.product-type.application";
+		};
+		410 /* ShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 71D /* Build configuration list for PBXNativeTarget "ShareExtension" */;
+			buildPhases = (
+				403 /* Sources */,
+				405 /* Frameworks */,
+				407 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ShareExtension;
+			packageProductDependencies = (
+				30E /* WatermarkCore */,
+			);
+			productName = ShareExtension;
+			productReference = 620 /* ShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		411 /* PhotoEditExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 71E /* Build configuration list for PBXNativeTarget "PhotoEditExtension" */;
+			buildPhases = (
+				404 /* Sources */,
+				406 /* Frameworks */,
+				408 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PhotoEditExtension;
+			packageProductDependencies = (
+				30E /* WatermarkCore */,
+			);
+			productName = PhotoEditExtension;
+			productReference = 621 /* PhotoEditExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -211,6 +317,16 @@
 					400 = {
 						CreatedOnToolsVersion = 26.0;
 						LastSwiftMigration = 2600;
+					};
+					410 = {
+						CreatedOnToolsVersion = 26.0;
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					411 = {
+						CreatedOnToolsVersion = 26.0;
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -231,12 +347,43 @@
 			projectRoot = "";
 			targets = (
 				400 /* WatermarkApp */,
+				410 /* ShareExtension */,
+				411 /* PhotoEditExtension */,
 			);
 		};
 /* End PBXProject section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		409 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				01A /* ShareExtension.appex in Embed App Extensions */,
+				01B /* PhotoEditExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXResourcesBuildPhase section */
 		402 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		407 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		408 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -267,6 +414,27 @@
 				010 /* LayerListView.swift in Sources */,
 				011 /* WhiteFrameToggleView.swift in Sources */,
 				012 /* ScaleLabelView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		403 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				013 /* ShareViewController.swift in Sources */,
+				014 /* ShareExtensionViewModel.swift in Sources */,
+				015 /* ShareExtensionRootView.swift in Sources */,
+				016 /* ShareSheetView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		404 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				017 /* PhotoEditingViewController.swift in Sources */,
+				018 /* PhotosExtensionViewModel.swift in Sources */,
+				019 /* PhotosExtensionRootView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -388,6 +556,110 @@
 			};
 			name = Release;
 		};
+		62D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Watermark;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.watermark.app.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		62E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Watermark;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.watermark.app.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		63D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PhotoEditExtension/PhotoEditExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PhotoEditExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Watermark;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.watermark.app.photoedit;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		63E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PhotoEditExtension/PhotoEditExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PhotoEditExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Watermark;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.watermark.app.photoedit;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -405,6 +677,24 @@
 			buildConfigurations = (
 				60D /* Debug */,
 				60E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		71D /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				62D /* Debug */,
+				62E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		71E /* Build configuration list for PBXNativeTarget "PhotoEditExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				63D /* Debug */,
+				63E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
