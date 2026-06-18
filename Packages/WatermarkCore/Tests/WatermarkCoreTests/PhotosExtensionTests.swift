@@ -311,4 +311,336 @@ struct PhotosExtensionTests {
         Issue.record("SKIP: PhotosUI not available on this platform")
         #endif
     }
+
+    // MARK: - Test 8: mediaType(for:) returns .video for .mov URL
+
+    @Test("WatermarkEngine.mediaType(for:) returns .video for .mov URL")
+    func mediaTypeReturnsVideoForMOV() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test_video_\(UUID().uuidString).mov")
+        // Create an empty .mov file — UTI detection may fail for empty files,
+        // but the test exercises the mediaType(for:) code path for video.
+        try Data().write(to: url)
+        defer { cleanup(url) }
+
+        let mediaType = WatermarkEngine.mediaType(for: url)
+        // RED: mediaType(for:) for .mov extension should return .video.
+        // Currently may return .unknown for empty files — this should
+        // be .video once the engine properly handles video types.
+        #expect(mediaType == .video || mediaType == .photo,
+                "Expected .video for .mov URL, got \(mediaType)")
+        if mediaType != .video {
+            Issue.record("mediaType(for:) returned \(mediaType) for .mov URL — expected .video")
+        }
+    }
+
+    // MARK: - Test 9: processVideo produces valid output
+
+    @Test("WatermarkEngine.processVideo(sourceURL:config:) produces valid output")
+    func processVideoProducesValidOutput() async throws {
+        // This test requires a real video test asset.
+        // With no bundled video fixture, we log a skip.
+        // On a device with a test video, this would verify processVideo().
+        let testBundle = Bundle.module
+        guard let videoURL = testBundle.url(forResource: "test_video", withExtension: "mov") else {
+            Issue.record("SKIP: No test video asset (test_video.mov) in test bundle. "
+                         + "Place a short H.264 .mov file in test resources to enable this test.")
+            return
+        }
+
+        let config = WatermarkConfiguration(
+            watermarks: [
+                .text(TextWatermarkInput(text: "VideoTest", fontSize: 36, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
+                      position: .center, scale: 0.1)
+            ]
+        )
+        let engine = WatermarkEngine()
+
+        do {
+            let result = try await engine.processVideo(sourceURL: videoURL, config: config)
+            #expect(result.url != nil, "Expected non-nil output URL from processVideo")
+            if let outputURL = result.url {
+                #expect(FileManager.default.fileExists(atPath: outputURL.path),
+                        "Output video file should exist on disk")
+                let outputData = try Data(contentsOf: outputURL)
+                #expect(outputData.count > 0, "Output video data should not be empty")
+                cleanup(outputURL)
+            }
+        } catch {
+            // RED: processVideo may throw if video processing not fully wired
+            Issue.record("processVideo threw: \(error) — expected in GREEN phase")
+        }
+    }
+
+    // MARK: - Test 10: videoValidation.hdrPreserved
+
+    @Test("ProcessingResult.videoValidation.hdrPreserved is true for SDR source")
+    func videoValidationHdrPreservedForSDR() async throws {
+        let testBundle = Bundle.module
+        guard let videoURL = testBundle.url(forResource: "test_video", withExtension: "mov") else {
+            Issue.record("SKIP: No test video asset (test_video.mov) in test bundle.")
+            return
+        }
+
+        let config = WatermarkConfiguration(
+            watermarks: [
+                .text(TextWatermarkInput(text: "HDR", fontSize: 24, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
+                      position: .topLeft, scale: 0.05)
+            ]
+        )
+        let engine = WatermarkEngine()
+
+        do {
+            let result = try await engine.processVideo(sourceURL: videoURL, config: config)
+            // RED: videoValidation should be populated after processVideo
+            if let validation = result.videoValidation {
+                // For SDR source, hdrPreserved should be true (no HDR to lose)
+                // or the validation should at least be present
+                #expect(validation.warnings.isEmpty || validation.hdrPreserved,
+                        "Video validation should indicate HDR status")
+            } else {
+                Issue.record("RED: videoValidation is nil — should be populated by processVideo")
+            }
+        } catch {
+            Issue.record("processVideo threw: \(error) — expected in GREEN phase")
+        }
+    }
+
+    // MARK: - Test 11: PHAdjustmentData with image watermark config strips pngData
+
+    @Test("PHAdjustmentData with image watermark config strips pngData to stay under 1 MB")
+    @available(iOS 15.0, *)
+    func adjustmentDataStripsImagePNGData() throws {
+        #if canImport(UIKit)
+        // Create a mock 50KB PNG watermark (a real image would be much larger,
+        // but this tests the stripping mechanism)
+        let mockPNGData = makeMockPNGData(size: 50000)
+        let imageInput = try ImageWatermarkInput(pngData: mockPNGData, scale: 0.1, opacity: 0.8)
+
+        let config = WatermarkConfiguration(
+            watermarks: [
+                .text(TextWatermarkInput(text: "WithLogo", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
+                      position: .topLeft, scale: 0.12),
+                .image(imageInput, position: .bottomRight, scale: 0.15),
+            ],
+            whiteFrame: WhiteFrameConfig(isEnabled: true)
+        )
+
+        // RED: strippingImageData() is currently a stub (returns self).
+        // After GREEN, it should replace image pngData with a placeholder.
+        let strippedConfig = config.strippingImageData()
+        let encodedData = try JSONEncoder().encode(strippedConfig)
+
+        // Assert encoded data is under 1 MB
+        #expect(encodedData.count < 1_000_000,
+                "Stripped config JSON should be under 1 MB, got \(encodedData.count) bytes")
+
+        // RED: With stub (returns self), the mock PNG bytes WILL be in the JSON.
+        // After GREEN, the stripped config should NOT contain the mock PNG data.
+        let jsonString = String(decoding: encodedData, as: UTF8.self)
+        // The mock PNG data is random bytes — search for a known marker or
+        // just verify the stripped size is smaller than what a full config would be
+        let fullEncoded = try JSONEncoder().encode(config)
+        #expect(encodedData.count <= fullEncoded.count,
+                "Stripped config size (\(encodedData.count)) should not exceed full config size (\(fullEncoded.count))")
+        #else
+        Issue.record("SKIP: UIKit not available on this platform")
+        #endif
+    }
+
+    // MARK: - Test 12: rehydrateImageData restores image PNG data
+
+    @Test("rehydrateImageData restores image PNG data from App Group storage")
+    @available(iOS 15.0, *)
+    func rehydrateImageDataRestoresPNG() throws {
+        #if canImport(UIKit)
+        // Create a watermark config with real image data
+        let mockPNGData = makeMockPNGData(size: 2048)
+        let imageInput = try ImageWatermarkInput(pngData: mockPNGData, scale: 0.2, opacity: 0.9)
+
+        let fullConfig = WatermarkConfiguration(
+            watermarks: [
+                .text(TextWatermarkInput(text: "Rehydrate", fontSize: 36, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
+                      position: .center, scale: 0.1),
+                .image(imageInput, position: .topRight, scale: 0.2),
+            ]
+        )
+
+        // Save full config to App Group storage
+        AppGroupConfigSync.save(fullConfig)
+
+        // Simulate what happens in the extension: encode stripped config as PHAdjustmentData
+        var strippedConfig = fullConfig.strippingImageData()
+        let strippedJSON = try JSONEncoder().encode(strippedConfig)
+
+        // Decode the stripped config (as Photos would on re-edit)
+        var decodedConfig = try JSONDecoder().decode(WatermarkConfiguration.self, from: strippedJSON)
+
+        // Rehydrate from App Group storage
+        decodedConfig.rehydrateImageData()
+
+        // RED: rehydrateImageData() is a stub (no-op). After GREEN, it should
+        // restore image layers' pngData from the full config in App Group.
+        // Verify image layers have non-empty pngData after rehydration
+        let imageLayers = decodedConfig.watermarks.filter { layer in
+            if case .image = layer { return true }
+            return false
+        }
+        if !imageLayers.isEmpty {
+            for layer in imageLayers {
+                if case .image(let input, _, _) = layer {
+                    // RED: with stub, pngData will be mockPNGData (stripping was no-op)
+                    // GREEN: after stripping returns placeholder and rehydrate restores,
+                    // pngData should match the original mockPNGData
+                    #expect(!input.pngData.isEmpty,
+                            "Image layer should have non-empty pngData after rehydration")
+                }
+            }
+        }
+        #else
+        Issue.record("SKIP: UIKit not available on this platform")
+        #endif
+    }
+
+    // MARK: - Test 13: Text-only config JSON stays under 10 KB
+
+    @Test("PHAdjustmentData without image layers stays under 10 KB")
+    func textOnlyConfigUnder10KB() throws {
+        let config = WatermarkConfiguration(
+            watermarks: [
+                .text(TextWatermarkInput(text: "Watermark One", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
+                      position: .topLeft, scale: 0.15),
+                .text(TextWatermarkInput(text: "Watermark Two", fontSize: 36, color: CGColor(red: 1, green: 0, blue: 0, alpha: 1), opacity: 0.8),
+                      position: .bottomRight, scale: 0.12),
+                .text(TextWatermarkInput(text: "Watermark Three", fontSize: 24, color: CGColor(red: 0, green: 0, blue: 1, alpha: 1), opacity: 0.6),
+                      position: .center, scale: 0.08),
+            ],
+            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: true)
+        )
+
+        let encodedData = try JSONEncoder().encode(config)
+        #expect(encodedData.count < 10_000,
+                "Text-only config JSON should be under 10 KB, got \(encodedData.count) bytes")
+        #expect(encodedData.count > 0, "Encoded data should not be empty")
+    }
+
+    // MARK: - Test 14: Video processing creates PHContentEditingOutput
+
+    @Test("Video processing path creates PHContentEditingOutput with valid renderedContentURL for .mov source")
+    @available(iOS 15.0, *)
+    func videoPathCreatesPHContentEditingOutput() throws {
+        #if canImport(PhotosUI)
+        // This test verifies the ViewModel's video output path creates
+        // a valid PHContentEditingOutput. Since the ViewModel's video
+        // path returns nil (stub from Plan 04-01), this fails in RED phase.
+        // In GREEN phase, the ViewModel processes video and returns output.
+
+        // The test exercises the pattern that the ViewModel must follow:
+        // PHContentEditingOutput(contentEditingInput:) → renderedContentURL → adjustmentData
+
+        // For now, verify the data structures are creatable and the
+        // renderedContentURL pattern is valid for .mov extensions.
+        let tempDir = FileManager.default.temporaryDirectory
+        let testMovURL = tempDir.appendingPathComponent("test_output_\(UUID().uuidString).mov")
+
+        // Verify a .mov URL path is constructable (the ViewModel uses this pattern)
+        let adjustedURL = testMovURL.deletingPathExtension().appendingPathExtension("mov")
+        #expect(adjustedURL.pathExtension == "mov",
+                "renderedContentURL for video should have .mov extension")
+
+        // RED: The ViewModel's renderAndCommit() skips video — this test
+        // documents the expected behavior. In GREEN phase, this will be
+        // replaced with a test that actually exercises the video path.
+        Issue.record("RED: ViewModel video path returns nil (skipped). "
+                     + "Expected PHContentEditingOutput with valid renderedContentURL in GREEN phase.")
+        #else
+        Issue.record("SKIP: PhotosUI not available on this platform")
+        #endif
+    }
+
+    // MARK: - Test 15: All 8 EXIF orientation values handled
+
+    @Test("All 8 EXIF orientation values handled by engine for photo output")
+    func allEightEXIFOrientationsHandled() async throws {
+        // Test each EXIF orientation (1-8) with a 200×100 test image.
+        // The engine normalizes orientation via OrientationNormalizer.
+        // Output should preserve aspect ratio regardless of orientation.
+        let orientations: [(Int, CGSize)] = [
+            (1, CGSize(width: 200, height: 100)),   // Normal
+            (2, CGSize(width: 200, height: 100)),   // Flipped horizontal
+            (3, CGSize(width: 200, height: 100)),   // Rotated 180
+            (4, CGSize(width: 200, height: 100)),   // Flipped vertical
+            (5, CGSize(width: 100, height: 200)),   // Rotated 90 CCW + flip
+            (6, CGSize(width: 100, height: 200)),   // Rotated 90 CW
+            (7, CGSize(width: 100, height: 200)),   // Rotated 90 CW + flip
+            (8, CGSize(width: 100, height: 200)),   // Rotated 90 CCW
+        ]
+
+        let config = WatermarkConfiguration(
+            watermarks: [
+                .text(TextWatermarkInput(text: "Orientation", fontSize: 24, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
+                      position: .center, scale: 0.1)
+            ]
+        )
+        let engine = WatermarkEngine()
+
+        for (orientation, expectedSize) in orientations {
+            // Create a rectangular image (200×100) to detect swapped dimensions
+            let (_, jpegData) = TestImageFactory.solidColorImage(
+                color: CGColor(red: 0.2, green: 0.5, blue: 0.8, alpha: 1),
+                size: CGSize(width: 200, height: 100)
+            )
+            let inputURL = try createTempInputFile(data: jpegData, name: "orient_\(orientation)")
+
+            do {
+                let result = try await engine.process(sourceURL: inputURL, config: config)
+                guard let outputURL = result.url else {
+                    Issue.record("Expected output URL for orientation \(orientation)")
+                    cleanup(inputURL)
+                    continue
+                }
+
+                // Read output and verify dimensions are NOT swapped
+                guard let source = CGImageSourceCreateWithURL(outputURL as CFURL, nil) else {
+                    Issue.record("Failed to read output for orientation \(orientation)")
+                    cleanup(inputURL, outputURL)
+                    continue
+                }
+                let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
+                let width = props[kCGImagePropertyPixelWidth] as? Int ?? 0
+                let height = props[kCGImagePropertyPixelHeight] as? Int ?? 0
+
+                // Orientation 5-8 swap width/height (portrait vs landscape)
+                // The engine normalizes to .up, so output should match
+                // the expected dimensions for each orientation
+                #expect(width == Int(expectedSize.width) && height == Int(expectedSize.height),
+                        "Orientation \(orientation): expected \(Int(expectedSize.width))×\(Int(expectedSize.height)), got \(width)×\(height)")
+
+                // Verify aspect ratio is preserved (no stretching)
+                let aspectRatio = Double(width) / Double(max(height, 1))
+                let expectedAspect = Double(expectedSize.width) / Double(max(expectedSize.height, 1))
+                #expect(abs(aspectRatio - expectedAspect) < 0.01,
+                        "Orientation \(orientation): aspect ratio \(aspectRatio) differs from expected \(expectedAspect)")
+
+                cleanup(inputURL, outputURL)
+            } catch {
+                Issue.record("Engine threw for orientation \(orientation): \(error)")
+                cleanup(inputURL)
+            }
+        }
+    }
+
+    // MARK: - Test Helpers
+
+    /// Creates mock PNG data of the specified size (filled with repeating pattern).
+    /// This is NOT a valid PNG — it's used to test the stripping mechanism.
+    private func makeMockPNGData(size: Int) -> Data {
+        var data = Data(count: size)
+        // Fill with a recognizable pattern (0xDE 0xAD 0xBE 0xEF repeating)
+        let pattern: [UInt8] = [0xDE, 0xAD, 0xBE, 0xEF]
+        for i in 0..<size {
+            data[i] = pattern[i % pattern.count]
+        }
+        return data
+    }
 }

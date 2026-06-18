@@ -151,7 +151,30 @@ public enum OutputFormat: Sendable, Codable {
         case .preserveSource: try container.encode(RawValue.preserveSource)
         case .heic: try container.encode(RawValue.heic)
         case .jpeg: try container.encode(RawValue.jpeg)
-        case .png: try container.encode(RawValue.png)
+            case .png: try container.encode(RawValue.png)
         }
+    }
+}
+
+// MARK: - PHAdjustmentData Image Stripping (stubs — RED phase)
+
+extension WatermarkConfiguration {
+    /// Returns a copy with image watermark PNG data replaced by a minimal
+    /// placeholder, keeping the serialized config under PHAdjustmentData
+    /// size limits.
+    ///
+    /// - RED stub: returns self unchanged. Will be properly implemented
+    ///   in Task 3.
+    public func strippingImageData() -> WatermarkConfiguration {
+        // RED: stub — returns self, not yet stripping image data
+        return self
+    }
+
+    /// Restores image watermark PNG data from the full config stored in
+    /// App Group UserDefaults.
+    ///
+    /// - RED stub: no-op. Will be properly implemented in Task 3.
+    public mutating func rehydrateImageData() {
+        // RED: stub — no-op, not yet rehydrating
     }
 }
