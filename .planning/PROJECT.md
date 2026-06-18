@@ -8,6 +8,16 @@ An iOS app that lets users add watermarks or white-frame metadata overlays to ph
 
 Add a watermark and share it instantly — without ever cluttering the camera roll.
 
+## Current Milestone: v1.1 Address tech debt — REQUIREMENTS drift, ViewModel duplication, Photos HDR detection
+
+**Goal:** Harden the v1.0 codebase and dev process — collapse duplicated ViewModel code, fix the Photos extension HDR warning, reconcile REQUIREMENTS.md traceability with recurrence prevention, and add a wave-level build gate to catch broken builds early.
+
+**Target work items:**
+- REQUIREMENTS drift — audit REQUIREMENTS.md against current code AND add a recurrence guard so checkboxes stay in sync per plan
+- ViewModel duplication — add default implementations to `WatermarkConfigurable`; collapse ~186 duplicated lines across 3 ViewModels → ~20
+- Photos HDR detection — populate `sourceHasHDR`/`sourceFormatLabel` in `PhotosExtensionViewModel` so the HDR→JPEG warning fires
+- Wave-level build gate — per-wave `xcodebuild` verification so pre-existing build errors surface at source
+
 ## Requirements
 
 ### Validated
@@ -50,7 +60,12 @@ Add a watermark and share it instantly — without ever cluttering the camera ro
 
 ### Active
 
-(None — define next milestone via `/gsd-new-milestone`)
+<!-- v1.1 tech-debt milestone — formal REQ-IDs defined in REQUIREMENTS.md -->
+
+- [ ] Audit REQUIREMENTS.md traceability against current code; add recurrence guard for per-plan checkbox sync
+- [ ] Add default implementations to `WatermarkConfigurable` protocol; collapse duplicated layer-management code across 3 ViewModels
+- [ ] Populate `sourceHasHDR`/`sourceFormatLabel` in `PhotosExtensionViewModel` so HDR→JPEG warning fires in Photos extension
+- [ ] Add wave-level `xcodebuild` build gate so broken builds surface at source, not at milestone audit
 
 ### Out of Scope
 
@@ -67,7 +82,7 @@ Add a watermark and share it instantly — without ever cluttering the camera ro
 
 Shipped v1.0 MVP with 13,222 lines of Swift across 82 files. Tech stack: Swift 6 / SwiftUI (iOS 18), AVFoundation, Core Image, ImageIO, PencilKit, Photos, AppIntents. Architecture: WatermarkCore Swift Package (shared engine) consumed by 3 targets (Main App, ShareExtension, PhotoEditExtension) via App Group container. 137 commits over 1 day, 44 tasks across 20 plans. 227 automated tests (14 pre-existing EXIF orientation test failures in SPM CLI mode — pass under xcodebuild).
 
-Initial development revealed: (1) REQUIREMENTS.md traceability drift — 5 requirements remained unchecked despite implementation (fixed during milestone archive); (2) ViewModel layer-management code is near-duplicated across 3 targets — `WatermarkConfigurable` protocol would benefit from default implementations; (3) PhotosExtensionViewModel doesn't populate `sourceHasHDR`/`sourceFormatLabel` (minor — HDR preserved by default).
+Initial development revealed: (1) REQUIREMENTS.md traceability drift — 5 requirements remained unchecked despite implementation (reconciled at archive, but no prevention mechanism); (2) ViewModel layer-management code is near-duplicated across 3 targets — `WatermarkConfigurable` protocol would benefit from default implementations; (3) PhotosExtensionViewModel doesn't populate `sourceHasHDR`/`sourceFormatLabel` (minor — HDR preserved by default). The v1.0 retrospective (RETROSPECTIVE.md) also flagged that pre-existing build errors from Phases 5–6 compounded undetected until Phase 7 because executor self-checks reported "PASSED" without an actual `xcodebuild` invocation. **v1.1 addresses all four items** as a focused tech-debt milestone — no new user-facing features.
 
 ## Constraints
 
@@ -115,4 +130,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-18 after v1.0 milestone*
+*Last updated: 2026-06-18 after v1.1 milestone start*
