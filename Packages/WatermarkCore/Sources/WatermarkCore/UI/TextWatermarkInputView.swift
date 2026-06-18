@@ -64,7 +64,7 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
 
     private var currentText: String {
         if let layer = viewModel.config.watermarks.first,
-           case .text(let input, _, _) = layer {
+           case .text(let input, _, _, _, _) = layer {
             return input.text
         }
         return ""
@@ -75,7 +75,7 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
             get: { currentText },
             set: { newValue in
                 guard var layer = viewModel.config.watermarks.first,
-                      case let .text(input, position, scale) = layer else { return }
+                      case let .text(input, position, scale, opacity, isVisible) = layer else { return }
                 let truncated = String(newValue.prefix(500))
                 viewModel.config.watermarks[0] = .text(
                     TextWatermarkInput(
@@ -85,7 +85,9 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
                         opacity: input.opacity
                     ),
                     position: position,
-                    scale: scale
+                    scale: scale,
+                    opacity: opacity,
+                    isVisible: isVisible
                 )
             }
         )

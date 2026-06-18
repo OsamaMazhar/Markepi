@@ -54,7 +54,7 @@ struct PhotosExtensionTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "Test", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                      position: .bottomRight, scale: 0.15)
+                      position: .bottomRight, scale: 0.15, opacity: 1.0, isVisible: true)
             ]
         )
         let engine = WatermarkEngine()
@@ -99,7 +99,7 @@ struct PhotosExtensionTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "Test", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                      position: .bottomRight, scale: 0.15)
+                      position: .bottomRight, scale: 0.15, opacity: 1.0, isVisible: true)
             ],
             whiteFrame: WhiteFrameConfig(isEnabled: true),
             outputFormat: .preserveSource
@@ -111,7 +111,7 @@ struct PhotosExtensionTests {
         #expect(decoded.watermarks.count == 1, "Expected 1 watermark layer")
         #expect(decoded.watermarks[0].position == .bottomRight, "Position should be .bottomRight")
         #expect(decoded.watermarks[0].scale == 0.15, "Scale should be 0.15")
-        if case .text(let textConfig, _, _) = decoded.watermarks[0] {
+        if case .text(let textConfig, _, _, _, _) = decoded.watermarks[0] {
             #expect(textConfig.text == "Test", "Text should be 'Test'")
             #expect(textConfig.fontSize == 48, "Font size should be 48")
         } else {
@@ -129,7 +129,7 @@ struct PhotosExtensionTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "VersionCheck", fontSize: 36, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                      position: .center, scale: 0.1)
+                      position: .center, scale: 0.1, opacity: 1.0, isVisible: true)
             ]
         )
         let encodedData = try JSONEncoder().encode(config)
@@ -167,7 +167,7 @@ struct PhotosExtensionTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "HDR", fontSize: 24, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                      position: .topLeft, scale: 0.05)
+                      position: .topLeft, scale: 0.05, opacity: 1.0, isVisible: true)
             ]
         )
         let engine = WatermarkEngine()
@@ -219,7 +219,7 @@ struct PhotosExtensionTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "EXIF", fontSize: 20, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                      position: .topRight, scale: 0.08)
+                      position: .topRight, scale: 0.08, opacity: 1.0, isVisible: true)
             ]
         )
         let engine = WatermarkEngine()
@@ -280,7 +280,7 @@ struct PhotosExtensionTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "Reject", fontSize: 24, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                      position: .center, scale: 0.1)
+                      position: .center, scale: 0.1, opacity: 1.0, isVisible: true)
             ]
         )
         let encodedData = try JSONEncoder().encode(config)
@@ -347,7 +347,7 @@ struct PhotosExtensionTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "VideoTest", fontSize: 36, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                      position: .center, scale: 0.1)
+                      position: .center, scale: 0.1, opacity: 1.0, isVisible: true)
             ]
         )
         let engine = WatermarkEngine()
@@ -380,7 +380,7 @@ struct PhotosExtensionTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "HDR", fontSize: 24, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                      position: .topLeft, scale: 0.05)
+                      position: .topLeft, scale: 0.05, opacity: 1.0, isVisible: true)
             ]
         )
         let engine = WatermarkEngine()
@@ -415,8 +415,8 @@ struct PhotosExtensionTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "WithLogo", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                      position: .topLeft, scale: 0.12),
-                .image(imageInput, position: .bottomRight, scale: 0.15),
+                      position: .topLeft, scale: 0.12, opacity: 1.0, isVisible: true),
+                .image(imageInput, position: .bottomRight, scale: 0.15, opacity: 1.0, isVisible: true),
             ],
             whiteFrame: WhiteFrameConfig(isEnabled: true)
         )
@@ -456,8 +456,8 @@ struct PhotosExtensionTests {
         let fullConfig = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "Rehydrate", fontSize: 36, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                      position: .center, scale: 0.1),
-                .image(imageInput, position: .topRight, scale: 0.2),
+                      position: .center, scale: 0.1, opacity: 1.0, isVisible: true),
+                .image(imageInput, position: .topRight, scale: 0.2, opacity: 1.0, isVisible: true),
             ]
         )
 
@@ -483,7 +483,7 @@ struct PhotosExtensionTests {
         }
         if !imageLayers.isEmpty {
             for layer in imageLayers {
-                if case .image(let input, _, _) = layer {
+                if case .image(let input, _, _, _, _) = layer {
                     // RED: with stub, pngData will be mockPNGData (stripping was no-op)
                     // GREEN: after stripping returns placeholder and rehydrate restores,
                     // pngData should match the original mockPNGData
@@ -504,11 +504,11 @@ struct PhotosExtensionTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "Watermark One", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                      position: .topLeft, scale: 0.15),
+                      position: .topLeft, scale: 0.15, opacity: 1.0, isVisible: true),
                 .text(TextWatermarkInput(text: "Watermark Two", fontSize: 36, color: CGColor(red: 1, green: 0, blue: 0, alpha: 1), opacity: 0.8),
-                      position: .bottomRight, scale: 0.12),
+                      position: .bottomRight, scale: 0.12, opacity: 1.0, isVisible: true),
                 .text(TextWatermarkInput(text: "Watermark Three", fontSize: 24, color: CGColor(red: 0, green: 0, blue: 1, alpha: 1), opacity: 0.6),
-                      position: .center, scale: 0.08),
+                      position: .center, scale: 0.08, opacity: 1.0, isVisible: true),
             ],
             whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: true)
         )
@@ -573,7 +573,7 @@ struct PhotosExtensionTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "Orientation", fontSize: 24, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                      position: .center, scale: 0.1)
+                      position: .center, scale: 0.1, opacity: 1.0, isVisible: true)
             ]
         )
         let engine = WatermarkEngine()

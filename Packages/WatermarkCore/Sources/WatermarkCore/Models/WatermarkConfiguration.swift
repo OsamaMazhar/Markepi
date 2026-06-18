@@ -40,28 +40,48 @@ public struct WatermarkConfiguration: Sendable, Codable {
 
 /// Discriminated union representing a single watermark layer in the layer stack.
 ///
-/// Each layer has a type (.text or .image), a position preset, and a scale factor.
+/// Each layer has a type (.text or .image), a position preset, a scale factor,
+/// per-layer compositing opacity (0.0–1.0), and a visibility toggle.
 /// Layers are composited in array order (index 0 = bottom, last index = top) per D-01.
 public enum WatermarkLayer: Sendable {
     /// Text watermark with SF system font rendering
-    case text(TextWatermarkInput, position: WatermarkPosition, scale: CGFloat)
+    case text(TextWatermarkInput, position: WatermarkPosition, scale: CGFloat, opacity: CGFloat, isVisible: Bool)
 
     /// Image/logo watermark (full implementation in Plan 02)
-    case image(ImageWatermarkInput, position: WatermarkPosition, scale: CGFloat)
+    case image(ImageWatermarkInput, position: WatermarkPosition, scale: CGFloat, opacity: CGFloat, isVisible: Bool)
 
     /// The position preset for this watermark layer
     public var position: WatermarkPosition {
         switch self {
-        case .text(_, let position, _): return position
-        case .image(_, let position, _): return position
+        case .text(_, let position, _, _, _): return position
+        case .image(_, let position, _, _, _): return position
         }
     }
 
     /// The scale factor relative to base image shorter dimension (0.01–0.90)
     public var scale: CGFloat {
         switch self {
-        case .text(_, _, let scale): return scale
-        case .image(_, _, let scale): return scale
+        case .text(_, _, let scale, _, _): return scale
+        case .image(_, _, let scale, _, _): return scale
+        }
+    }
+
+    /// Per-layer compositing opacity (0.0–1.0). Default 1.0.
+    /// Applied via CIFilter.colorMatrix alpha modulation at compositing time.
+    /// Distinct from per-element opacity (TextWatermarkInput.opacity for text rendering,
+    /// ImageWatermarkInput.opacity for PNG alpha).
+    public var opacity: CGFloat {
+        switch self {
+        case .text(_, _, _, let opacity, _): return opacity
+        case .image(_, _, _, let opacity, _): return opacity
+        }
+    }
+
+    /// Per-layer visibility. False → layer is skipped in compositing.
+    public var isVisible: Bool {
+        switch self {
+        case .text(_, _, _, _, let isVisible): return isVisible
+        case .image(_, _, _, _, let isVisible): return isVisible
         }
     }
 }
@@ -70,7 +90,7 @@ public enum WatermarkLayer: Sendable {
 
 extension WatermarkLayer: Codable {
     enum CodingKeys: String, CodingKey {
-        case type, textConfig, imageConfig, position, scale
+        case type, textConfig, imageConfig, position, scale, opacity, isVisible
     }
 
     enum LayerType: String, Codable {
@@ -82,14 +102,16 @@ extension WatermarkLayer: Codable {
         let type = try container.decode(LayerType.self, forKey: .type)
         let position = try container.decode(WatermarkPosition.self, forKey: .position)
         let scale = try container.decode(CGFloat.self, forKey: .scale)
+        let opacity = try container.decodeIfPresent(CGFloat.self, forKey: .opacity) ?? 1.0
+        let isVisible = try container.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true
 
         switch type {
         case .text:
             let config = try container.decode(TextWatermarkInput.self, forKey: .textConfig)
-            self = .text(config, position: position, scale: scale)
+            self = .text(config, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
         case .image:
             let config = try container.decode(ImageWatermarkInput.self, forKey: .imageConfig)
-            self = .image(config, position: position, scale: scale)
+            self = .image(config, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
         }
     }
 
@@ -99,12 +121,16 @@ extension WatermarkLayer: Codable {
         try container.encode(scale, forKey: .scale)
 
         switch self {
-        case .text(let config, _, _):
+        case .text(let config, _, _, let opacity, let isVisible):
             try container.encode(LayerType.text, forKey: .type)
             try container.encode(config, forKey: .textConfig)
-        case .image(let config, _, _):
+            try container.encode(opacity, forKey: .opacity)
+            try container.encode(isVisible, forKey: .isVisible)
+        case .image(let config, _, _, let opacity, let isVisible):
             try container.encode(LayerType.image, forKey: .type)
             try container.encode(config, forKey: .imageConfig)
+            try container.encode(opacity, forKey: .opacity)
+            try container.encode(isVisible, forKey: .isVisible)
         }
     }
 }
@@ -200,7 +226,7 @@ extension WatermarkConfiguration {
         // Replace image watermark PNG data with 1×1 transparent placeholder
         copy.watermarks = watermarks.map { layer in
             switch layer {
-            case .image(let input, let position, let scale):
+            case .image(let input, let position, let scale, let opacity, let isVisible):
                 // Preserve position and scale for rehydration matching (T-04-08)
                 // Replace pngData with minimal placeholder (~67 bytes vs original)
                 if let strippedInput = try? ImageWatermarkInput(
@@ -208,14 +234,16 @@ extension WatermarkConfiguration {
                     scale: input.scale,
                     opacity: input.opacity
                 ) {
-                    return .image(strippedInput, position: position, scale: scale)
+                    return .image(strippedInput, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
                 }
                 // Fallback: if placeholder fails (shouldn't), keep original as text marker
                 return .text(
                     TextWatermarkInput(text: "[Image]", fontSize: 12,
                                        color: CGColor(gray: 0.5, alpha: 1), opacity: 0.5),
                     position: position,
-                    scale: scale
+                    scale: scale,
+                    opacity: 0.5,
+                    isVisible: true
                 )
             case .text:
                 return layer
@@ -245,7 +273,7 @@ extension WatermarkConfiguration {
         // Build lookup: (position, scale) → ImageWatermarkInput from full config
         var fullImageLayers: [(WatermarkPosition, CGFloat, ImageWatermarkInput)] = []
         for layer in fullConfig.watermarks {
-            if case .image(let input, let position, let scale) = layer {
+            if case .image(let input, let position, let scale, _, _) = layer {
                 fullImageLayers.append((position, scale, input))
             }
         }
@@ -253,7 +281,7 @@ extension WatermarkConfiguration {
         // Rehydrate each image layer in self by matching position + scale
         watermarks = watermarks.map { layer in
             switch layer {
-            case .image(let strippedInput, let position, let scale):
+            case .image(let strippedInput, let position, let scale, let opacity, let isVisible):
                 // T-04-08: match by position AND scale
                 if let match = fullImageLayers.first(where: { $0.0 == position && abs($0.1 - scale) < 0.001 }),
                    !match.2.pngData.isEmpty {
@@ -263,7 +291,7 @@ extension WatermarkConfiguration {
                         scale: strippedInput.scale,
                         opacity: strippedInput.opacity
                     ) {
-                        return .image(rehydrated, position: position, scale: scale)
+                        return .image(rehydrated, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
                     }
                 }
                 // No match found or invalid data — keep the stripped placeholder

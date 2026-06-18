@@ -78,7 +78,7 @@ public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View
 
     private func layerDescription(for layer: WatermarkLayer) -> String {
         switch layer {
-        case .text(let input, _, _):
+        case .text(let input, _, _, _, _):
             if input.text.isEmpty { return "Text" }
             return String(input.text.prefix(20))
         case .image:

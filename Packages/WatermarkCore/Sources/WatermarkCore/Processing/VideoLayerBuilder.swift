@@ -71,12 +71,12 @@ public struct VideoLayerBuilder {
         let scale: CGFloat
 
         switch watermark {
-        case .text(let textConfig, _, let s):
+        case .text(let textConfig, _, let s, _, _):
             scale = s
             let ciImage = TextWatermarkRenderer.render(config: textConfig)
             cgImage = try renderToCGImage(ciImage)
 
-        case .image(let imageConfig, _, let s):
+        case .image(let imageConfig, _, let s, _, _):
             scale = s
             let ciImage = try ImageWatermarkRenderer.render(config: imageConfig)
             cgImage = try renderToCGImage(ciImage)

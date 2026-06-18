@@ -101,7 +101,7 @@ public actor WatermarkEngine {
             cgImage: cgImage,
             metadata: loaded.metadata,
             gainMapAuxData: loaded.gainMapAuxData,
-            dngMetadata: nil,
+            dngMetadata: loaded.dngMetadata,
             sourceUTI: loaded.sourceUTI,
             to: outputURL
         )
@@ -173,39 +173,22 @@ public actor WatermarkEngine {
 
         var composited = normalized
 
-        // White frame rendering (composited below all watermark layers)
-        // Frame border + metadata text rendered via UIGraphicsImageRenderer → CIImage.
-        // Frame is CISourceOverCompositing'd onto base; watermarks are then
-        // composited on top of the frame-bearing image (D-04: frame below watermarks).
-        if let frameConfig = config.whiteFrame, frameConfig.isEnabled {
-            let frameCIImage = try WhiteFrameRenderer.render(
-                config: frameConfig,
-                baseExtent: composited.extent,
-                metadata: metadata,
-                scale: 1.0
-            )
-
-            // Composite frame onto base — frame borders cover edges,
-            // transparent center shows original image through
-            let frameFilter = CIFilter.sourceOverCompositing()
-            frameFilter.inputImage = frameCIImage
-            frameFilter.backgroundImage = composited
-            composited = frameFilter.outputImage ?? composited
-        }
-
         var layers: [(CIImage, CGPoint)] = []
         let extent = composited.extent
 
         // Build layers in order: bottom layer first, top layer last (D-01)
         for watermark in config.watermarks {
+            // MULT-02: Skip hidden layers
+            guard watermark.isVisible else { continue }
+
             let watermarkImage: CIImage
 
             switch watermark {
-            case .text(let textConfig, _, _):
-                // Token substitution happens BEFORE NSAttributedString creation (D-07)
+            case .text(let textConfig, _, _, _, _):
+                // EXIF-01: Token substitution before rendering (Plan 05-02 integration)
                 watermarkImage = TextWatermarkRenderer.render(config: textConfig, metadata: metadata)
 
-            case .image(let imageConfig, _, _):
+            case .image(let imageConfig, _, _, _, _):
                 watermarkImage = try ImageWatermarkRenderer.render(config: imageConfig)
             }
 
@@ -214,19 +197,47 @@ public actor WatermarkEngine {
                 by: CGAffineTransform(scaleX: watermark.scale, y: watermark.scale)
             )
 
+            // MULT-02: Per-layer opacity via CIFilter.colorMatrix
+            let opacityAdjusted: CIImage
+            if watermark.opacity < 1.0 {
+                let matrix = CIFilter.colorMatrix()
+                matrix.inputImage = scaled
+                matrix.aVector = CIVector(x: 0, y: 0, z: 0, w: CGFloat(watermark.opacity))
+                matrix.biasVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+                opacityAdjusted = matrix.outputImage ?? scaled
+            } else {
+                opacityAdjusted = scaled
+            }
+
             // Calculate position using CIImage bottom-left origin coordinates
             // Uses configurable padding from WatermarkConfiguration (default 20)
             let position = PositionCalculator.position(
                 for: watermark.position,
-                watermarkExtent: scaled.extent,
+                watermarkExtent: opacityAdjusted.extent,
                 baseExtent: extent,
                 padding: config.padding
             )
 
-            layers.append((scaled, position))
+            layers.append((opacityAdjusted, position))
         }
 
-        // Composite all layers onto base (with frame if enabled) via CISourceOverCompositing
-        return WatermarkRenderer.composite(layers: layers, onto: composited)
+        // D-12: Composite watermark layers onto base (text → image, bottom to top)
+        let watermarkedResult = WatermarkRenderer.composite(layers: layers, onto: composited)
+
+        // D-12: White frame composited ON TOP (outermost layer)
+        if let frameConfig = config.whiteFrame, frameConfig.isEnabled {
+            let frameCIImage = try WhiteFrameRenderer.render(
+                config: frameConfig,
+                baseExtent: watermarkedResult.extent,
+                metadata: metadata,
+                scale: 1.0
+            )
+            let frameFilter = CIFilter.sourceOverCompositing()
+            frameFilter.inputImage = frameCIImage
+            frameFilter.backgroundImage = watermarkedResult
+            return frameFilter.outputImage ?? watermarkedResult
+        }
+
+        return watermarkedResult
     }
 }

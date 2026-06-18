@@ -42,7 +42,7 @@ struct WatermarkEngineTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "TEST", fontSize: 48, opacity: 1.0),
-                      position: .center, scale: 0.1)
+                      position: .center, scale: 0.1, opacity: 1.0, isVisible: true)
             ]
         )
         let engine = WatermarkEngine()
@@ -74,7 +74,7 @@ struct WatermarkEngineTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "OK", fontSize: 36, opacity: 1.0),
-                      position: .topLeft, scale: 0.05)
+                      position: .topLeft, scale: 0.05, opacity: 1.0, isVisible: true)
             ]
         )
         let engine = WatermarkEngine()
@@ -118,7 +118,7 @@ struct WatermarkEngineTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "A", fontSize: 24, opacity: 1.0),
-                      position: .bottomRight, scale: 0.1)
+                      position: .bottomRight, scale: 0.1, opacity: 1.0, isVisible: true)
             ]
         )
         let engine = WatermarkEngine()
@@ -149,7 +149,7 @@ struct WatermarkEngineTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "X", fontSize: 12, opacity: 1.0),
-                      position: .center, scale: 0.05)
+                      position: .center, scale: 0.05, opacity: 1.0, isVisible: true)
             ]
         )
         let engine = WatermarkEngine()
@@ -185,7 +185,7 @@ struct WatermarkEngineTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "META", fontSize: 32, opacity: 0.8),
-                      position: .topCenter, scale: 0.1)
+                      position: .topCenter, scale: 0.1, opacity: 1.0, isVisible: true)
             ]
         )
         let engine = WatermarkEngine()
@@ -268,8 +268,8 @@ struct WatermarkEngineTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "TOP", fontSize: 36, opacity: 1.0),
-                      position: .topLeft, scale: 0.1),
-                .image(imageInput, position: .bottomRight, scale: 0.5),
+                      position: .topLeft, scale: 0.1, opacity: 1.0, isVisible: true),
+                .image(imageInput, position: .bottomRight, scale: 0.5, opacity: 1.0, isVisible: true),
             ]
         )
         let engine = WatermarkEngine()
@@ -320,7 +320,7 @@ struct WatermarkEngineTests {
 
         let config = WatermarkConfiguration(
             watermarks: [
-                .image(imageInput, position: .center, scale: 0.5),
+                .image(imageInput, position: .center, scale: 0.5, opacity: 1.0, isVisible: true),
             ]
         )
         let engine = WatermarkEngine()
@@ -383,7 +383,7 @@ struct WatermarkEngineTests {
 
         let config = WatermarkConfiguration(
             watermarks: [
-                .image(imageInput, position: .center, scale: 0.5),
+                .image(imageInput, position: .center, scale: 0.5, opacity: 1.0, isVisible: true),
             ]
         )
         let engine = WatermarkEngine()
@@ -425,7 +425,7 @@ struct WatermarkEngineTests {
 
         var config = WatermarkConfiguration(
             watermarks: [
-                .image(imageInput, position: .topLeft, scale: 0.5),
+                .image(imageInput, position: .topLeft, scale: 0.5, opacity: 1.0, isVisible: true),
             ]
         )
         config.padding = 50
@@ -464,7 +464,7 @@ struct WatermarkEngineTests {
         // No explicit padding set — should default to 20
         let config = WatermarkConfiguration(
             watermarks: [
-                .image(imageInput, position: .topLeft, scale: 0.5),
+                .image(imageInput, position: .topLeft, scale: 0.5, opacity: 1.0, isVisible: true),
             ]
         )
         let engine = WatermarkEngine()
@@ -499,7 +499,7 @@ struct WatermarkEngineTests {
 
         let config = WatermarkConfiguration(
             watermarks: [
-                .image(imageInput, position: .bottomRight, scale: 0.4),
+                .image(imageInput, position: .bottomRight, scale: 0.4, opacity: 1.0, isVisible: true),
             ]
         )
         let engine = WatermarkEngine()
@@ -615,7 +615,7 @@ struct WatermarkEngineTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "TOP", fontSize: 48, opacity: 1.0),
-                      position: .topLeft, scale: 0.15),
+                      position: .topLeft, scale: 0.15, opacity: 1.0, isVisible: true),
             ],
             whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false)
         )
@@ -754,7 +754,7 @@ struct WatermarkEngineTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "TEST", fontSize: 36, opacity: 1.0),
-                      position: .center, scale: 0.1),
+                      position: .center, scale: 0.1, opacity: 1.0, isVisible: true),
             ],
             whiteFrame: WhiteFrameConfig(isEnabled: false)
         )
@@ -955,8 +955,8 @@ struct WatermarkEngineTests {
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "Hello", fontSize: 36, opacity: 1.0),
-                      position: .topLeft, scale: 0.12),
-                .image(imageInput, position: .bottomRight, scale: 0.3),
+                      position: .topLeft, scale: 0.12, opacity: 1.0, isVisible: true),
+                .image(imageInput, position: .bottomRight, scale: 0.3, opacity: 1.0, isVisible: true),
             ],
             whiteFrame: WhiteFrameConfig(
                 isEnabled: true,
