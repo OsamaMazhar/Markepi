@@ -33,7 +33,11 @@ v1.0 phases 1-7 are archived under `.planning/milestones/v1.0-ROADMAP.md`.
   2. A reproducible mechanism (script, make target, or workflow hook) exists that updates REQUIREMENTS.md checkboxes after each plan completes, with documented invocation
   3. Running the recurrence-guard mechanism against a plan with completed requirements produces the correct checkbox state without manual edits (verified by dry-run or test)
   4. The v1.1 REQUIREMENTS.md traceability table shows all 5 v1.1 requirements (TRACE-01, TRACE-02, REFA-01, PHDR-01, BUILD-01) mapped to their phases with Status "Pending"
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Reconcile v1.0 archive REQUIREMENTS.md: flip 10 unchecked checkboxes, add 5 missing checkboxes, update 15 stale traceability entries, reclassify 7 shipped Phase 7 requirements v2→v1, fix coverage counts, add Reconciliation Note
+- [ ] 08-02-PLAN.md — Build recurrence guard: create scripts/sync-requirements.sh, scripts/test-sync-requirements.sh (fixture test with 3 branches), update AGENTS.md with post-plan step and not_found resolution path
 
 ### Phase 9: Wave-Level Build Gate
 **Goal**: A per-wave xcodebuild verification runs across all 3 targets so broken builds surface at source, not at milestone audit
@@ -83,7 +87,7 @@ Phases execute in numeric order: 8 → 9 → 10 → 11
 | 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | v1.0 | 4/4 | Complete | 2026-06-18 |
 | 6. Export Control & UX Polish | v1.0 | 3/3 | Complete | 2026-06-18 |
 | 7. Additional Inputs & System Integration (v2) | v1.0 | 3/3 | Complete | 2026-06-18 |
-| 8. Traceability Reconciliation & Recurrence Guard | v1.1 | 0/TBD | Not started | - |
+| 8. Traceability Reconciliation & Recurrence Guard | v1.1 | 0/2 | Not started | - |
 | 9. Wave-Level Build Gate | v1.1 | 0/TBD | Not started | - |
 | 10. WatermarkConfigurable Protocol Defaults | v1.1 | 0/TBD | Not started | - |
 | 11. Photos Extension HDR Detection | v1.1 | 0/TBD | Not started | - |
