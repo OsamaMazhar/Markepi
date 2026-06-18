@@ -106,7 +106,17 @@ Plans:
   2. Photos extension watermarked output includes an undoable adjustment entry in the Photos edit history (non-destructive editing)
   3. Comprehensive QA confirms HDR preservation, metadata integrity, and orientation correctness across the supported iOS 18 device range without memory crashes
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — Complete Photo Editing Extension: Xcode targets (PhotoEdit + ShareExtension), PHContentEditingController, photo watermarking via WatermarkEngine, PHAdjustmentData undo/re-edit, automated tests
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 04-02-PLAN.md — Video support in Photos extension (audiovisualAsset → VideoProcessor), PHAdjustmentData image watermark stripping, comprehensive automated test suite, manual QA checklist
+
 **UI hint**: yes
 
 ### Phase 5: Extended Engine (ProRAW, EXIF Tokens, Multi-Layer)
