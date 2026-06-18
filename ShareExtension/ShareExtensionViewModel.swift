@@ -407,6 +407,8 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
                let image = UIImage(data: data) {
                 originalSourceImage = image
             }
+        case .livePhoto:
+            break
         case .unknown:
             break
         }
