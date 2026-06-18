@@ -157,6 +157,44 @@ Use these entry points:
 Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
 <!-- GSD:workflow-end -->
 
+<!-- GSD:post-plan-start source=.planning/phases/08-traceability-reconciliation-recurrence-guard -->
+## GSD Post-Plan Step
+
+After writing a plan's SUMMARY.md, the gsd-executor MUST run:
+
+```
+bash scripts/sync-requirements.sh <path-to-summary>
+```
+
+This keeps `.planning/REQUIREMENTS.md` checkboxes and traceability table in sync with shipped features, preventing the manual drift that affected v1.0 (10/35 requirements unchecked at milestone close).
+
+### Exit Codes and Resolution
+
+| Exit | Meaning | Action |
+|------|---------|--------|
+| 0 | All requirement IDs marked complete or already complete. No `not_found`. | Proceed — plan completion is unblocked. |
+| 1 | At least one requirement ID in `not_found`. **BLOCKER.** | Resolve before marking plan complete: |
+| 2+ | Script error (missing SUMMARY, invalid frontmatter, tool failure). **BLOCKER.** | Diagnose and fix the script or SUMMARY. |
+
+### Not-Found Resolution Path
+
+If the script exits 1 (IDs in `not_found`):
+
+1. **Typo in SUMMARY `requirements-completed`:** Fix the requirement ID in the SUMMARY frontmatter, then re-run the script.
+2. **Requirement ID missing from REQUIREMENTS.md:** Add the requirement definition to `.planning/REQUIREMENTS.md` (with `- [ ] **ID**:` checkbox and traceability table row), then re-run the script.
+3. The script is idempotent — re-running with corrected data is always safe.
+
+### Regression Check
+
+Verify the guard works:
+
+```bash
+bash scripts/test-sync-requirements.sh
+```
+
+This self-contained fixture test validates three branches (happy path, not_found, already_complete) and exits non-zero on failure. Run after any change to `sync-requirements.sh` or the GSD `mark-complete` tool.
+
+<!-- GSD:post-plan-end -->
 
 
 <!-- GSD:profile-start -->
