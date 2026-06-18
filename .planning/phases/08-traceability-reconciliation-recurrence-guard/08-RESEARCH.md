@@ -652,19 +652,19 @@ exit 0
 | A3 | The gsd-executor will run `sync-requirements.sh` from the project root (so `planningPaths(cwd)` resolves correctly) | Recurrence Guard Design | LOW — the executor always operates from the project root by convention. |
 | A4 | `gsd-sdk query frontmatter get` continues to use the `--pick` flag with the same semantics in future GSD versions | Recurrence Guard Design | MEDIUM — if the CLI changes, the script needs updating. This is a documented dependency; the fixture test would catch breakage. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **One commit or split for TRACE-01?**
+1. **RESOLVED: One commit or split for TRACE-01?**
    - What we know: D-06 specifies a single atomic commit. The planner may prefer to split checkbox updates from category reclassification for reviewability.
-   - Recommendation: Use a single commit as specified. If splitting, update the commit message scheme and document rationale in the plan's deviations section. The atomicity of "reconciliation happened" is more important than per-change granularity for an archived document.
+   - Resolution: Single atomic commit as specified. The plan (08-01-PLAN.md Task 2, Part F) implements a single commit with the locked message. No splitting needed — all edits are confined to one file and the atomicity of "reconciliation happened" is more important than per-change granularity for an archived document.
 
-2. **What if SUMMARY.md has `requirements-completed: []` (empty array)?**
+2. **RESOLVED: What if SUMMARY.md has `requirements-completed: []` (empty array)?**
    - What we know: `frontmatter get --pick` returns `[]`. `jq -r '.[]'` produces no output. The script should exit 0 (not an error — the plan simply didn't deliver new requirements).
-   - Recommendation: Handle explicitly — check for empty array and exit 0 with a message. This is a normal case (e.g., Phase 8's own plan may not complete TRACE-01/02 until plan execution; or a future plan that delivers no new requirement IDs).
+   - Resolution: The script (08-02-PLAN.md Task 1, step 3) handles three cases explicitly: JSON array with IDs → proceed; `null` or empty string → exit 0; empty array `[]` → exit 0. This is a normal case covered in the implementation contract.
 
-3. **What if the gsd-executor skips running `sync-requirements.sh`?**
+3. **RESOLVED: What if the gsd-executor skips running `sync-requirements.sh`?**
    - What we know: The recurrence guard is "semi-automatic" — documented in AGENTS.md as a step the executor runs, not a hard enforcement in the GSD workflow code.
-   - Recommendation: The planner should document the post-plan step clearly in AGENTS.md with a prominent heading. The executor's adherence is trust-based. A future phase could wire it into the GSD workflow files, but that's deferred (D-03 explicitly keeps it repo-local).
+   - Resolution: The AGENTS.md post-plan step (08-02-PLAN.md Task 3) is documented with a prominent `## GSD Post-Plan Step` heading, a MUST invocation, an exit code table with BLOCKER designations, and a resolution path. The executor's adherence is trust-based. A future phase could wire it into the GSD workflow files, but that's deferred (D-03 explicitly keeps it repo-local).
 
 ## Metadata
 
