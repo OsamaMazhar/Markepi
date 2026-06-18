@@ -36,7 +36,7 @@ v1.0 phases 1-7 are archived under `.planning/milestones/v1.0-ROADMAP.md`.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Reconcile v1.0 archive REQUIREMENTS.md: flip 10 unchecked checkboxes, add 5 missing checkboxes, update 15 stale traceability entries, reclassify 7 shipped Phase 7 requirements v2→v1, fix coverage counts, add Reconciliation Note
+- [x] 08-01-PLAN.md — Reconcile v1.0 archive REQUIREMENTS.md: flip 10 unchecked checkboxes, add 5 missing checkboxes, update 15 stale traceability entries, reclassify 7 shipped Phase 7 requirements v2→v1, fix coverage counts, add Reconciliation Note
 - [ ] 08-02-PLAN.md — Build recurrence guard: create scripts/sync-requirements.sh, scripts/test-sync-requirements.sh (fixture test with 3 branches), update AGENTS.md with post-plan step and not_found resolution path
 
 ### Phase 9: Wave-Level Build Gate
@@ -87,7 +87,7 @@ Phases execute in numeric order: 8 → 9 → 10 → 11
 | 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | v1.0 | 4/4 | Complete | 2026-06-18 |
 | 6. Export Control & UX Polish | v1.0 | 3/3 | Complete | 2026-06-18 |
 | 7. Additional Inputs & System Integration (v2) | v1.0 | 3/3 | Complete | 2026-06-18 |
-| 8. Traceability Reconciliation & Recurrence Guard | v1.1 | 0/2 | Not started | - |
+| 8. Traceability Reconciliation & Recurrence Guard | v1.1 | 1/2 | In Progress|  |
 | 9. Wave-Level Build Gate | v1.1 | 0/TBD | Not started | - |
 | 10. WatermarkConfigurable Protocol Defaults | v1.1 | 0/TBD | Not started | - |
 | 11. Photos Extension HDR Detection | v1.1 | 0/TBD | Not started | - |
