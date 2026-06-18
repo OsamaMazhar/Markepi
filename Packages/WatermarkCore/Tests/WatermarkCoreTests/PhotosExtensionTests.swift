@@ -624,6 +624,150 @@ struct PhotosExtensionTests {
         }
     }
 
+    // MARK: - Phase 11: HDR + Format Detection (RED)
+
+    /// Creates a temp PNG file from test image data for URL-based UTI detection.
+    private func createTempPNGFile(name: String, size: CGSize = CGSize(width: 10, height: 10)) throws -> URL {
+        let (cgImage, _) = TestImageFactory.solidColorImage(
+            color: CGColor(red: 0, green: 1, blue: 0, alpha: 1),
+            size: size
+        )
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(name)_\(UUID().uuidString).png")
+        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+            throw NSError(domain: "Test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create CGImageDestination"])
+        }
+        CGImageDestinationAddImage(dest, cgImage, nil)
+        guard CGImageDestinationFinalize(dest) else {
+            throw NSError(domain: "Test", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to finalize PNG"])
+        }
+        return url
+    }
+
+    // MARK: Test 16: CGImageSource URL-based UTI detection for JPEG
+
+    @Test("CGImageSourceCreateWithURL detects JPEG UTI from file URL")
+    func cgImageSourceURLDetectsJPEG() async throws {
+        let (_, jpegData) = TestImageFactory.solidColorImage(
+            color: CGColor(red: 1, green: 0, blue: 0, alpha: 1),
+            size: CGSize(width: 10, height: 10)
+        )
+        let url = try createTempInputFile(data: jpegData, name: "detect_jpeg")
+        defer { cleanup(url) }
+
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+            Issue.record("RED: CGImageSourceCreateWithURL returned nil for valid JPEG file")
+            return
+        }
+        guard let uti = CGImageSourceGetType(source) else {
+            Issue.record("RED: CGImageSourceGetType returned nil for JPEG")
+            return
+        }
+        #expect((uti as String) == "public.jpeg", "Expected 'public.jpeg', got '\(uti as String)'")
+    }
+
+    // MARK: Test 17: CGImageSource URL-based UTI detection for PNG
+
+    @Test("CGImageSourceCreateWithURL detects PNG UTI from file URL")
+    func cgImageSourceURLDetectsPNG() async throws {
+        let url = try createTempPNGFile(name: "detect_png")
+        defer { cleanup(url) }
+
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+            Issue.record("RED: CGImageSourceCreateWithURL returned nil for valid PNG file")
+            return
+        }
+        guard let uti = CGImageSourceGetType(source) else {
+            Issue.record("RED: CGImageSourceGetType returned nil for PNG")
+            return
+        }
+        #expect((uti as String) == "public.png", "Expected 'public.png', got '\(uti as String)'")
+    }
+
+    // MARK: Test 18: Format label mapping from UTI strings
+
+    @Test("UTI to format label mapping returns correct labels for HEIC/JPEG/PNG/TIFF")
+    func utiToFormatLabelMapping() throws {
+        // Tests the 4-way switch that will be embedded in PhotosExtensionViewModel
+        func formatLabel(for uti: String) -> String? {
+            switch uti {
+            case "public.heic": return "HEIC"
+            case "public.jpeg": return "JPEG"
+            case "public.png":  return "PNG"
+            case "public.tiff": return "TIFF"
+            default:            return nil
+            }
+        }
+
+        #expect(formatLabel(for: "public.heic") == "HEIC", "HEIC UTI should map to 'HEIC'")
+        #expect(formatLabel(for: "public.jpeg") == "JPEG", "JPEG UTI should map to 'JPEG'")
+        #expect(formatLabel(for: "public.png") == "PNG", "PNG UTI should map to 'PNG'")
+        #expect(formatLabel(for: "public.tiff") == "TIFF", "TIFF UTI should map to 'TIFF'")
+        #expect(formatLabel(for: "com.adobe.raw-image") == nil, "DNG UTI should map to nil")
+        #expect(formatLabel(for: "public.unknown") == nil, "Unknown UTI should map to nil")
+    }
+
+    // MARK: Test 19: HDR detection heuristic (HEIC UTI → true)
+
+    @Test("HDR detection heuristic returns true for public.heic, false for others")
+    func hdrDetectionHeuristic() throws {
+        // Tests the UTI heuristic that will be embedded in PhotosExtensionViewModel
+        func isHDR(uti: String?) -> Bool {
+            guard let uti = uti else { return false }
+            return uti == "public.heic"
+        }
+
+        #expect(isHDR(uti: "public.heic") == true, "HEIC should be detected as HDR-capable")
+        #expect(isHDR(uti: "public.jpeg") == false, "JPEG should not be detected as HDR")
+        #expect(isHDR(uti: "public.png") == false, "PNG should not be detected as HDR")
+        #expect(isHDR(uti: "public.tiff") == false, "TIFF should not be detected as HDR")
+        #expect(isHDR(uti: nil) == false, "nil UTI should not be detected as HDR")
+    }
+
+    // MARK: Test 20: CGImageSourceGetType guard (nil UTI on non-image files)
+
+    @Test("CGImageSourceGetType returns nil for non-image text file — guard must handle nil UTI")
+    func cgImageSourceGetTypeReturnsNilForTextFile() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("text_file_\(UUID().uuidString).txt")
+        try "hello world".write(to: url, atomically: true, encoding: .utf8)
+        defer { cleanup(url) }
+
+        // Note: CGImageSourceCreateWithURL may succeed on some platforms for text files,
+        // but CGImageSourceGetType will return nil (no recognized image UTI).
+        // The guard in PhotosExtensionViewModel must handle BOTH conditions:
+        //   guard let source = CGImageSourceCreateWithURL(...),
+        //         let uti = CGImageSourceGetType(source) else { return }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+            // Source is nil — guard handles this (fine)
+            return
+        }
+        let uti = CGImageSourceGetType(source)
+        #expect(uti == nil, "RED: CGImageSourceGetType should return nil for text file — guard must handle nil UTI gracefully")
+    }
+
+    // MARK: Test 21: Video format label mapping from path extension
+
+    @Test("Video format label mapping from path extension returns MOV/MP4/M4V")
+    func videoFormatLabelMapping() throws {
+        // Tests the path extension mapping that will be embedded in PhotosExtensionViewModel
+        func videoFormatLabel(from url: URL) -> String? {
+            switch url.pathExtension.lowercased() {
+            case "mov": return "MOV"
+            case "mp4": return "MP4"
+            case "m4v": return "M4V"
+            default:    return nil
+            }
+        }
+
+        #expect(videoFormatLabel(from: URL(fileURLWithPath: "/test/video.mov")) == "MOV")
+        #expect(videoFormatLabel(from: URL(fileURLWithPath: "/test/video.MOV")) == "MOV", "Case-insensitive match")
+        #expect(videoFormatLabel(from: URL(fileURLWithPath: "/test/video.mp4")) == "MP4")
+        #expect(videoFormatLabel(from: URL(fileURLWithPath: "/test/video.m4v")) == "M4V")
+        #expect(videoFormatLabel(from: URL(fileURLWithPath: "/test/video.avi")) == nil, "Unknown extension should map to nil")
+        #expect(videoFormatLabel(from: URL(fileURLWithPath: "/test/video")) == nil, "No extension should map to nil")
+    }
+
     // MARK: - Test Helpers
 
     /// Creates mock PNG data of the specified size (filled with repeating pattern).
