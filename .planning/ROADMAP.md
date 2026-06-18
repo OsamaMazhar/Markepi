@@ -168,7 +168,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 06-02-PLAN.md — Before/After Comparison: originalSourceImage caching in both ViewModels, LongPressGesture with "Original" label overlay + haptic feedback, simultaneous gesture composition with existing MagnifyGesture, works for photos and videos
+- [x] 06-02-PLAN.md — Before/After Comparison: originalSourceImage caching in both ViewModels, LongPressGesture with "Original" label overlay + haptic feedback, simultaneous gesture composition with existing MagnifyGesture, works for photos and videos
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -205,5 +205,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Video Processing & Share Extension | 3/3 | Complete   | 2026-06-17 |
 | 4. Photos Edit Extension & Polish | 2/2 | Complete   | 2026-06-18 |
 | 5. Extended Engine (ProRAW, EXIF, Multi-Layer) | 4/4 | Complete   | 2026-06-18 |
-| 6. Export Control & UX Polish | 1/3 | In Progress|  |
+| 6. Export Control & UX Polish | 2/3 | In Progress|  |
 | 7. Additional Inputs & System Integration (v2) | 0/? | Not started | - |
