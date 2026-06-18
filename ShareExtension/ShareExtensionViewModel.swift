@@ -357,6 +357,9 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
             case .image(let imageConfig, _, _):
                 guard let rendered = try? ImageWatermarkRenderer.render(config: imageConfig) else { continue }
                 watermarkImage = rendered
+            case .signature(let signatureInput, _, _):
+                guard let rendered = try? SignatureRenderer.render(input: signatureInput) else { continue }
+                watermarkImage = rendered
             }
 
             let scaled = watermarkImage.transformed(
@@ -678,6 +681,8 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
             config.watermarks[index] = .text(input, position: position, scale: scale)
         case .image(let input, _, _):
             config.watermarks[index] = .image(input, position: position, scale: scale)
+        case .signature(let input, _, _, let opacity, let isVisible):
+            config.watermarks[index] = .signature(input, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
         }
     }
 
@@ -694,6 +699,8 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
             config.watermarks[index] = .text(input, position: position, scale: clamped)
         case .image(let input, _, _):
             config.watermarks[index] = .image(input, position: position, scale: clamped)
+        case .signature(let input, _, _, let opacity, let isVisible):
+            config.watermarks[index] = .signature(input, position: position, scale: clamped, opacity: opacity, isVisible: isVisible)
         }
     }
 
@@ -753,6 +760,8 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
                 parts.append("t:\(input.text)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
             case .image(let input, let pos, let scl):
                 parts.append("im:\(input.pngData.hashValue)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
+            case .signature(let input, let pos, let scl):
+                parts.append("sig:\(input.strokeData.hashValue)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
             }
         }
         parts.append("wf:\(config.whiteFrame?.isEnabled == true ? "1" : "0")")

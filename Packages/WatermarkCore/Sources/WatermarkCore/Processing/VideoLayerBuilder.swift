@@ -80,6 +80,11 @@ public struct VideoLayerBuilder {
             scale = s
             let ciImage = try ImageWatermarkRenderer.render(config: imageConfig)
             cgImage = try renderToCGImage(ciImage)
+
+        case .signature(let signatureInput, _, let s, _, _):
+            scale = s
+            let ciImage = try SignatureRenderer.render(input: signatureInput)
+            cgImage = try renderToCGImage(ciImage)
         }
 
         let wmLayer = CALayer()

@@ -196,6 +196,9 @@ public actor WatermarkEngine {
 
             case .image(let imageConfig, _, _, _, _):
                 watermarkImage = try ImageWatermarkRenderer.render(config: imageConfig)
+
+            case .signature(let signatureInput, _, _, _, _):
+                watermarkImage = try SignatureRenderer.render(input: signatureInput)
             }
 
             // Scale watermark relative to base image

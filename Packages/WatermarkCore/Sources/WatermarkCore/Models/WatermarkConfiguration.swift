@@ -81,11 +81,15 @@ public enum WatermarkLayer: Sendable {
     /// Image/logo watermark (full implementation in Plan 02)
     case image(ImageWatermarkInput, position: WatermarkPosition, scale: CGFloat, opacity: CGFloat, isVisible: Bool)
 
+    /// Signature watermark with PencilKit stroke data
+    case signature(SignatureInput, position: WatermarkPosition, scale: CGFloat, opacity: CGFloat, isVisible: Bool)
+
     /// The position preset for this watermark layer
     public var position: WatermarkPosition {
         switch self {
         case .text(_, let position, _, _, _): return position
         case .image(_, let position, _, _, _): return position
+        case .signature(_, let position, _, _, _): return position
         }
     }
 
@@ -94,6 +98,7 @@ public enum WatermarkLayer: Sendable {
         switch self {
         case .text(_, _, let scale, _, _): return scale
         case .image(_, _, let scale, _, _): return scale
+        case .signature(_, _, let scale, _, _): return scale
         }
     }
 
@@ -105,6 +110,7 @@ public enum WatermarkLayer: Sendable {
         switch self {
         case .text(_, _, _, let opacity, _): return opacity
         case .image(_, _, _, let opacity, _): return opacity
+        case .signature(_, _, _, let opacity, _): return opacity
         }
     }
 
@@ -113,6 +119,7 @@ public enum WatermarkLayer: Sendable {
         switch self {
         case .text(_, _, _, _, let isVisible): return isVisible
         case .image(_, _, _, _, let isVisible): return isVisible
+        case .signature(_, _, _, _, let isVisible): return isVisible
         }
     }
 }
@@ -121,11 +128,11 @@ public enum WatermarkLayer: Sendable {
 
 extension WatermarkLayer: Codable {
     enum CodingKeys: String, CodingKey {
-        case type, textConfig, imageConfig, position, scale, opacity, isVisible
+        case type, textConfig, imageConfig, signatureConfig, position, scale, opacity, isVisible
     }
 
     enum LayerType: String, Codable {
-        case text, image
+        case text, image, signature
     }
 
     public init(from decoder: Decoder) throws {
@@ -143,6 +150,9 @@ extension WatermarkLayer: Codable {
         case .image:
             let config = try container.decode(ImageWatermarkInput.self, forKey: .imageConfig)
             self = .image(config, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
+        case .signature:
+            let config = try container.decode(SignatureInput.self, forKey: .signatureConfig)
+            self = .signature(config, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
         }
     }
 
@@ -160,6 +170,11 @@ extension WatermarkLayer: Codable {
         case .image(let config, _, _, let opacity, let isVisible):
             try container.encode(LayerType.image, forKey: .type)
             try container.encode(config, forKey: .imageConfig)
+            try container.encode(opacity, forKey: .opacity)
+            try container.encode(isVisible, forKey: .isVisible)
+        case .signature(let config, _, _, let opacity, let isVisible):
+            try container.encode(LayerType.signature, forKey: .type)
+            try container.encode(config, forKey: .signatureConfig)
             try container.encode(opacity, forKey: .opacity)
             try container.encode(isVisible, forKey: .isVisible)
         }
@@ -303,6 +318,8 @@ extension WatermarkConfiguration {
                 )
             case .text:
                 return layer
+            case .signature:
+                return layer
             }
         }
 
@@ -353,6 +370,8 @@ extension WatermarkConfiguration {
                 // No match found or invalid data — keep the stripped placeholder
                 return layer
             case .text:
+                return layer
+            case .signature:
                 return layer
             }
         }

@@ -73,6 +73,7 @@ public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View
         switch layer {
         case .text: return "textformat"
         case .image: return "photo"
+        case .signature: return "signature"
         }
     }
 
@@ -83,6 +84,8 @@ public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View
             return String(input.text.prefix(20))
         case .image:
             return "Logo"
+        case .signature:
+            return "Signature"
         }
     }
 }
