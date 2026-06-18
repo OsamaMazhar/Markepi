@@ -13,7 +13,7 @@ Requirements for the v1.1 tech-debt milestone. Each maps to a roadmap phase.
 ### Traceability (TRACE)
 
 - [x] **TRACE-01**: REQUIREMENTS.md is audited against the current codebase — every validated requirement is checked and the traceability table accurately reflects which phase delivered it
-- [ ] **TRACE-02**: A reproducible mechanism keeps REQUIREMENTS.md checkboxes in sync with implemented features after each plan, so traceability no longer drifts manually between plans
+- [x] **TRACE-02**: A reproducible mechanism keeps REQUIREMENTS.md checkboxes in sync with implemented features after each plan, so traceability no longer drifts manually between plans
 
 ### Refactor (REFA)
 
@@ -70,7 +70,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | TRACE-01 | Phase 8 | Complete |
-| TRACE-02 | Phase 8 | Pending |
+| TRACE-02 | Phase 8 | Complete |
 | REFA-01 | Phase 10 | Pending |
 | PHDR-01 | Phase 11 | Pending |
 | BUILD-01 | Phase 9 | Pending |
