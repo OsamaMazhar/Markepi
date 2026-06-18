@@ -6,6 +6,8 @@ struct PreviewView: View {
 
     @GestureState private var pinchScale: CGFloat = 1.0
     @State private var committedScale: CGFloat = 1.0
+    @GestureState private var isComparing: Bool = false
+    @State private var hapticTrigger: Bool = false
 
     private var effectiveScale: CGFloat {
         committedScale * pinchScale
@@ -20,16 +22,27 @@ struct PreviewView: View {
     var body: some View {
         Group {
             if let preview = viewModel.previewImage {
-                Image(uiImage: preview)
+                Image(uiImage: isComparing ? (viewModel.originalSourceImage ?? preview) : preview)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .drawingGroup()
                     .scaleEffect(effectiveScale)
-                    .gesture(magnifyGesture)
+                    .gesture(combinedGesture)
+                    .sensoryFeedback(.impact(weight: .light), trigger: hapticTrigger)
                     .overlay(alignment: .topTrailing) {
                         if pinchScale != 1.0 {
                             ScaleLabelView(scale: effectiveScale * layerScale)
                                 .padding(12)
+                        }
+                    }
+                    .overlay(alignment: .center) {
+                        if isComparing {
+                            Text("Original")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(.ultraThinMaterial, in: Capsule())
+                                .transition(.opacity.animation(.easeInOut(duration: 0.15)))
                         }
                     }
                     .overlay {
@@ -89,6 +102,21 @@ struct PreviewView: View {
                 guard idx >= 0, idx < viewModel.config.watermarks.count else { return }
                 viewModel.updateLayerScale(at: idx, scale: finalScale)
             }
+    }
+
+    private var comparisonGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.15)
+            .updating($isComparing) { value, state, _ in
+                let wasComparing = state
+                state = value
+                if wasComparing != value {
+                    hapticTrigger.toggle()
+                }
+            }
+    }
+
+    private var combinedGesture: some Gesture {
+        comparisonGesture.simultaneously(with: magnifyGesture)
     }
 
     private var pickerButton: some View {
