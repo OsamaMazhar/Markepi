@@ -23,6 +23,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
     }
 
     var previewImage: UIImage?
+    var originalSourceImage: UIImage?
     var isGeneratingPreview: Bool = false
 
     var renderingState: RenderingState = .idle
@@ -90,6 +91,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
             }
             photos = loaded
             currentIndex = 0
+            Task { await loadSourceForComparison() }
             showPicker = false
         }
     }
@@ -145,6 +147,27 @@ final class WatermarkViewModel: WatermarkConfigurable {
         }
     }
 
+    /// Caches the un-watermarked original source image for before/after comparison
+    /// toggling (D-06, D-08). Called once on media import. The cached image persists
+    /// across all watermark config changes and is only cleared on media unload.
+    func loadSourceForComparison() async {
+        guard let sourceURL = currentPhoto?.sourceURL else { return }
+        let type = WatermarkEngine.mediaType(for: sourceURL)
+        switch type {
+        case .video:
+            if let frame = try? await VideoFrameExtractor.extract(from: sourceURL) {
+                originalSourceImage = UIImage(cgImage: frame)
+            }
+        case .photo:
+            if let data = try? Data(contentsOf: sourceURL),
+               let image = UIImage(data: data) {
+                originalSourceImage = image
+            }
+        case .unknown:
+            break
+        }
+    }
+
     func renderAndPrepareShare() async {
         guard let sourceURL = currentPhoto?.sourceURL else { return }
         renderingState = .rendering
@@ -185,6 +208,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
     func confirmCancel() {
         photos = []
         currentIndex = 0
+        originalSourceImage = nil
         fullResResult = nil
         renderingState = .idle
         showPicker = true

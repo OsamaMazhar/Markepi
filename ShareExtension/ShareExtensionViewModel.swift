@@ -59,6 +59,7 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
     /// Watermarked preview image displayed in the preview area.
     /// Updated after each debounced preview generation.
     var previewImage: UIImage?
+    var originalSourceImage: UIImage?
 
     /// Guards against overlapping preview generation calls.
     var isGeneratingPreview: Bool = false
@@ -249,6 +250,7 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
             sourceURL = destURL
             isVideo = false
             isLoadingMedia = false
+            Task { await loadSourceForComparison() }
 
             // Trigger debounced preview generation
             await generatePreview()
@@ -293,6 +295,7 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
             sourceURL = url
             isVideo = true
             isLoadingMedia = false
+            Task { await loadSourceForComparison() }
 
             // Generate static frame preview (D-03)
             await generateVideoPreview()
@@ -376,6 +379,29 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
         }
 
         previewImage = UIImage(cgImage: cgImage)
+    }
+
+    // MARK: - Source Image Caching for Comparison (D-06, D-08)
+
+    /// Caches the un-watermarked original source image for before/after comparison
+    /// toggling. Called once on media import. The cached image persists across all
+    /// watermark config changes and is only cleared on media unload.
+    func loadSourceForComparison() async {
+        guard let sourceURL = sourceURL else { return }
+        let type = WatermarkEngine.mediaType(for: sourceURL)
+        switch type {
+        case .video:
+            if let frame = try? await VideoFrameExtractor.extract(from: sourceURL) {
+                originalSourceImage = UIImage(cgImage: frame)
+            }
+        case .photo:
+            if let data = try? Data(contentsOf: sourceURL),
+               let image = UIImage(data: data) {
+                originalSourceImage = image
+            }
+        case .unknown:
+            break
+        }
     }
 
     // MARK: - Video Rendering
@@ -540,6 +566,7 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
         // Reset state for next item
         sourceURL = nil
         previewImage = nil
+        originalSourceImage = nil
         fullResResult = nil
         renderingState = .idle
         isVideo = false
