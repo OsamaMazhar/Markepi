@@ -52,6 +52,47 @@
 
 ---
 
+## Milestone: v1.1 — Tech Debt Hardening
+
+**Shipped:** 2026-06-18
+**Phases:** 4 | **Plans:** 6 | **Tasks:** 15
+
+### What Was Built
+- REQUIREMENTS.md traceability reconciliation: 15 checkbox flips, 15 traceability table updates, 7 requirements reclassified v2→v1 in archived v1.0 requirements
+- Recurrence guard: `scripts/sync-requirements.sh` + `scripts/test-sync-requirements.sh` — automated per-plan REQUIREMENTS.md checkbox sync, exits non-zero on mismatch
+- Wave-level build gate: `scripts/build-gate.sh` + `scripts/test-build-gate.sh` — xcodebuild across all 3 targets, replaces untrustworthy file-existence self-checks
+- WatermarkConfigurable protocol defaults: 9 default implementations (5 method + 1 no-op + 3 computed properties), collapsing ~186 duplicated ViewModel lines to ~20
+- Photos extension HDR detection: `sourceHasHDR`/`sourceFormatLabel` populated from `PHContentEditingInput` — HDR→JPEG warning now fires in Photos extension
+
+### What Worked
+- Phase 8+9 (tooling/process) ran before Phases 10+11 (code changes) — the build gate caught issues immediately rather than at milestone end
+- Protocol extension defaults with `AnyObject` constraint eliminated the `mutating self` problem cleanly
+- 227 existing tests passed unchanged after the refactor — proper structural move, no logic changes
+- Auto-advance chain (discuss → plan → execute) completed Phase 11 autonomously in ~5 minutes
+- AGENTS.md as integration point for post-plan and post-wave steps — executor discovers both without workflow file edits
+
+### What Was Inefficient
+- Decision coverage gate flagged all 12 CONTEXT.md decisions as uncovered because the plan didn't cite `D-NN:` IDs explicitly — structural match didn't align with text-match gate
+- Nyquist validation gate fired a warning in plan-checker because `nyquist_validation` disabled config wasn't persisted to disk — process infrastructure gap, not plan quality issue
+
+### Patterns Established
+- Repo-local bash scripts in `scripts/` for tooling (zero dependencies beyond macOS pre-installed tools)
+- `gsd-sdk query` delegation for reusable operations (requirements mark-complete, build-gate invocation)
+- Self-contained fixture tests with trap-based cleanup — proves gate behavior without mutating source
+- Exit-code contracts: 0 = proceed, non-zero = blocker — consistent across sync-requirements, build-gate, and test scripts
+
+### Key Lessons
+1. **Process phases before code phases.** Scheduling Phase 8 (traceability guard) and Phase 9 (build gate) before Phase 10 (refactor) meant the guard and gate protected the code changes — directly validated by Phase 11 where the build gate ran and passed instantly.
+2. **Protocol extensions with `AnyObject` constraint are safe for mutable state.** The `@MainActor` + `AnyObject` constraint on `WatermarkConfigurable` meant protocol defaults could mutate `self.config` and `self.activeLayerIndex` directly without `@discardableResult` patterns or copy-on-write concerns.
+3. **Decision coverage gate is conservative by design.** Text-matching for `D-NN:` IDs misses decisions embedded in task actions. This is intentional (false negative > false positive for a gate that blocks planning), but plan authors should be aware of the citation requirement.
+
+### Cost Observations
+- Model mix: ~100% sonnet (executor, researcher, planner, checker all sonnet)
+- Sessions: single session, 45 commits
+- Notable: v1.1 delivered 4 phases, 6 plans, 15 tasks in ~3 hours — all tech-debt hardening, zero new user-facing features. The auto-advance chain (discuss→plan→execute) completed Phase 11 autonomously.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -59,14 +100,17 @@
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
 | v1.0 | 1 | 7 | Greenfield → shipped MVP; established WatermarkCore package + 3-target architecture |
+| v1.1 | 1 | 4 | Tech-debt hardening: automated traceability, build gate, protocol defaults, HDR detection fix |
 
 ### Cumulative Quality
 
 | Milestone | Tests | Coverage | Zero-Dep Additions |
 |-----------|-------|----------|-------------------|
 | v1.0 | 227 | N/A (no coverage tooling) | 0 (Apple system frameworks only) |
+| v1.1 | 233 | N/A (no coverage tooling) | 0 (Apple system frameworks only) |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. _First milestone — trends will emerge in v1.1+_
-2. _First milestone — trends will emerge in v1.1+_
+1. **Automate critical path checks.** v1.0 lacked both traceability automation and build verification; v1.1 added both as repo-local scripts with self-contained fixture tests.
+2. **Process phases before code phases.** Build gate + traceability guard ran before code refactors — caught issues at source rather than at milestone audit.
+3. **Protocol defaults eliminate maintenance hazard.** 186 duplicated ViewModel lines across 3 targets collapsed to ~20 in a single protocol extension — future layer-management changes touch one file, not three.
