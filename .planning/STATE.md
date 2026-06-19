@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Batch, Templates & Process
-status: completed
+status: verifying
 stopped_at: Phase 12 UI-SPEC approved
-last_updated: "2026-06-19T20:02:58.315Z"
-last_activity: 2026-06-19 -- Phase 12 marked complete
+last_updated: "2026-06-19T20:36:45.450Z"
+last_activity: 2026-06-19
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 8
+  completed_plans: 6
   percent: 33
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 
 Phase: 12 — COMPLETE
 Plan: 5 of 5
-Status: Phase 12 complete
-Last activity: 2026-06-19 -- Phase 12 marked complete
+Status: Phase complete — ready for verification
+Last activity: 2026-06-19
 
-Progress: [██████████] 100%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Progress: [██████████] 100%
 | Phase 12-template-management P03 | 6min | 3 tasks | 6 files |
 | Phase 12-template-management P05 | 2min | 2 tasks | 5 files |
 | Phase 12-template-management P04 | 1 min | 2 tasks | 2 files |
+| Phase 13-batch-processing P01 | 6min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -59,6 +60,7 @@ Progress: [██████████] 100%
 - [v2.0 roadmap]: Phases 12-14 ordered by dependency: Templates (12) → Batch (13) → Process Hardening (14). Templates ship first to validate Codable schema migration before users have data. Batch depends on templates for auto-default-on-import. Process Hardening is independent tooling that can run last.
 - [v2.0 roadmap]: All new components are strictly additive on top of the shipped v1.0 + v1.1 codebase. WatermarkEngine is unchanged. Batch wraps it in a serial processing loop.
 - [Phase ?]: Auto-apply uses inline if-let pattern at each import path rather than calling a shared method — Keeps each import path's tail explicit and avoids refactoring existing method signatures
+- [Phase 13-batch-processing]: cancelBatchProcessing() added to WatermarkConfigurable protocol with default no-op — share/photo extension ViewModels inherit it without changes
 
 ### Pending Todos
 
@@ -81,6 +83,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T19:59:50.077Z
+Last session: 2026-06-19T20:36:45.442Z
 Stopped at: Phase 12 UI-SPEC approved
 Resume file: None

@@ -23,12 +23,12 @@ Requirements for the v2.0 milestone. Each maps to a roadmap phase.
 ### Batch Processing (BATC)
 
 - [ ] **BATC-01**: User can select multiple photos and videos in the picker and apply one watermark configuration to all items
-- [ ] **BATC-02**: User sees per-item progress (e.g., "3 of 15") with a determinate progress bar, ETA, and cancel button with full temp file cleanup
-- [ ] **BATC-03**: A single corrupted or unsupported file does not abort the entire batch; failures are collected and reported alongside successes after completion
+- [x] **BATC-02**: User sees per-item progress (e.g., "3 of 15") with a determinate progress bar, ETA, and cancel button with full temp file cleanup
+- [x] **BATC-03**: A single corrupted or unsupported file does not abort the entire batch; failures are collected and reported alongside successes after completion
 - [ ] **BATC-04**: User can share all watermarked batch results together in a single share sheet (array of output URLs)
 - [ ] **BATC-05**: User can adjust watermark position, scale, or text per individual item within a batch without affecting other items
 - [ ] **BATC-06**: User can background the app during batch processing and receive a system notification when the batch completes
-- [ ] **BATC-07**: User can process photos and videos together in a single batch operation with progress weighted by processing time
+- [x] **BATC-07**: User can process photos and videos together in a single batch operation with progress weighted by processing time
 
 ### Process Hardening (PHRO)
 
@@ -79,12 +79,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TMPL-05 | Phase 12 | Complete |
 | TMPL-06 | Phase 12 | Complete |
 | BATC-01 | Phase 13 | Pending |
-| BATC-02 | Phase 13 | Pending |
-| BATC-03 | Phase 13 | Pending |
+| BATC-02 | Phase 13 | Complete |
+| BATC-03 | Phase 13 | Complete |
 | BATC-04 | Phase 13 | Pending |
 | BATC-05 | Phase 13 | Pending |
 | BATC-06 | Phase 13 | Pending |
-| BATC-07 | Phase 13 | Pending |
+| BATC-07 | Phase 13 | Complete |
 | PHRO-01 | Phase 14 | Pending |
 | PHRO-02 | Phase 14 | Pending |
 
