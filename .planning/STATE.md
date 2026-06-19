@@ -4,14 +4,14 @@ milestone: v2.0
 milestone_name: Batch, Templates & Process
 status: executing
 stopped_at: Phase 12 UI-SPEC approved
-last_updated: "2026-06-19T19:56:40.142Z"
+last_updated: "2026-06-19T19:59:53.099Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 4
-  percent: 0
+  completed_plans: 5
+  percent: 33
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 ## Current Position
 
 Phase: 12 (template-management) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-06-19
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [████████░░] 80%
 *Updated after each plan completion*
 | Phase 12-template-management P03 | 6min | 3 tasks | 6 files |
 | Phase 12-template-management P05 | 2min | 2 tasks | 5 files |
+| Phase 12-template-management P04 | 1 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -57,6 +58,7 @@ Progress: [████████░░] 80%
 
 - [v2.0 roadmap]: Phases 12-14 ordered by dependency: Templates (12) → Batch (13) → Process Hardening (14). Templates ship first to validate Codable schema migration before users have data. Batch depends on templates for auto-default-on-import. Process Hardening is independent tooling that can run last.
 - [v2.0 roadmap]: All new components are strictly additive on top of the shipped v1.0 + v1.1 codebase. WatermarkEngine is unchanged. Batch wraps it in a serial processing loop.
+- [Phase ?]: Auto-apply uses inline if-let pattern at each import path rather than calling a shared method — Keeps each import path's tail explicit and avoids refactoring existing method signatures
 
 ### Pending Todos
 
@@ -79,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T19:56:36.825Z
+Last session: 2026-06-19T19:59:50.077Z
 Stopped at: Phase 12 UI-SPEC approved
 Resume file: None

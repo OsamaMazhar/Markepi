@@ -76,7 +76,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 12-04-PLAN.md — Main app integration: WatermarkViewModel auto-apply, ContentView sheet+alert
+- [x] 12-04-PLAN.md — Main app integration: WatermarkViewModel auto-apply, ContentView sheet+alert
 
 **UI hint**: yes
 
