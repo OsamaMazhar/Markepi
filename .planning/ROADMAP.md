@@ -46,45 +46,66 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
 ## Phase Details
 
 ### Phase 12: Template Management
+
 **Goal**: Users can save, load, manage, and auto-apply watermark templates across all app entry points
 **Depends on**: Phase 11 (v1.1 shipped foundation)
 **Requirements**: TMPL-01, TMPL-02, TMPL-03, TMPL-04, TMPL-05, TMPL-06
 **Success Criteria** (what must be TRUE):
+
   1. User can save the current watermark configuration as a named template and see it appear in the template list
   2. User can browse saved templates with preview thumbnails applied to current media, and tap one to apply it instantly
   3. User can rename, duplicate, and swipe-to-delete any saved template from the list
   4. User can mark a template as default; the default template auto-applies when new media is imported in the main app, share extension, and Photos edit extension
    5. User can export a template as a `.watermarktemplate` file and import one from Files or share sheet into the template library
+
 **Plans**: 5 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 12-01-PLAN.md — Core data layer: Template model, TemplateStore with migration chain, App.entitlements
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 12-02-PLAN.md — Protocol additions, Save as Template button, SaveTemplateAlertModifier
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 12-03-PLAN.md — Template list UI: row view, preview thumbnails, import, context menus
-- [ ] 12-04-PLAN.md — Main app integration: WatermarkViewModel auto-apply, ContentView sheet+alert
 - [ ] 12-05-PLAN.md — Extension auto-apply + .watermarktemplate UTI registration
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 12-04-PLAN.md — Main app integration: WatermarkViewModel auto-apply, ContentView sheet+alert
+
 **UI hint**: yes
 
 ### Phase 13: Batch Processing
+
 **Goal**: Users can watermark multiple photos and videos in one operation with shared configuration, per-item adjustments, progress tracking, and error resilience
 **Depends on**: Phase 12 (templates provide auto-default-on-import for batch workflows)
 **Requirements**: BATC-01, BATC-02, BATC-03, BATC-04, BATC-05, BATC-06, BATC-07
 **Success Criteria** (what must be TRUE):
+
   1. User can select multiple photos and videos in the picker and apply a single watermark configuration to all items simultaneously
   2. User sees per-item progress with a determinate progress bar and ETA, can cancel processing at any time with full temp file cleanup, and can background the app to receive a system notification when the batch completes
   3. When one file in a batch fails (corrupted or unsupported), the remaining items continue processing; a summary reports successes and failures after completion
   4. User can share all successfully watermarked batch results together in a single share sheet
   5. User can adjust watermark position, scale, or text for an individual item within the batch without affecting other items
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 14: Process Hardening
+
 **Goal**: GSD workflow tooling improvements that make phase execution more reliable and auditable
 **Depends on**: Nothing (independent tooling changes; zero app code impact)
 **Requirements**: PHRO-01, PHRO-02
 **Success Criteria** (what must be TRUE):
+
   1. A per-phase VERIFICATION.md template is populated during execution with UAT checkboxes, automated test counts, and manual QA steps — no empty template left unfilled after a plan completes
   2. Git worktree operations are protected against stale worktree directory failures: a pre-check detects stale worktrees, prunes when safe, and falls back to timestamp-suffixed directory names when the primary path is occupied
+
 **Plans**: TBD
 
 ## Progress
