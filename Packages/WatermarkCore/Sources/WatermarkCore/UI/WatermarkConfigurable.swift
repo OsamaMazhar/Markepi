@@ -26,6 +26,10 @@ public protocol WatermarkConfigurable: AnyObject {
     var errorMessage: String? { get set }
     var showError: Bool { get set }
 
+    // Template Management (Phase 12)
+    var showSaveTemplateAlert: Bool { get set }
+    var showTemplateList: Bool { get set }
+
     func addLogoLayer(pngData: Data)
     func addSignatureLayer(strokeData: Data, inkColor: CGColor, strokeWidth: CGFloat)
     func removeLayer(at index: Int)
@@ -44,6 +48,10 @@ public protocol WatermarkConfigurable: AnyObject {
     /// Called by ControlsView's Cancel button during .renderingVideo state.
     /// The ViewModel cancels the export task and cleans up the incomplete temp file.
     func cancelVideoExport()
+
+    /// Applies a template's configuration to the current state.
+    /// Called from TemplateListView when a row is tapped.
+    func applyTemplate(_ template: Template)
 }
 
 // MARK: - Default Implementations
@@ -130,5 +138,11 @@ extension WatermarkConfigurable {
     public var outputQuality: Float {
         get { config.outputQuality }
         set { config.outputQuality = newValue }
+    }
+
+    // MARK: - Template Management (Phase 12)
+
+    public func applyTemplate(_ template: Template) {
+        config = template.config
     }
 }
