@@ -38,6 +38,9 @@
 		724 /* TemplateRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 720; };
 		725 /* TemplatePreviewThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 721; };
 		726 /* SaveTemplateAlertModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 722; };
+		727 /* BatchProgressOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 730; };
+		728 /* BatchItemConfigProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 731; };
+		729 /* BatchItemDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 732; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -78,6 +81,9 @@
 		720 /* TemplateRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateRowView.swift; sourceTree = "<group>"; };
 		721 /* TemplatePreviewThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplatePreviewThumbnail.swift; sourceTree = "<group>"; };
 		722 /* SaveTemplateAlertModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTemplateAlertModifier.swift; sourceTree = "<group>"; };
+		730 /* BatchProgressOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchProgressOverlay.swift; sourceTree = "<group>"; };
+		731 /* BatchItemConfigProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchItemConfigProxy.swift; sourceTree = "<group>"; };
+		732 /* BatchItemDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchItemDetailSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -197,6 +203,7 @@
 				334 /* Navigation */,
 				335 /* Common */,
 				336 /* Templates */,
+				337 /* Batch */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -258,6 +265,16 @@
 				722 /* SaveTemplateAlertModifier.swift */,
 			);
 			path = Templates;
+			sourceTree = "<group>";
+		};
+		337 /* Batch */ = {
+			isa = PBXGroup;
+			children = (
+				730 /* BatchProgressOverlay.swift */,
+				731 /* BatchItemConfigProxy.swift */,
+				732 /* BatchItemDetailSheet.swift */,
+			);
+			path = Batch;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -421,6 +438,9 @@
 				724 /* TemplateRowView.swift in Sources */,
 				725 /* TemplatePreviewThumbnail.swift in Sources */,
 				726 /* SaveTemplateAlertModifier.swift in Sources */,
+				727 /* BatchProgressOverlay.swift in Sources */,
+				728 /* BatchItemConfigProxy.swift in Sources */,
+				729 /* BatchItemDetailSheet.swift in Sources */,
 				001 /* AsyncButton.swift in Sources */,
 				002 /* ContentView.swift in Sources */,
 				004 /* ErrorAlertModifier.swift in Sources */,
