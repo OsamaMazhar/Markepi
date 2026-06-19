@@ -23,6 +23,9 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
         viewModel.sourceFormatLabel
     }
 
+    /// True when the ViewModel has multiple photos loaded — gates batch-mode UI.
+    private var isBatchMode: Bool { viewModel.hasMultiplePhotos }
+
     public init(viewModel: ViewModel) {
         self.viewModel = viewModel
     }
@@ -130,8 +133,13 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                     Task { await viewModel.renderAndPrepareShare() }
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "square.and.arrow.up")
-                        Text("Share")
+                        if isBatchMode {
+                            Image(systemName: "square.and.arrow.up.on.square.fill")
+                            Text("Watermark All")
+                        } else {
+                            Image(systemName: "square.and.arrow.up")
+                            Text("Share")
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
@@ -171,7 +179,7 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                             .foregroundStyle(.secondary)
                     }
                     Button(role: .destructive) {
-                        viewModel.cancelVideoExport()
+                        viewModel.cancelProcessing()
                     } label: {
                         Text("Cancel")
                             .frame(maxWidth: .infinity)
@@ -192,17 +200,21 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                         Text("\(current)/\(total)")
                             .font(.caption.weight(.medium))
                             .monospacedDigit()
-                            .frame(minWidth: 48, alignment: .trailing)
+                            .frame(width: 56, alignment: .trailing)
                     }
-                    if let eta = eta {
-                        Text("ETA ~\(Int(max(eta, 0)))s")
+                    if let eta = eta, eta > 0 {
+                        Text("ETA: \(Int(eta / 60)) min")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("--")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                     Button(role: .destructive) {
-                        viewModel.cancelBatchProcessing()
+                        viewModel.cancelProcessing()
                     } label: {
-                        Text("Cancel Batch")
+                        Text("Stop Processing")
                             .frame(maxWidth: .infinity)
                             .frame(height: 36)
                     }
@@ -221,7 +233,11 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
-                        Text("Ready to Share")
+                        if isBatchMode {
+                            Text("Ready to Share All")
+                        } else {
+                            Text("Ready to Share")
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
