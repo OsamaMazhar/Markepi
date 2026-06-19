@@ -39,7 +39,7 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
 
 **Milestone Goal:** Ship deferred v1.0 features: batch processing with per-item config adjustments, full template CRUD + auto-default, and process hardening.
 
-- [ ] **Phase 12: Template Management** — Save/load/manage watermark templates with auto-default on import
+- [x] **Phase 12: Template Management** — Save/load/manage watermark templates with auto-default on import (completed 2026-06-19)
 - [ ] **Phase 13: Batch Processing** — Multi-item watermarking with shared config, per-item adjustments, and progress tracking
 - [ ] **Phase 14: Process Hardening** — VERIFICATION.md templating and worktree-safety fix
 
@@ -123,6 +123,6 @@ Plans:
 | 9. Wave-Level Build Gate | v1.1 | 1/1 | Complete | 2026-06-18 |
 | 10. WatermarkConfigurable Protocol Defaults | v1.1 | 2/2 | Complete | 2026-06-18 |
 | 11. Photos Extension HDR Detection | v1.1 | 1/1 | Complete | 2026-06-18 |
-| 12. Template Management | v2.0 | 4/5 | In Progress|  |
+| 12. Template Management | v2.0 | 5/5 | Complete   | 2026-06-19 |
 | 13. Batch Processing | v2.0 | 0/TBD | Not started | — |
 | 14. Process Hardening | v2.0 | 0/TBD | Not started | — |
