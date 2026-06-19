@@ -1,347 +1,294 @@
 # Pitfalls Research
 
-**Domain:** iOS Photo/Video Watermarking App
-**Researched:** 2026-06-17
+**Domain:** iOS Photo/Video Watermarking App — Batch Processing, Template Management, Process Hardening
+**Researched:** 2026-06-19
 **Confidence:** HIGH
 
 ## Critical Pitfalls
 
-### Pitfall 1: HDR Gain Map Destruction During Image Processing
+### Pitfall 1: Parallel Batch Processing Memory Explosion
 
 **What goes wrong:**
-When an iPhone photo with HDR (ISO HDR gain map) passes through any rendering pipeline — `CIImage` → `CGImage` → export — the gain map auxiliary data is silently discarded. The output image loses all HDR "pop," appearing flat and SDR-only. The gain map lives as auxiliary metadata attached to the file container (via Apple's `kCGImageAuxiliaryDataTypeHDRGainMap`), separate from the base pixel buffer. Standard `CIContext.createCGImage()` renders only the base layer and does not automatically carry the gain map through.
+When processing multiple items simultaneously in a batch (even as few as 3-5 items), all items' pixel buffers can coexist in memory. A 48MP ProRAW photo consumes ~192MB uncompressed (8064×6048 × 4 bytes RGBA). Three such items exceed the ~500MB safe ceiling and trigger a jetsam kill. For video, each concurrent `AVAssetExportSession` holds decoded frame buffers, pushing memory pressure past safe limits even faster. The system terminates the app with `EXC_RESOURCE RESOURCE_TYPE_MEMORY` — no crash log, just a silent kill.
 
 **Why it happens:**
-- `CIImage(contentsOf:)` loads the base image by default; you must explicitly request auxiliary data via `options: [.auxiliaryHDRGainMap: true]`
-- `CIContext` rendering typically produces a single `CGImage` — there is no mechanism to attach auxiliary data to a `CGImage`
-- When using `CGImageDestination` to write output, the gain map must be explicitly injected via `CGImageDestinationAddAuxiliaryDataInfo()` or the HEIF-specific `hdrGainMapImage` option on `CIImageRepresentationOption`
-- Many developers don't know gain maps exist and only discover the loss when comparing output side-by-side with original
+- The current `WatermarkEngine.process()` pipeline loads full-resolution data via `ImageLoader.load(from:)`, which extracts CIImage + metadata + gain map. When multiple tasks run in parallel (e.g., `TaskGroup`), each holds its own full-res pixel buffer simultaneously.
+- The current `handleSelection()` already loads all `PhotosPickerItem` data into `Data` objects and copies to temp files — storing all source data in `photos: [PhotoItem]` array. Each `PhotoItem.sourceURL` references a temp copy of the full file, but the decompressed pipeline data is what matters during processing.
+- `AVAssetExportSession` uses hardware video decoders that are finite resources. Running multiple concurrent exports exhausts these, producing `AVFoundationErrorDomain Code=-11839 "Cannot Decode"`.
+- Training-data patterns default to `TaskGroup` parallelism without understanding the memory implication per task.
 
 **How to avoid:**
-1. Load images with `CIImage(contentsOf: url, options: [.auxiliaryHDRGainMap: true])`
-2. Extract gain map via `CIImageOption.auxiliaryHDRGainMap` and store it as a separate `CIImage`
-3. When watermarking, apply the same watermark transform to both the base image AND the gain map (or composite watermark onto base, then re-attach the unmodified gain map)
-4. When writing output via `CIImage` write methods, use `CIImageRepresentationOption.hdrGainMapImage` to embed the gain map
-5. When using `CGImageDestination`, use `CGImageDestinationAddAuxiliaryDataInfo()` with `kCGImageAuxiliaryDataTypeHDRGainMap` to attach gain map data
-6. Use 16-bit float pixel formats (`CIFormat.RGBAh`) for the rendering context to preserve dynamic range
+1. **Serial processing queue:** Process ONE item at a time. Use an `Actor`-isolated `BatchProcessor` with a sequential queue. Never use `TaskGroup` with `addTask` for batch exports.
+2. **Per-item cleanup between items:** Call `TempFileManager.cleanup(url:)` on each item's temp output immediately after the share sheet dismisses for that item. Set `fullResResult = nil` and `previewImage = nil` before loading the next item.
+3. **Video serialization guard:** `BatchProcessor` must hold `maxConcurrentVideoExports = 1`. Queue videos sequentially; photos can be interleaved but never process >1 video at a time.
+4. **Memory budget tracking:** Before processing each item, check `os_proc_available_memory()` — if below 200MB free, pause and wait for cleanup.
+5. **autoreleasepool wrapping:** Wrap each batch iteration in `autoreleasepool { ... }` to force intermediate CIImage/CGImage deallocation between items.
+6. **PhotosPicker `.loadTransferable` lazy loading:** Don't eagerly load all items in `handleSelection()`. Load only the thumbnails for the strip. Defer full `Data` loading to on-demand during processing.
 
 **Warning signs:**
-- Output image visually identical to original when viewed on SDR display but "flat" on HDR display
-- `PHAsset` metadata shows "HDR" for original but output lacks HDR indicator in Photos app
-- File size drops dramatically (gain map data can be several MB)
-- Inspecting HEIF output with exiftool shows no Apple HDR gain map auxiliary data tracks
-
-**Phase to address:**
-Photo watermarking Phase (core image processing pipeline). This MUST be verified with actual HDR photos from iPhone 12+ before shipping.
-
----
-
-### Pitfall 2: EXIF/Metadata Stripping in Pixel Pipeline
-
-**What goes wrong:**
-Every conversion step in the image processing chain strips metadata. `CGImage` is a pure pixel buffer — it has no concept of EXIF, TIFF, GPS, or orientation tags. When you go from `PHAsset` → `CIImage` → `CGImage` → output file, all original metadata (camera model, lens, GPS, timestamp, color profile, orientation) is permanently lost unless explicitly preserved and re-attached during write.
-
-**Why it happens:**
-- `CIImage` and `CGImage` are pixel representations only — metadata lives in the file container, not on the image object
-- `UIImage` strips orientation when converting to `CGImage` (it "bakes in" the rotation but loses the EXIF orientation flag)
-- `UIImage.jpegData(compressionQuality:)` creates a brand new JPEG with fresh (empty) metadata — this is NOT a pass-through of original bytes
-- `CGImageDestinationAddImageFromSource()` copies metadata automatically but is unreliable — it carries over unintended tags and can't be used for precisely controlled metadata
-- Developers assume metadata "comes along for the ride" because it does in simpler workflows
-
-**How to avoid:**
-1. Extract metadata BEFORE any pixel manipulation using `CGImageSourceCopyPropertiesAtIndex()` on the original data/URL
-2. Store the properties dictionary separately throughout processing
-3. When writing output, use `CGImageDestinationAddImage()` (NOT `AddImageFromSource`) and pass the preserved metadata dictionary as properties
-4. For orientation: either "bake in" by rendering with a transform, then set output orientation to `.up`, OR preserve the original orientation tag and ensure output pixels match that orientation
-5. Use `CGImagePropertyOrientation` (not `UIImage.Orientation`) when working with ImageIO destinations
-6. Preserve color profile by passing source color space to `CIContext` or `CGContext` — never default to `CGColorSpaceCreateDeviceRGB()`
-7. For Photos framework outputs, use `PHAssetCreationRequest.addResource(with: .photo, data: dataWithMetadata, options: nil)`
-
-**Warning signs:**
-- Output files missing GPS location
-- Photos exported as "Unknown" camera model
-- Incorrect date/time on output files
-- Color shift or "washed out" appearance (color profile stripped)
-- Image appears rotated after being viewed on other platforms (EXIF orientation lost but pixels not re-oriented)
-
-**Phase to address:**
-Core image processing Phase. This is table-stakes — every image path must include metadata preservation.
-
----
-
-### Pitfall 3: Video Re-Encoding Quality Degradation
-
-**What goes wrong:**
-Any video processing that adds a watermark requires full decode→modify→re-encode. Even with "maximum quality" settings, the output is a generation-loss copy. Common misconfigurations make it dramatically worse: wrong pixel formats cause color shifts, wrong bitrate settings cause blocking artifacts, wrong color primaries cause washed-out output, and hardware encoder quirks introduce visual glitches on certain GOP structures.
-
-**Why it happens:**
-- `AVAssetExportPresetPassthrough` cannot be used when visual modifications are applied — it only works for trimming/recontainerization
-- `AVOutputSettingsAssistant` chooses "compatible" settings that often under-specify quality to favor broad playback support
-- Default encoder settings use variable bitrate that can dip too low on complex frames
-- Pixel format mismatch between source (`420YpCbCr8BiPlanarVideoRange`) and output settings causes unnecessary color space conversions
-- Failing to specify `AVVideoColorPrimariesKey`, `AVVideoTransferFunctionKey`, and `AVVideoYCbCrMatrixKey` causes the encoder to use default Rec.601 tags even for HD/4K content
-- Using `AVAssetExportSession` with `AVAssetExportPresetHighestQuality` is better than nothing but still gives no control over bitrate, profile level, or color metadata
-
-**How to avoid:**
-1. Use `AVAssetWriter` (not `AVAssetExportSession`) for full control over encoding parameters
-2. Match source pixel format when possible; use `kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange` for SDR video
-3. Explicitly set compression settings:
-   - `AVVideoAverageBitRateKey`: target at least 80% of source bitrate
-   - `AVVideoProfileLevelKey`: use `AVVideoProfileLevelH264HighAutoLevel` for H.264, or HEVC equivalent
-   - Set `AVVideoAllowFrameReorderingKey` to match source GOP structure
-4. Explicitly set color properties matching the source:
-   - SDR: `AVVideoColorPrimaries_ITU_R_709_2`, `AVVideoTransferFunction_ITU_R_709_2`, `AVVideoYCbCrMatrix_ITU_R_709_2`
-   - HDR: `AVVideoColorPrimaries_ITU_R_2020`, `AVVideoTransferFunction_ITU_R_2100_HLG` or `SMPTE_ST_2084_PQ`
-5. Read metadata from source asset (`asset.metadata`) and manually copy relevant items to `AVAssetWriter.metadata`
-6. Validate output with MediaInfo or ffprobe to confirm bitrate and color tags
-7. For development: compare source → intermediate → output PSNR to quantify quality loss
-
-**Warning signs:**
-- Output video appears "blocky" in high-motion scenes
-- Color looks different from original (desaturated or over-saturated)
-- Output file is dramatically smaller than source despite same resolution
-- Color primaries tag in output reads "Rec.601" for HD content
-
-**Phase to address:**
-Video watermarking Phase. This is the most technically demanding aspect — budget significantly more time for video than photo processing.
-
----
-
-### Pitfall 4: Share Extension Memory Limit Crashes
-
-**What goes wrong:**
-iOS share extensions have a hard memory ceiling of approximately 120 MB. When a user shares a large photo or video through the share sheet, naive code that loads the full-resolution `UIImage` or decodes all frames into memory will trigger a jetsam event. The extension is terminated with `EXC_RESOURCE RESOURCE_TYPE_MEMORY` — no crash log, no error handler, just a silent kill that looks to the user like the extension "didn't work."
-
-**Why it happens:**
-- A 12MP photo (4032×3024) as an uncompressed `UIImage` consumes ~48 MB (width×height×4 bytes). Multiple copies (original + preview + processed) easily exceed the limit
-- 4K video frames decoded into memory can consume 30+ MB per frame
-- Developers test on Simulator which has no memory limit, so crashes only appear on device
-- Converting shared attachment to `UIImage` immediately upon receipt is the default approach in most tutorials
-- Holding multiple full-resolution images in an array or collection before processing
-
-**How to avoid:**
-1. NEVER load shared media as `UIImage` — work with file URLs and `Data` objects instead
-2. Use `CGImageSource` with downsampling options (`kCGImageSourceCreateThumbnailFromImageAlways`, `kCGImageSourceThumbnailMaxPixelSize`) for previews
-3. Process one item at a time; release memory explicitly (`autoreleasepool` blocks)
-4. For video: use `AVAsset` which streams from disk; never load video frames into an array
-5. Write processed output to App Group shared container as a file (not `UserDefaults`)
-6. Configure tight `NSExtensionActivationRule` predicates:
-   - `NSExtensionActivationSupportsImageWithMaxCount`: 1
-   - `NSExtensionActivationSupportsMovieWithMaxCount`: 1
-   - Use `NSPredicate` to prevent attachment types you can't handle
-7. Close the extension immediately after writing to shared container — don't keep it alive
-8. Test on physical devices only — Simulator memory behavior is irrelevant
-
-**Warning signs:**
-- Extension works in Simulator but "crashes" silently on device
-- Works with small photos but fails with 48MP ProRAW
+- App works fine with 1-3 items but silently crashes with 5+ items
+- Instruments Allocations shows heap growth without corresponding deallocation between items
+- Video batch: second export fails with "Cannot Decode" / error -11839
 - Xcode Organizer shows jetsam events with `reason: per-process-limit`
-- Memory graph in Xcode debugger spikes above 100MB during processing
 
 **Phase to address:**
-Share Extension Phase. Must be designed with memory budget from day one.
+Batch Processing Phase. Must be designed with serial execution and per-item cleanup from day one.
 
 ---
 
-### Pitfall 5: CIImage Coordinate System & Double-Rotation Bug
+### Pitfall 2: Concurrent AVAssetExportSession Hardware Decoder Exhaustion
 
 **What goes wrong:**
-When applying transforms (crop, overlay placement) to a `CIImage` that has EXIF orientation, the CIImage coordinate system (bottom-left origin, +Y up) conflicts with both the UIKit coordinate system (top-left origin, +Y down) and the EXIF orientation. This produces "double rotation," where applying what looks like a correct crop or overlay position in UIKit coordinates produces a wildly incorrect result in the output. The most common manifestation: a watermark placed in the "top-right corner" via UIKit coordinates appears in the bottom-left of the output image.
+When batch-processing multiple videos, even with sequential execution, if a previous `AVAssetExportSession` hasn't fully released its hardware decoder resources, the next export fails with `AVFoundationErrorDomain Code=-11839 "Cannot Decode"`. The hardware video decoder pipeline is a finite, shared system resource — iOS devices have a limited number of concurrent decode sessions.
 
 **Why it happens:**
-- `CIImage` ignores EXIF orientation — it represents the raw sensor data in its stored orientation
-- If a photo was shot in portrait but stored as landscape with EXIF rotation=6 (90° CW), the `CIImage` extent represents the landscape orientation
-- UIKit views display the EXIF-corrected orientation, but any coordinates from those views are in UIKit space
-- Applying `CIImage.cropped(to:)` or `CIImage.transformed(by:)` with UIKit-space coordinates operates on the raw (unrotated) image data
-- The Y-axis must be flipped: `ciY = imageHeight - uiKitY - overlayHeight`
-- Failure to normalize orientation before applying positional transforms creates compound errors
+- `AVAssetExportSession` internally uses `VTDecompressionSession` (hardware-accelerated). These sessions are reference-counted by the system and may not release immediately when the session completes.
+- The current `VideoProcessor.process()` creates `AVAssetExportSession`, calls `export(to:as:)`, then returns — but the session object may still hold decoder resources until deallocated.
+- `AVMutableComposition` holds references to source `AVAsset` tracks. If the composition isn't fully released, the underlying decoder sessions remain allocated.
 
 **How to avoid:**
-1. Always normalize orientation BEFORE applying any positional transforms:
-   ```swift
-   let oriented = ciImage.oriented(forExifOrientation: exifOrientation)
-   ```
-2. After normalization, the CIImage extent matches the visual display — UIKit coordinates can be directly mapped with Y-axis flip
-3. When overlaying watermarks, convert UIKit-space positions to CIImage space:
-   ```swift
-   let ciY = orientedImage.extent.height - uiKitY - watermarkHeight
-   ```
-4. Prefer `oriented(forExifOrientation:)` over `imageByApplyingOrientation()` on `CIImage` — the former is more explicit about EXIF handling
-5. Use `orientationTransform(forExifOrientation:)` to get the `CGAffineTransform` and combine it with other transforms via `transformed(by:)` for a single-pass operation
-6. If you must use Core Graphics for watermark rendering, apply the orientation transform to the `CGContext` CTM before drawing
+1. **Single export at a time:** `BatchProcessor` must use a serial `OperationQueue` with `maxConcurrentOperationCount = 1` for ALL exports (photo and video).
+2. **Explicit resource release:** After each export completes, explicitly set the export session, composition, videoComposition, and source asset references to `nil`. Then call `await Task.yield()` to give the system a scheduler tick to release resources.
+3. **Throttle between video exports:** Insert a minimum 0.5s delay between consecutive video exports to allow hardware decoder cleanup.
+4. **Pre-export availability check:** Before starting a video export, attempt a lightweight `AVAsset.load(.duration)` on a small test asset to verify the decoder pipeline is available. If it fails with -11839, delay and retry.
+5. **Use `@available(iOS 18, *)` `export(to:as:)` async API exclusively** (already done) — the older `exportAsynchronously(completionHandler:)` callback API has worse resource management.
 
 **Warning signs:**
-- Watermark appears in wrong corner of output image
-- Cropped output is shifted or has wrong aspect ratio
-- "It looks right in the preview but wrong in the saved file"
-- Rotating a landscape image that already has EXIF rotation produces portrait output
+- First video exports fine; second immediately fails with error -11839
+- Error message: "Cannot Decode" or "The operation could not be completed"
+- Works in Simulator but fails on device (hardware decoder limits don't apply in Simulator)
+- Export failures are inconsistent — sometimes 3 videos work, sometimes only 1
 
 **Phase to address:**
-Photo watermarking Phase (core image processing).
+Batch Processing Phase — specifically the video batch sub-path.
 
 ---
 
-### Pitfall 6: PHContentEditingInput Orientation Handling
+### Pitfall 3: Share Extension Memory Crash With Multiple NSItemProvider Items
 
 **What goes wrong:**
-When the Photos editing extension receives an image via `PHContentEditingInput`, the `fullSizeImageURL` points to the master file — which may have pixels stored in landscape orientation with EXIF rotation=6 (portrait). If you load this with `CIImage(contentsOf: url)` without applying `input.fullSizeImageOrientation`, your processing operates on the raw pixel layout. The output may have correct EXIF orientation but wrong raster dimensions, or vice versa. Some methods "bake in" orientation by physically rotating pixels, others preserve the EXIF tag — mixing these approaches creates inconsistent results.
+The share extension has a hard ~120MB memory ceiling (Pitfall 4 from v1.0 research). When a user selects multiple photos/videos from the Photos app and shares to Watermark, each `NSItemProvider.loadItem(forTypeIdentifier:completionHandler:)` or `loadFileRepresentation(forTypeIdentifier:)` call can load full-resolution data into the extension's memory space. Multiple items loaded simultaneously trigger a jetsam kill within seconds.
 
 **Why it happens:**
-- `fullSizeImageOrientation` is an Int32 (not `CGImagePropertyOrientation` or `UIImage.Orientation`), easy to mishandle
-- `CIImage(contentsOf:)` does not read EXIF orientation — you must apply it manually
-- If you render through `CIContext.createCGImage()` and then create a `UIImage(cgImage:scale:orientation:)`, you need to decide: set orientation to `.up` (pixels already rotated) or preserve the original value (pixels still in raw orientation)
-- `PHAdjustmentData` carries no orientation information — it's reconstructible only if your edit format preserves it
+- The current `ShareExtensionViewModel` loads one item at a time (from `extensionContext.inputItems`), which is safe for single-item shares. Batch share from Photos sends multiple `NSExtensionItem`s, and iterating through them while holding previous item data causes accumulation.
+- Each `NSItemProvider.loadFileRepresentation` copies the file to a temp URL within the extension sandbox. These temp files + any decoded preview data accumulate.
+- Photos app batch share sends ALL items as a single `inputItems` array. The naive iteration pattern processes them sequentially but doesn't release previous item data before loading the next.
 
 **How to avoid:**
-1. Always read `contentEditingInput.fullSizeImageOrientation`
-2. Convert to `CGImagePropertyOrientation` using the mapping:
-   ```swift
-   let cgOrientation = CGImagePropertyOrientation(rawValue: UInt32(input.fullSizeImageOrientation)) ?? .up
-   ```
-3. Normalize the CIImage before processing:
-   ```swift
-   let oriented = CIImage(contentsOf: url)?.oriented(forExifOrientation: Int32(cgOrientation.rawValue))
-   ```
-4. When writing output via `CGImageDestination`, set the EXIF orientation to `.up` (1) if you've already baked in the rotation through rendering, OR preserve the original orientation tag if your pixels remain in raw layout
-5. Be consistent across the entire pipeline — pick one strategy (bake-in or preserve-tag) and stick with it
-6. Verify by testing with photos shot in all four device orientations
+1. **Single-item-only for share extension batch:** The share extension should process ONE item at a time. For multi-item shares, present the batch UI (thumbnail strip) using only thumbnails, then for full-resolution processing, write the config + source URL references to App Group container and prompt the user to open the main app.
+2. **Thumbnail-only pattern in extension:** Use `CGImageSourceCreateThumbnailAtIndex` with `kCGImageSourceThumbnailMaxPixelSize: 300` for all extension previews. Never load full-resolution data in the extension.
+3. **Pass-through for batch share:** The share extension's role for batch should be: receive items → save file URLs to App Group container → call `completeRequest()` → main app handles batch processing. Extension does NOT render.
+4. **Limit `NSExtensionActivationRule`:** Set `NSExtensionActivationSupportsImageWithMaxCount: 10` (not unlimited) to prevent the extension from appearing for enormous selections.
+5. **Release guards in item iteration:** After processing each `NSExtensionItem`, set local variables to `nil` and call `autoreleasepool` explicitly.
 
 **Warning signs:**
-- Output image dimensions don't match source after processing
-- Image appears rotated when viewed outside Photos app
-- Photos edit extension shows different aspect ratio than original
-- "adjustment data too large" errors when saving (orientation mismatch causing redundant pixel copies)
+- Share extension works for single item, silently crashes for 3+ items
+- Extension appears briefly then vanishes (jetsam before UI renders)
+- Xcode Organizer jetsam reports from share extension process
+- Works in Simulator (no memory limit enforcement); fails on device
 
 **Phase to address:**
-Photos Edit Extension Phase.
+Batch Processing Phase — specifically the share extension batch sub-path.
 
 ---
 
-### Pitfall 7: Video HDR (Dolby Vision / HLG) Flattening to SDR
+### Pitfall 4: Codable Template Schema Evolution Breaking Saved Templates
 
 **What goes wrong:**
-When a user shares an HDR video (iPhone 12+ Dolby Vision or HLG footage), the processing pipeline — overlay watermark → re-encode — inadvertently flattens the HDR content to SDR. The output is technically playable but loses all HDR luminance range. Highlights that should be 1000+ nits render at SDR 100-nit levels, colors desaturate, and the "HDR" indicator in Photos disappears.
+When the `WatermarkConfiguration` Codable model evolves (new fields added to `WatermarkLayer`, new watermark types, new properties on `WhiteFrameConfig`), templates saved in the previous schema version fail to decode. `JSONDecoder` throws a `DecodingError` because keys are missing or enum cases are unrecognized. All user-saved templates become unreadable — the user loses their customization work.
 
 **Why it happens:**
-- `AVAssetWriter` defaults to SDR color properties if not explicitly configured
-- The watermark overlay (text, logo) is typically authored in SDR (sRGB/Rec.709). Compositing SDR content onto HDR video without HDR-aware blending produces incorrect luminance
-- `AVAssetExportSession` with generic presets does not preserve HDR metadata automatically
-- One common approach is tone-mapping to SDR — but if your goal is HDR preservation, you must output HDR
-- `AVVideoComposition` and `AVVideoCompositionCoreAnimationTool` render in the composition's color space; if the composition defaults to SDR, the HDR signal is clipped
+- The current `WatermarkConfiguration` uses `decodeIfPresent` with defaults for most fields (good), but `WatermarkLayer` uses a discriminator pattern (`LayerType` enum with `.text`, `.image`, `.signature` cases). Adding a new layer type (e.g., `.shape`) without a migration path causes old templates to fail on the unknown enum case.
+- `Codable` synthesis doesn't handle unknown enum cases gracefully unless you implement custom `init(from:)` with a fallback.
+- `AppGroupConfigSync.save()` overwrites the config with the new schema version, but old copies in the Photos extension's `PHAdjustmentData` may still reference the old schema.
+- Users may share configs across devices (via iCloud backup) — template version drift between app versions.
 
 **How to avoid:**
-1. Check source video HDR status: inspect `asset.tracks` for HDR metadata; check `CMFormatDescription` for transfer function (HLG, PQ)
-2. If source is HDR, configure `AVAssetWriter` output with HDR color properties:
-   - HLG: `AVVideoColorPrimaries_ITU_R_2020`, `AVVideoTransferFunction_ITU_R_2100_HLG`
-   - Dolby Vision (PQ): `AVVideoColorPrimaries_ITU_R_2020`, `AVVideoTransferFunction_SMPTE_ST_2084_PQ`
-   - Matrix: `AVVideoYCbCrMatrix_ITU_R_2020`
-3. For `AVVideoComposition`, set `colorPrimaries`, `colorTransferFunction`, `colorYCbCrMatrix` to match source HDR metadata
-4. Render watermark in extended range: use `CIFormat.RGBAh` (16-bit float), wide gamut color space
-5. If watermark is SDR, apply HDR gain (multiply luminance) before compositing to match the HDR luminance range
-6. Use `AVAssetWriterInputPixelBufferAdaptor` with HDR-compatible pixel format (`kCVPixelFormatType_64RGBAHalf` or `kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange`)
-7. Test with actual Dolby Vision footage from iPhone 12+ — simulator video is often SDR-only
+1. **Template version field:** Add a `schemaVersion: Int` property to `WatermarkConfiguration`. Current version = 1. Increment on any breaking change.
+2. **Migration function:** Implement `WatermarkConfiguration.migrate(from oldVersion: Int)` that transforms v1→v2→v3 etc. Call on decode before using.
+3. **`LayerType` fallback in `init(from:)`:** When decoding an unknown `LayerType`, fall back to a `.text` placeholder with the text "[Unknown Layer]" rather than throwing.
+4. **`decodeIfPresent` on ALL new fields:** Every new property added to `WatermarkConfiguration`, `WatermarkLayer`, `TextWatermarkInput`, `ImageWatermarkInput`, `WhiteFrameConfig`, etc. MUST use `decodeIfPresent` with a sensible default. Never add a non-optional decoded field.
+5. **Template storage format versioning:** Prefix template JSON files with a version header (e.g., `{"schemaVersion": 1, "config": {...}}`). Decode the header first, then pass to the version-appropriate decoder.
+6. **Testing:** Maintain a "template museum" — a directory of test fixtures with templates saved in every historical schema version. Unit tests decode each and verify the migration produces a valid config.
+7. **`PHAdjustmentData.formatVersion`:** The Photos extension's `PHAdjustmentData(formatIdentifier:formatVersion:data:)` already has a `formatVersion` string. Keep this in sync with `schemaVersion` and use it to select the correct migration path.
 
 **Warning signs:**
-- Output video loses "HDR" badge in Photos app
-- Highlights that were bright in original appear clipped at SDR levels
-- Colors look desaturated compared to original on XDR display
-- Output file is significantly smaller than source (HDR metadata + wider bit depth dropped)
+- After app update, previously saved templates fail to load (silently returns default config)
+- `JSONDecoder.decode` throws `keyNotFound` or `DecodingError.typeMismatch` for old templates
+- Photos edit extension can't restore previous edits after app update
+- `AppGroupConfigSync.load()` returns `nil` when it previously returned valid configs
 
 **Phase to address:**
-Video processing Phase. Critical for iPhone 12+ users who shoot HDR video by default.
+Template Management Phase. Must be implemented BEFORE the first template save feature ships — retrofitting migrations after users have data is 3-5x more expensive.
 
 ---
 
-### Pitfall 8: AVAssetExportSession Audio Track Drop
+### Pitfall 5: App Group Template Sync Race Conditions (Last-Writer-Wins)
 
 **What goes wrong:**
-After processing a video (overlaying watermark), the output video is silent — audio track is missing. This happens most commonly when using `AVMutableComposition` with `AVAssetExportSession` and the audio track insertion is incorrect, or when the export session configuration doesn't include the audio mix.
+When the main app saves a template and the share extension simultaneously loads or saves a different config, the last writer silently overwrites the other's changes. `AppGroupConfigSync` uses `UserDefaults(suiteName:)` which provides atomic file writes (no corruption) but does NOT provide transactional read-modify-write semantics across processes. If the main app updates the default template setting while the share extension is auto-applying it to an import, the extension may read a partially-updated or stale config.
 
 **Why it happens:**
-- When creating an `AVMutableComposition`, developers focus on the video track and forget to insert the audio track
-- `AVMutableVideoComposition` only governs video — audio handling requires a separate `AVAudioMix` (or simply including the audio track in the composition)
-- If you're using `AVAssetExportPresetPassthrough` with a mutable composition that has been modified, the passthrough may fail silently for audio
-- Simultaneous playback of the source asset in an `AVPlayer` instance can cause export to fail to access the audio track
+- `UserDefaults` writes are atomic per-key (the `set(_:forKey:)` call atomically writes the whole plist), but there's no cross-process locking.
+- The current `AppGroupConfigSync.save()` is called on every config mutation via `didSet` in the ViewModel. `AppGroupConfigSync.load()` is called on init. If the main app and share extension are both active, they can read/write the same key simultaneously.
+- `UserDefaults.didChangeNotification` does NOT fire across processes — the extension can't know the main app wrote a new default template.
+- The `WatermarkConfiguration` with image watermark layers contains `Data` blobs (PNG data). Writing large `Data` to `UserDefaults` is slow enough that a window for write overlap exists.
 
 **How to avoid:**
-1. When creating `AVMutableComposition`, explicitly insert both video AND audio tracks:
-   ```swift
-   let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
-   try compositionAudioTrack?.insertTimeRange(timeRange, of: sourceAudioTrack, at: .zero)
-   ```
-2. Verify audio track exists before export: `composition.tracks(withMediaType: .audio).count > 0`
-3. If using `AVAssetExportSession`, ensure no other object (AVPlayer) is holding the source asset
-4. Check export error after completion: `session.error` often surfaces audio format incompatibilities
-5. For complex compositions, use `AVAssetWriter` with separate `AVAssetWriterInput` for audio (more control)
+1. **Template storage as individual files:** Store each saved template as a separate JSON file in the App Group container directory (e.g., `Shared/Templates/{uuid}.json`). File-level operations (create, rename, delete) are atomic at the filesystem level.
+2. **Template index as a lightweight manifest:** Maintain a `templates.json` manifest file that lists template UUIDs, names, and the UUID of the current default. This file is small and written atomically using `FileManager` with a temp-file → rename pattern (atomic on APFS).
+3. **Config sync vs template sync separation:** `AppGroupConfigSync` remains for the current "active" watermark config (settings like last-used position, default text). Templates get a separate `TemplateStore` that operates on the file-based storage.
+4. **File coordination for manifest:** Use `NSFileCoordinator` with `NSFilePresenter` when reading/writing the template manifest to prevent cross-process corruption.
+5. **Template default marker:** Store the default template UUID as a separate small key in `UserDefaults` (atomic per-key). The manifest file is the source of truth for template contents; the `UserDefaults` key is just a pointer.
 
 **Warning signs:**
-- Output video has no sound
-- `composition.tracks(withMediaType: .audio).count` returns 0 before export
-- "Operation Stopped" error in export session
-- Export succeeds but file is suspiciously small
+- Template list is inconsistent between main app and extension (missing templates)
+- Default template changes get "lost" after using the extension
+- Template rename/deletion in main app doesn't reflect in extension until next cold launch
+- Intermittent failures reading templates — sometimes works, sometimes `nil`
 
 **Phase to address:**
-Video processing Phase.
+Template Management Phase. Must be architected before any template persistence code is written.
 
 ---
 
-### Pitfall 9: UIImage.jpegData() Re-Compression Trap
+### Pitfall 6: UserDefaults Size Limit for Configs With Image Watermark Data
 
 **What goes wrong:**
-Using `uiImage.jpegData(compressionQuality: 1.0)` thinking it will produce a lossless pass-through of the original JPEG bytes. In reality, this fully decompresses the image into pixel buffer → re-compresses to JPEG with quality 1.0. The output is a SECOND-GENERATION lossy JPEG that has accumulated compression artifacts. Even at quality 1.0, the re-encoding is mathematically different from the original JPEG bitstream.
+The current `AppGroupConfigSync` stores the entire `WatermarkConfiguration` (including image watermark PNG `Data` blobs) as a single `UserDefaults` key. When templates are introduced, there's a natural temptation to store the template list similarly. But `UserDefaults` loads the **entire** property list file into memory at app launch. A user with 10 templates, each containing a 2MB logo PNG, causes a 20MB `UserDefaults` plist. This increases cold-launch memory pressure by 20MB per process (main app + extension) and slows `UserDefaults` initialization.
 
 **Why it happens:**
-- `UIImage` is a decoded bitmap — it has no memory of the original JPEG compression
-- `jpegData(compressionQuality:)` always re-encodes from scratch
-- Quality 1.0 in JPEG encoding still applies the DCT quantization tables — it's not visually lossless
-- Developers assume "quality 1.0 = same as original" but JPEG encoding is not deterministic
+- `UserDefaults` is a flat plist file — `~/Library/Preferences/group.com.watermark.app.plist`. Every key's value is deserialized on first access.
+- Image watermark PNG data is stored inline in the `WatermarkConfiguration`'s `ImageWatermarkInput.pngData`. When saved to `UserDefaults`, the entire JSON-encoded config (including the base64-represented PNG blob) is written as one value.
+- Developers default to `UserDefaults` because it's simple and already used for config sync. Adding templates to the same storage path seems natural.
 
 **How to avoid:**
-1. For photos that don't need pixel modification: pass through the original `Data` bytes without any decode/re-encode
-2. When pixel modification IS required (watermarking):
-   - Accept the generation loss BUT use `CGImageDestination` with `kCGImageDestinationLossyCompressionQuality = 1.0`
-   - Prefer HEIF output (`public.heic`) which has better compression efficiency and less visible generation loss than JPEG
-   - Match the target format to the source format to avoid transcoding between lossy codecs
-3. Never use `UIImage.jpegData()` or `UIImage.heicData()` — always use `CGImageDestination` or `CIImage` write methods
-4. For HEIF source images, output HEIF to avoid the double-loss of HEIF→decode→JPEG
+1. **Templates as files, not UserDefaults:** Each template is a separate JSON file in `AppGroupContainer/Shared/Templates/`. The manifest is a small index file referencing them by UUID.
+2. **Image data in App Group file storage:** Store watermark logo images separately as PNG files in `AppGroupContainer/Shared/Images/{uuid}.png`. Templates reference the UUID, not the raw data.
+3. **`AppGroupConfigSync` keeps only the active config:** Reduce the stored config to text-only + references (no inline image data). Image data for the *active* watermark layer is loaded from its template's PNG file at processing time.
+4. **Size guard:** On template save, if the combined JSON + image data exceeds 1MB, refuse to save and show a warning. Logos over 1MB are unnecessary for watermark use.
 
 **Warning signs:**
-- Output JPEG is different file size from source even with quality=1.0
-- Visible compression artifacts in output that weren't in source
-- HEIF source → JPEG output quality noticeably degraded
+- App launch time increases noticeably after saving 5+ templates
+- `UserDefaults` reads become slow (>50ms for a single key)
+- Memory usage at launch increases linearly with template count
+- `AppGroupConfigSync.load()` call on init blocks the main thread perceptibly
 
 **Phase to address:**
-Core image processing Phase.
+Template Management Phase. File-based storage must be the architecture from the start.
 
 ---
 
-### Pitfall 10: PHAdjustmentData Size Limit Crashes
+### Pitfall 7: PhotosPicker `.loadTransferable` Eager Batch Data Retention
 
 **What goes wrong:**
-The Photos editing extension's `PHAdjustmentData` has an unpublicized but strict size limit. Storing large data (raw image data, full-resolution PNG overlays, complex filter parameter serializations) in `PHAdjustmentData` causes the extension to be terminated by the system. The `formatIdentifier` and `formatVersion` plus the `data` payload must be very small — Apple intends this for a "recipe" of edit parameters, not actual assets.
+The current `WatermarkViewModel.handleSelection()` iterates through all selected `PhotosPickerItem`s and calls `item.loadTransferable(type: Data.self)` for each, storing the full `Data` in temp files and keeping `PhotoItem` objects with `sourceURL` references. For a batch of 20 48MP ProRAW photos, this is ~20 × 75MB = 1.5GB of data copied to temp files, plus the memory overhead of decoding each for thumbnail generation. On devices with 4GB RAM, this depletes memory budget before processing even begins.
 
 **Why it happens:**
-- Developers store watermark image data (PNG/HEIF) directly in adjustment data for "self-contained" edits
-- Complex serialization of filter parameters produces unexpectedly large payloads
-- The limit is not documented by Apple, so it's discovered through crash reports
-- Works during development with small test images but fails in production with complex assets
+- The current implementation eagerly loads all items because it was designed for single-item or small selection use. The `maxSelectionCount: 20` was set optimistically without considering the memory implication of 20 ProRAW files.
+- `loadTransferable(type: Data.self)` copies the full media data into memory. For ProRAW DNG files that are 75MB each, this is catastrophic at scale.
+- The `createThumbnail(from:maxPixelSize:)` call per-item also decodes each image, adding another 10-20MB per image during the import phase.
 
 **How to avoid:**
-1. `PHAdjustmentData` should contain ONLY a lightweight recipe: watermark position enum, text string, format identifier, maybe a UUID reference
-2. Store watermark assets (images, fonts) in the app's shared container or bundle — never in adjustment data
-3. Reference external assets by identifier or hash, not by embedding them
-4. Keep `formatIdentifier` short (reverse-DNS style) and total payload well under 1KB
-5. If you need to store more complex state, write it to a file in App Group container and store only the file URL's bookmark or UUID in adjustment data
-6. Test with worst-case: maximum text length, maximum number of watermark placements
+1. **Lazy loading:** In `handleSelection()`, store `PhotosPickerItem` references (or their `itemIdentifier` strings) in the `PhotoItem` struct. Do NOT load data until the user navigates to that item's preview or processes it. Use `PhotoItem(id:itemIdentifier:mediaType:)` with deferred data loading.
+2. **Thumbnail generation from `PhotosPickerItem` directly:** Use `PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)` + `PHImageManager.requestImage(for:targetSize:contentMode:options:)` with `targetSize: CGSize(width: 200, height: 200)` for thumbnails. This avoids loading the full file at all.
+3. **Batch import limit:** Reduce `maxSelectionCount` from 20 to 10 for memory safety. Warn user via alert when selecting >10 items.
+4. **Streaming copy to temp:** When data MUST be loaded (for processing), use `item.loadFileRepresentation(forTypeIdentifier:)` which provides a URL to a temp copy, then hard-link or copy the file without reading into memory.
+5. **Progressive import:** Import thumbnails first (fast, low memory), then show the batch UI. Load full data on-demand per item as the user swipes through the batch.
 
 **Warning signs:**
-- Extension works for simple edits but crashes for edits with multiple watermarks
-- Xcode console shows "adjustment data too large" or similar Photos framework warnings
-- `canHandle(_:)` returns false for previously saved edits
-- Inconsistent behavior between device and simulator (simulator has no size enforcement)
+- Memory spikes to 1.5GB+ during `handleSelection` with 10+ items
+- UI freezes for 10-30 seconds during import (all items loading on main actor)
+- Jetsam kill occurs before the user sees any UI
+- Thumbnail strip takes 5+ seconds to appear after picker dismisses
 
 **Phase to address:**
-Photos Edit Extension Phase.
+Batch Processing Phase. Import strategy must be redesigned for scale.
+
+---
+
+### Pitfall 8: Batch Cancellation Leaving Orphaned Temp Files and Partial State
+
+**What goes wrong:**
+When a user cancels a batch operation mid-way (e.g., after processing 3 of 10 items), the system leaves behind: (1) temp files for already-processed items that were shared, (2) temp files for the current partially-processed item, (3) source temp files from import, (4) export session resources still holding decoder sessions. Over multiple batch sessions, the caches directory fills with orphaned files, and hardware decoder resources leak.
+
+**Why it happens:**
+- The current single-item flow has a clear completion path: process → share → cleanup temp file. In batch, the user may cancel after sharing some items but before processing others.
+- `Task.cancel()` cancels the async work but doesn't trigger cleanup of already-written temp files.
+- `AVAssetExportSession.cancelExport()` cancels the encoding but the session object and its decoder resources may not be released.
+- `TempFileManager.cleanupOldFiles(olderThan: 3600)` only cleans files >1 hour old — files from a cancelled batch 5 minutes ago persist.
+
+**How to avoid:**
+1. **Batch session lifecycle:** Create a `BatchSession` actor that tracks all temp files created during a batch operation (source copies, processed outputs). On cancellation or completion, iterate and clean up ALL tracked files.
+2. **Cancellation cleanup path:** When cancellation is requested, call `batchSession.cleanupAll()` which deletes every temp file associated with the session, regardless of processing state.
+3. **Per-item processing state tracking:** Each item in the batch has a state: `.pending`, `.processing`, `.completed`, `.shared`, `.failed`. Only transition to `.shared` after the share sheet dismisses with a completion. Cleanup `.shared` items immediately after share. Cleanup `.failed` and `.pending` items on batch completion/cancellation.
+4. **Resource release on cancel:** When cancelling video export, call `exportSession.cancelExport()`, then set `exportSession = nil`, `composition = nil`, `videoComposition = nil`, and call `await Task.yield()` to allow deallocation.
+5. **Aggressive temp file cleanup:** Reduce `TempFileManager` cleanup age from 3600s to 300s (5 minutes) for batch mode. Add a `cleanupAllWatermarkFiles()` that deletes ALL `watermark_*` prefixed files on batch cancellation.
+
+**Warning signs:**
+- caches directory grows unboundedly after repeated batch use
+- "Storage Almost Full" warnings after batch processing sessions
+- App launch progressively slower (checking/staling temp files)
+- Video exports start failing with "Cannot Decode" after 2-3 cancelled batches (decoder leak)
+
+**Phase to address:**
+Batch Processing Phase. Cleanup strategy is not an afterthought — it's part of the core batch lifecycle design.
+
+---
+
+### Pitfall 9: Per-Item Config Adjustment State Bleeding Across Batch Items
+
+**What goes wrong:**
+In batch mode, the user can adjust the watermark config per-item (e.g., different text on photo 3 vs photo 5). If the ViewModel's `config` property is shared across all items without per-item snapshots, navigating back to a previously-configured item shows the *current* config (from the last-edited item), not the config the user set for that specific item.
+
+**Why it happens:**
+- The current `WatermarkViewModel` has a single `config: WatermarkConfiguration` property bound to the UI. When the user changes position/text/scale, `config` updates globally.
+- For batch, the natural extension is: swipe to item → config shows current state → user changes → config is now different. But when the user swipes back to item 1, config hasn't been saved per-item, so item 1 now shows item 5's config.
+- The `didSet { AppGroupConfigSync.save(config) }` saves the last-edited config globally, not per-item.
+
+**How to avoid:**
+1. **Per-item config storage:** Store a `[Int: WatermarkConfiguration]` dictionary in the ViewModel, keyed by batch item index. Each item has its own config snapshot.
+2. **Config copy-on-switch:** When the user navigates to a new batch item, save the current config to the dictionary for the *previous* index, then load (or initialize from global default) the config for the *new* index.
+3. **"Apply to All" action:** Provide a button that copies the current item's config to ALL items in the batch, overwriting their individual configs. This is the primary batch user need — set once, apply everywhere.
+4. **Per-item config dirty tracking:** Mark items as `configModified: true` when their config differs from the batch default. Show a visual indicator (e.g., dot on thumbnail) so users know which items have custom configs.
+5. **Batch config as a template:** The batch's "base" config is the template/default. Per-item configs are overlays/diffs from the base. On batch start, all items inherit the base. As users customize per-item, the overlay records the diff.
+
+**Warning signs:**
+- User sets watermark text on photo 3, swipes to photo 7 and back — photo 3 shows photo 7's text
+- Config changes "bleed" across items unpredictably
+- "Apply to All" applies unexpected config because the base config drifted
+- User frustration: "I already set this!" — indicates state bleeding
+
+**Phase to address:**
+Batch Processing Phase. Per-item config state must be part of the batch data model from the start.
+
+---
+
+### Pitfall 10: Template Auto-Apply Race With Import Flow
+
+**What goes wrong:**
+When a default template is configured to auto-apply on import, and the user selects multiple items via PhotosPicker, there's a race between: (a) the import flow loading thumbnails and creating `PhotoItem`s, (b) the template auto-apply setting `config` from the template, and (c) the UI rendering the first item's preview. If the template loads after the first preview renders, the user briefly sees the default config, then it snaps to the template config — a visual jank.
+
+**Why it happens:**
+- `WatermarkViewModel.init()` loads `AppGroupConfigSync.load()` synchronously, which is correct for initial config. But the "default template" feature loads a *different* config from the template store, which may involve file I/O from the App Group container.
+- If template loading is async (file read), the `config` starts as the last-used config, then updates to the template config after I/O completes. This causes a double-render: first with stale config, then with template config.
+- For batch, this multiplies: each item's per-item config must be initialized from the template, and if done lazily, the user sees configs pop in one by one.
+
+**How to avoid:**
+1. **Template preload on app launch:** Load the default template (if set) in `WatermarkViewModel.init()` BEFORE the first render. Make template loading synchronous (file read is fast for small JSON files).
+2. **Template config as the initial state:** If a default template is set, initialize `config` from the template directly instead of from `AppGroupConfigSync.load()`. Only fall back to the last-used config if no default template exists.
+3. **Batch initialization with template:** When `handleSelection()` runs, immediately clone the default template config for every item in the batch. Store all per-item configs before the UI renders.
+4. **No async template loading for auto-apply:** Template auto-apply MUST be synchronous. The template JSON is <10KB — file read is sub-millisecond. Defer async operations (image data hydration) to background.
+5. **Preview suppression during template load:** Set a `isApplyingTemplate = true` flag that suppresses preview generation until all per-item configs are initialized. Show a brief "Applying template..." indicator if needed.
+
+**Warning signs:**
+- First preview render shows wrong config for 100-500ms, then snaps to template
+- In batch, items flash with default config before template applies
+- Template config "flickers" during import
+- "Apply to All" sometimes misses the first item (race window)
+
+**Phase to address:**
+Template Management Phase. Auto-apply must be synchronous and preloaded.
 
 ---
 
@@ -349,127 +296,122 @@ Photos Edit Extension Phase.
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Using `UIImage.jpegData()` for output | Simple one-liner, no ImageIO knowledge needed | Irreversible quality loss from re-compression, all metadata stripped | Never for this project (quality preservation is a core requirement) |
-| `CIContext()` created per image | No state management | Each context allocates GPU resources; repeated creation causes memory fragmentation and 10-100x slower processing | Only in throwaway prototypes, never in production |
-| `AVAssetExportSession` with generic preset | Few lines of code, works for simple cases | No bitrate control, color metadata may default incorrectly, no guarantee of audio passthrough | Quick prototyping only; use `AVAssetWriter` for production |
-| Bypassing HDR gain map handling | Works for SDR images, simpler code | All HDR content is silently flattened; impossible to retrofit later without refactoring entire pipeline | Not acceptable — HDR is default for iPhone 12+ |
-| UIKit-coordinate overlay placement without CIImage Y-axis flip | Works on square images with EXIF=up | Incorrect watermark placement on all portrait photos and any image with non-zero EXIF orientation | Never |
-| Hardcoded color profile (DeviceRGB) | Works on device screen | Output has wrong colors when viewed on other devices/platforms | Never for a sharing app |
-| Storing watermark images in `PHAdjustmentData` | Self-contained edit history | Extension crashes on modestly-sized watermarks | Never |
-
----
+| Storing templates in `UserDefaults` alongside config sync | Zero new storage infrastructure | Template count limits, launch slowdown, memory bloat, race conditions with config sync | Never — templates need file-based storage from day one |
+| `maxSelectionCount: 20` without changing import to lazy loading | No code change needed for batch | Memory crashes with 10+ ProRAW photos, import freezes UI for 30+ seconds | Only if batch ships with maxSelectionCount=5 and explicit ProRAW warning |
+| Adding template fields to `WatermarkConfiguration` without schema versioning | No migration infrastructure needed | First model change breaks all saved templates irreversibly, user data loss | Never — schema versioning must ship with the first template save |
+| Processing batch items in `TaskGroup` for "performance" | Perceived speed gain | Memory explosion, decoder exhaustion, non-deterministic crashes on different devices | Never — serial processing is the only safe approach for media batch |
+| Using existing `AppGroupConfigSync` for template list storage | Reuses proven sync mechanism | Template list corruption under concurrent access, last-writer-wins data loss | Never — templates need independent file-based storage |
+| Eagerly loading all `PhotosPickerItem` data on selection | Simple, matches current single-item flow | 1.5GB+ memory spike for 20 photos, UI freeze, jetsam kill | Only with maxSelectionCount=1 |
+| Skipping batch cancellation cleanup (relying on hourly sweep) | Fewer code paths to test | Orphaned temp files accumulate, decoder resource leaks, storage pressure | Never for a share-oriented app that processes media frequently |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| **Share Extension → Main App** | Trying to call `UIApplication.shared.open()` to bring main app to foreground from extension | Save shared data to App Group container, display "Saved" UI, let user open app manually. Never force-open from extension — it's unsupported and causes infinite launch loops on iOS 16+. |
-| **Share Extension → Main App** | Passing large data via `UserDefaults` (shared suite) | Write files to App Group shared container; pass only file paths or UUIDs through `UserDefaults` |
-| **Photos Edit Extension** | Assuming extension stays alive between sessions; caching state in memory | Extension process is killed frequently. Serialize all state to disk immediately. Restore from `PHAdjustmentData` + App Group storage on each launch. |
-| **NSExtensionActivationRule** | `TRUEPREDICATE` (accepts everything) | Use specific constraints: `NSExtensionActivationSupportsImageWithMaxCount = 1`, `NSExtensionActivationSupportsMovieWithMaxCount = 1`, plus type filtering |
-| **App Group Configuration** | Configuring only in main app target | Must be enabled in BOTH main app AND every extension target's Signing & Capabilities. Mismatch = silent failures reading/writing shared data. |
-| **Photos Framework Authorization** | Requesting `.readWrite` access in extension | Photos extension gets implicit access to the asset being edited. Don't request authorization — it will prompt user unnecessarily in wrong context. |
-| **AVAsset access from Photos** | Using `PHAsset.requestContentEditingInput()` result on main thread | Loading full-resolution video is I/O heavy. Use `PHImageManager.requestAVAsset()` for video, and always on background queue. |
-| **Watermark as CALayer** | Adding `CALayer` directly to on-screen `UIView` for watermark, then rendering that view's layer | CALayer hierarchy must be standalone (not attached to any on-screen view) for `AVVideoCompositionCoreAnimationTool`. Create `parentLayer` + `videoLayer` + `watermarkLayer` specifically for export, never reuse UI layers. |
-
----
+| **PhotosPicker → Batch ViewModel** | Eager `loadTransferable(type: Data.self)` for all items | Store `PhotosPickerItem` references; load on-demand per item. Use `PHImageManager` for thumbnails. |
+| **Batch Processor → WatermarkEngine** | Calling `engine.process()` in a `TaskGroup` with concurrent tasks | Serial `Actor`-based queue. One item at a time. `autoreleasepool` per item. |
+| **Video Batch → AVFoundation** | Running multiple `AVAssetExportSession` concurrently or back-to-back without delay | Serial queue with 0.5s inter-export delay. Release all session/composition references between exports. |
+| **Template Store → App Group Container** | Reading/writing template manifest without file coordination | Use `NSFileCoordinator` with `NSFilePresenter` for manifest access. Atomic write-via-temp-file pattern. |
+| **Default Template → Import Flow** | Async loading of default template after UI renders | Synchronous preload in `ViewModel.init()`. Template JSON is <10KB — file read is instantaneous. |
+| **Per-Item Config → Batch UI** | Single shared `config` property mutated in place | Per-item config dictionary `[Int: WatermarkConfiguration]`. Copy-on-switch. "Apply to All" action. |
+| **Batch Cancel → Resource Cleanup** | Just `Task.cancel()` without cleanup | `BatchSession` actor tracks all temp files. On cancel: cleanup all, nil out AVFoundation references, yield to system. |
+| **Share Extension Batch → Main App** | Trying to process multiple items in the extension | Extension saves file URLs to App Group container, completes immediately. Main app picks up batch processing on next foreground. |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Full-resolution `UIImage` decoding in extensions | Silent jetsam crashes on device, works in Simulator | Use `CGImageSource` with downsampling for previews; process full-res only once during final export | Immediately on first real-device test with 12MP+ photos |
-| `CIContext` creation per image | Slow processing times, memory churn, GPU resource exhaustion | Create ONE `CIContext` per processing session, store as instance property, reuse across all images | Noticeable at 3+ images; catastrophic at 20+ |
-| `AVMutableVideoComposition` + many sublayers | Dropped frames, export glitches, encoder falling back to low-quality | Flatten complex watermark into single pre-rendered `UIImage`/`CIImage`, use as single-layer overlay. Each `CALayer` sublayer adds rendering overhead during export. | At 5+ independent CALayer sublayers |
-| Rendering watermark with Core Graphics (`CGContext`) on large images | Single-threaded CPU rendering, 5-10x slower than GPU | Use `CIImage` + `CIContext` (GPU-accelerated). Core Graphics is CPU-bound and single-threaded. | Any image > 4MP (iPhone 6s and later) |
-| Unnecessary pixel format conversions in video pipeline | Color shifts, quality loss, slower encoding | Match source pixel format as closely as possible. Use bi-planar YCbCr for video, avoid RGB conversion unless necessary for watermark blending. | Any video with non-trivial color gamut |
-| Using `UIImageView` to display full-res image in extension UI | Scrolling lag, memory pressure, eventual crash | Always downsample for display: use `CGImageSourceCreateThumbnailAtIndex()` with `kCGImageSourceThumbnailMaxPixelSize` matching the view's pixel dimensions | Immediate for images > 2MP |
-| `PHCachingImageManager` in extension | Misunderstood API — it's for pre-warming, not an in-memory LRU. Attempting to use it for caching leads to unexpected deallocation and redundant fetches. | Manage your own disk-based cache for intermediate processing results; PHCachingImageManager is for pre-fetching in UICollectionView/scroll contexts | When reloading after extension process restart |
-
----
+| Parallel batch processing with TaskGroup | Jetsam kill at 3-5 items, inconsistent crash point | Serial processing queue. `maxConcurrentVideoExports = 1`. `autoreleasepool` per item. | Immediate with 48MP photos or 4K video on device |
+| 20-item PhotosPicker eager import | 1.5GB memory spike, 30s UI freeze, jetsam kill | Lazy loading: store item references, load on-demand. `maxSelectionCount = 10`. | At ~7 ProRAW or ~12 12MP photos |
+| Multiple video exports without resource release | Second export fails with error -11839 "Cannot Decode" | 0.5s delay between exports, explicit nil-out of AV objects | First batch with 2+ videos |
+| Growing caches directory from batch temp files | Storage pressure, slow launch | `BatchSession` per-session cleanup. Reduce sweep age to 300s. | After 3-4 batch sessions of 10+ items |
+| Template manifest contention under concurrent access | Missing/duplicate templates, default template reset | `NSFileCoordinator` for manifest access. Atomic write-via-temp-file. | When main app and extension are both active (e.g., app in background, extension foreground) |
+| `UserDefaults` bloated with template image data | 20MB+ plist, slow launch, memory overhead | Templates as files + image data as separate PNGs. `UserDefaults` for pointers only. | At 5+ templates with 1MB+ logo images |
+| Per-item config rebuild on every navigation | Thumbnail strip swipe stutter, 200ms+ lag | Cache rendered previews per item. Invalidate only when config changes. | At 5+ items with complex multi-layer configs |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Writing to shared container without data validation | Maliciously crafted file from another share extension (if App Group ID is known) could contain path traversal or oversized payload | Validate file types, check file size before processing, use sandboxed file operations |
-| Including user's precise GPS coordinates in watermarked output metadata | Users sharing to social media unintentionally broadcasting their home/work location | Offer "Strip Location" option before share, or strip GPS by default when watermarking for social media output |
-| Loading arbitrary file formats from share extension | Malicious video file with crafted codec parameters could trigger decoder vulnerability | Validate MIME types, check actual file headers (not just extension), set processing timeouts |
-
----
+| Template JSON files executable via malicious file injection | If App Group container is writable by another app with known group ID (unlikely but possible: App Group IDs are discoverable via provisioning profile enumeration), a crafted template JSON could contain script injection if rendered in web views | Validate all template JSON before parsing. Schema-validate against known structure. Reject templates with unexpected keys. |
+| Per-item configs exposing previous item's EXIF tokens | If EXIF token substitution (`{camera}`, `{lens}`) in watermark text isn't re-evaluated per item, the watermark on photo 2 may show photo 1's camera model | Re-evaluate ALL EXIF tokens for each item's config just before processing, not at config-set time |
+| Batch share extension preserving photo library identifiers across processes | Storing `PHAsset.localIdentifier` in App Group container for cross-process access violates user privacy expectations (the main app may not have photo library access for those specific assets) | Only pass file URLs and `Data` between processes. Never pass `PHAsset.localIdentifier`. Use `PHAsset.fetchAssets` with the identifier only in the process that has explicit photo library authorization |
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Video processing on main thread | App freezes for seconds/minutes, user force-quits | Process on background queue with determinate progress bar (`Progress` object from AVAssetExportSession/AVAssetWriter) |
-| No progress indication for video export | User wonders "is it working?" and may cancel | Show progress bar with time remaining estimate, allow background processing with notification on completion |
-| Watermark preview at wrong scale | Watermark looks perfect in preview but enormous/tiny in output | Preview should show watermark at output resolution. Render preview overlay proportionally using same relative coordinates that will be used for output. |
-| Deleting original after watermarking | Catastrophic data loss if output is corrupted or user changes mind | Never delete or modify original. Watermark produces new file. |
-| "Save" button that saves to camera roll | Clutters camera roll, contradicts core value prop | Only action should be "Share" — output goes to share sheet, never saved unless user explicitly chooses "Save to Photos" from share sheet |
-| Extension showing nothing after selecting unsupported file type | Confusion, assumes app is broken | Use `NSExtensionActivationRule` to prevent extension from appearing for unsupported types. In-app picker: show clear "Unsupported format" message. |
-
----
+| No per-item progress during batch processing | User sees single "Processing..." spinner for 5 minutes with 10 items — doesn't know if it's stuck or progressing | Show "Processing 3 of 10" with per-item progress bar. Show thumbnail of current item being processed. ETA for full batch. |
+| Batch processing blocks all UI interaction | User can't cancel, can't preview other items, can't adjust configs for pending items | Allow config editing for PENDING items while current item processes. Only lock the current item's preview. |
+| "Apply to All" irreversible without undo | User accidentally applies wrong config to all 20 items, must undo one by one | Snapshot entire batch config before "Apply to All". Provide single "Undo Apply to All" action within 30s. |
+| Template delete without "in use" warning | User deletes template that's currently applied to an in-progress batch; configs break silently | Before deleting: check if template is currently applied to any active batch item or set as default. Warn with count of affected items. |
+| Batch share from extension shows all items but processes none | User selects 5 photos in Photos app, shares to Watermark, sees UI but can only process 1 (or none) | Extension receives items → shows "Processing {count} items? Open Watermark app to complete." with "Open App" button. |
+| Template list in main app doesn't update after extension creates a template | User creates template in extension, opens main app — template missing until cold restart | Use `CFNotificationCenter` Darwin notification to ping the main app when template store changes. Main app refreshes on notification. |
+| No "what changed?" on batch preview after config adjustment | User adjusts position on item 4 of 10, then views item 4's thumbnail in the strip — it looks identical because the strip shows source, not watermarked preview | Thumbnail strip should show watermarked preview (low-res, fast render) for each item once its per-item config is set. |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **HDR preservation:** Verified output has gain map auxiliary data when source had it? Tested with iPhone 12+ HDR photo?
-- [ ] **EXIF completeness:** GPS, camera model, lens, aperture, ISO, timestamp, color profile all present in output? Checked with exiftool?
-- [ ] **Orientation correctness:** Output displays correctly in Photos, Files, and when shared to Instagram/Twitter/WhatsApp? Tested portrait, landscape-left, landscape-right, upside-down?
-- [ ] **Video audio:** Output video has audio track, correct duration, no sync drift? Verified on both stereo and spatial audio sources?
-- [ ] **Watermark placement accuracy:** All 8 positions (top-left, top-center, top-right, middle-left, center, middle-right, bottom-left, bottom-center, bottom-right) render correctly for both landscape and portrait aspect ratios?
-- [ ] **Large image handling:** Tested with 48MP ProRAW? 108MP from third-party camera apps? Panorama (up to 100MP)?
-- [ ] **Video memory:** 10-minute 4K60 video processes without jetsam? Peak memory < 200MB during processing?
-- [ ] **Share extension on device:** Tested on physical device (not just Simulator)? Verified with Photos app share sheet, Safari image share, Files app share?
-- [ ] **Photos edit extension lifecycle:** Extension works after being killed by system and relaunched? `PHAdjustmentData` reconstruction works from stored recipe?
-- [ ] **Format fidelity:** HEIF source → HEIF output? JPEG source → JPEG output? No unintended format conversion?
-- [ ] **Share without save:** Output appears in share sheet, user can share to any app, no copy saved to camera roll unless explicitly chosen in share sheet?
-- [ ] **Cold launch from share extension:** App opens correctly when user returns to it after share extension completes?
-
----
+- [ ] **Batch memory safe with ProRAW:** Tested with 10 48MP ProRAW files on iPhone 14 Pro (6GB RAM)? Peak memory < 400MB during entire batch session?
+- [ ] **Batch video serialization:** Two consecutive 4K60 videos export without "Cannot Decode" errors? 0.5s delay enforced between exports?
+- [ ] **Share extension batch handoff:** 5+ items sent from Photos share sheet → extension appears → items visible → "Open in Watermark" works → main app receives all items?
+- [ ] **Template schema migration:** Test fixtures from v1 schema decode successfully after adding new fields? All existing templates survive app update?
+- [ ] **Template file storage, not UserDefaults:** Template JSON files are individual files in App Group container? Manifest file written atomically via temp-file → rename?
+- [ ] **App Group template sync:** Template created in main app appears in extension within 2 seconds (Darwin notification)? Template deleted in extension is gone from main app?
+- [ ] **Per-item config isolation:** Config change on item 3 doesn't affect item 1? "Apply to All" correctly propagates to all items, including previously customized ones?
+- [ ] **Batch cancellation cleanup:** Cancel mid-batch (after 4 of 10 processed) → all temp files cleaned? Video decoder resources released? Subsequent batch works without -11839 error?
+- [ ] **Default template auto-apply:** Open app with default template set → picker opens → select items → first preview shows template config immediately (no flicker)?
+- [ ] **Template delete safety:** Delete template that's the current default → default falls back to last-used config? Delete template applied to active batch item → item falls back to batch base config?
+- [ ] **EXIF token per-item evaluation:** Batch of 3 photos from different cameras → watermark text with `{camera}` shows each photo's correct camera model (not first photo's for all)?
+- [ ] **Thumbnail strip reflects per-item configs:** After customizing item 3's watermark position, item 3's thumbnail in the strip shows the watermark in the new position (not the batch default)?
+- [ ] **Batch export all same format:** All 10 items export in their source format (not all forced to HEIC)? OutputFormat.preserveSource works per-item?
+- [ ] **Cancel during video export in batch:** Cancel button works mid-video-export? Remaining items still processable? No orphaned export sessions?
+- [ ] **Share without save for batch:** Each shared item goes to share sheet individually? No items saved to camera roll unless user explicitly chooses "Save" from share sheet?
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| HDR gain map loss in photo pipeline | HIGH (full pipeline refactor) | Audit every image loading point for `.auxiliaryHDRGainMap` option. Add gain map extraction at input, re-attachment at output. May require switching from `UIImage`-based to `CIImage`-based pipeline. |
-| EXIF stripping through CGImage path | MEDIUM | Centralize metadata extraction into a single MetadataPreserver utility. Audit all output paths to pass through preserved metadata dictionary. One-time refactor of output methods. |
-| Video re-encode quality settings inadequate | LOW-MEDIUM | Tune `AVAssetWriter` compression settings, re-test. May need per-source-format configuration mapping. |
-| Share extension memory crash | MEDIUM | Redesign extension to use streaming/downsampling. Swap `UIImage` for `CGImageSource`. Implement processing queue with memory budget. |
-| CIImage coordinate system bugs | LOW | Centralize coordinate conversion into a CoordinateConverter utility with tests for all EXIF orientations. Audit all positional transform code. |
-| AVAssetExportSession audio drop | LOW | Swap to `AVAssetWriter` for video exports. Explicitly add audio track to composition. Add preflight check: `composition.tracks(withMediaType: .audio).count > 0`. |
-
----
+| Parallel batch memory crash | MEDIUM | Convert `TaskGroup` to serial `Actor`-based queue. Add memory budget check before each item. Wrap in `autoreleasepool`. 1-2 day refactor. |
+| Template schema migration missing | HIGH | Write migration function from each historical schema version. Build "template museum" test fixtures. Add `schemaVersion` to all Codable types. 3-5 day effort if >1 schema version exists. |
+| Templates stored in UserDefaults with image blobs | MEDIUM | Write migration: read all templates from `UserDefaults`, write to individual files, remove `UserDefaults` keys. Update all access points to file-based storage. 1-2 days. |
+| App Group template race condition | MEDIUM | Replace `UserDefaults` template list with file-based manifest + `NSFileCoordinator`. Add Darwin notification for cross-process change propagation. 2-3 days. |
+| PhotosPicker eager import memory spike | LOW-MEDIUM | Refactor `handleSelection` to store `PhotosPickerItem` references. Add on-demand loading via `PHImageManager`. Rebuild thumbnail strip to use PHImageManager requests. 1-2 days. |
+| Batch cancellation resource leak | LOW | Centralize temp file tracking in `BatchSession` actor. Add cleanup-on-cancel path. Reduce sweep age. 0.5-1 day. |
+| Per-item config state bleeding | LOW | Add `[Int: WatermarkConfiguration]` dictionary. Copy-on-switch logic. "Apply to All" action. 0.5 day. |
+| Default template race with import | LOW | Make template auto-apply synchronous. Preload in `init()`. Suppress preview until applied. 0.5 day. |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| HDR gain map destruction | Photo watermarking (core pipeline) | Compare original vs output with XDR display; check auxiliary data tracks in output HEIF |
-| EXIF/metadata stripping | Photo watermarking (core pipeline) | Exiftool diff of source vs output metadata dictionaries |
-| Video re-encoding quality loss | Video watermarking | PSNR comparison; visual inspection at 2x zoom for compression artifacts |
-| Share extension memory crash | Share Extension | Test with 48MP photo on oldest supported device; verify memory < 100MB peak |
-| CIImage coordinate system | Photo watermarking (core pipeline) | Automated test: watermark in known position, verify pixel coordinates at output |
-| PHContentEditingInput orientation | Photos Edit Extension | Test with photos shot in all 4 device orientations |
-| Video HDR flattening | Video watermarking | Test with Dolby Vision footage from iPhone 12+; verify HDR badge on output |
-| AVAssetExportSession audio drop | Video watermarking | Verify audio track presence in output via AVAssetTrack listing |
-| UIImage.jpegData() re-compression | Photo watermarking (core pipeline) | Binary compare source vs output for non-watermarked regions |
-| PHAdjustmentData size limit | Photos Edit Extension | Test with maximum-complexity edit (all watermarks, max text length) |
-
----
+| Parallel batch memory explosion | Batch Processing | Test with 10 48MP ProRAW on iPhone 14 Pro; verify peak memory < 400MB in Instruments |
+| AVAssetExportSession decoder exhaustion | Batch Processing (video sub-path) | Two consecutive 4K60 exports pass; no -11839 error on 5 consecutive exports |
+| Share extension batch memory crash | Batch Processing (extension sub-path) | 5+ items from Photos share sheet; extension stable; handoff to main app |
+| Codable template schema evolution | Template Management | Template museum fixtures from all schema versions decode successfully |
+| App Group template sync races | Template Management | Template created in app appears in extension; delete in extension reflected in app |
+| UserDefaults template size bloat | Template Management | 10 templates with 2MB logos: launch time unchanged, memory overhead < 5MB |
+| PhotosPicker eager batch import | Batch Processing | 10 ProRAW selections: import completes in < 2s, memory < 200MB during import |
+| Batch cancellation orphaned files | Batch Processing | Cancel mid-batch: all watermark_* temp files cleaned; caches dir size back to pre-batch level |
+| Per-item config state bleeding | Batch Processing | Customize item 3, swipe to item 1 and back to 3: config unchanged; "Apply to All" works correctly |
+| Template auto-apply race with import | Template Management | Open app with default template → select items → first preview shows template config (no flicker) |
 
 ## Sources
 
-- Apple Developer Documentation: `CIImage` auxiliary data options, `CGImageSource` metadata, `AVAssetWriter` color properties
-- Apple HDR Video WWDC sessions (2020-2024): HDR editing pipeline, gain map specification
-- `CGImageDestination` API reference: `AddImageFromSource` vs `AddImage` metadata handling
-- `AVFoundation` Programming Guide: video composition, export presets, `AVAssetWriter` configuration
-- Apple App Extension Programming Guide: memory limits, `NSExtensionActivationRule`, App Group sharing
-- `PHContentEditingController` protocol reference and sample code
-- Stack Overflow: HDR gain map preservation threads, EXIF stripping discussions, share extension crash diagnostics
-- Community post-mortems: iOS Photo editing app developer forums, known issues with `UIImage` and metadata
-- Dolby Vision / HLG developer documentation: metadata signaling, color primaries mappings
+- **Apple Developer Documentation** — `AVAssetExportSession`, `AVMutableComposition`, hardware decoder limits, async export API (developer.apple.com). HIGH confidence.
+- **Apple Developer Documentation** — `UserDefaults`, App Group sharing, `NSExtensionActivationRule`, `PHContentEditingController` (developer.apple.com). HIGH confidence.
+- **Apple Developer Documentation** — `PhotosPicker`, `PhotosPickerItem`, `Transferable`, `PHImageManager` (developer.apple.com). HIGH confidence.
+- **Apple Developer Documentation** — `NSFileCoordinator`, `NSFilePresenter`, atomic file writes (developer.apple.com). HIGH confidence.
+- **Stack Overflow** — iOS concurrent `AVAssetExportSession` "Cannot Decode" error -11839; verified by multiple sources across iOS 14-18. HIGH confidence.
+- **Kulman.sk (iOS developer blog)** — Share extension memory limits and batch processing strategies (2024). MEDIUM confidence.
+- **Cedric Bahirwe (iOS dev blog)** — PhotosPicker multiple image memory management patterns (2025). MEDIUM confidence.
+- **Swift by Sundell** — Codable backward compatibility strategies for evolving data models (2024). MEDIUM confidence.
+- **Merowing.info** — Codable schema versioning and migration techniques (2024). MEDIUM confidence.
+- **Christian Selig (Apollo dev)** — App Group communication patterns, Darwin notifications for cross-process sync (2024). MEDIUM confidence.
+- **Community discussions (Reddit r/iOSProgramming, r/swift)** — Batch processing memory crashes, template persistence, App Group races. MEDIUM confidence (consistent patterns across multiple threads).
+- **Existing codebase analysis** — `WatermarkViewModel.handleSelection()` eager loading, `AppGroupConfigSync` single-key pattern, `VideoProcessor` export session lifecycle, `WatermarkConfiguration` Codable design. HIGH confidence (direct code inspection).
+- **Apple WWDC sessions** — "What's new in Photos" (2024), "Supporting HDR images in your app" (2024), "Modernizing your app for iOS 18" (2024). HIGH confidence.
 
 ---
-*Pitfalls research for: iOS Photo/Video Watermarking App*
-*Researched: 2026-06-17*
+
+*Pitfalls research for: iOS Photo/Video Watermarking App — Batch Processing, Template Management, Process Hardening*
+*Researched: 2026-06-19*

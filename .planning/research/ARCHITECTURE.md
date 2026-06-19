@@ -1,576 +1,487 @@
-# Architecture Research
+# Architecture Research: Batch Processing, Template Management & Process Hardening
 
-**Domain:** iOS Photo/Video Watermarking App
-**Researched:** 2026-06-17
+**Domain:** iOS Photo/Video Watermarking — v2.0 Feature Integration
+**Researched:** 2026-06-19
 **Confidence:** HIGH
+**Based on:** v1.0 + v1.1 shipped codebase (13,820 lines, 82+ files, 233 tests)
 
-## Standard Architecture
+## Executive Summary
 
-### System Overview
+The v2.0 milestone adds three feature clusters to an already-shipped iOS watermarking app:
+1. **Batch processing** — watermarking multiple photos/videos with shared config + per-item adjustments
+2. **Template management** — CRUD for saved watermark configurations + auto-default on import
+3. **Process hardening** — per-phase VERIFICATION.md templating + worktree-safety fix
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                           PRESENTATION LAYER (SwiftUI)                     │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                           │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────────┐ │
-│  │   MainAppView    │  │ ShareExtension   │  │ PhotoEditExtension     │ │
-│  │                  │  │  ViewController  │  │  ViewController         │ │
-│  │  - ImagePicker   │  │  (UIHostingCtrl  │  │  (PHContentEditing      │ │
-│  │  - PositionGrid  │  │   wrapping       │  │   Controller impl)     │ │
-│  │  - StylePicker   │  │   SwiftUI view)  │  │                         │ │
-│  │  - PreviewArea   │  │                  │  │  - Start content edit  │ │
-│  │  - ShareButton   │  │  - Process &     │  │  - Finish w/ rendered  │ │
-│  │                  │  │    share flow    │  │    content + adjust.   │ │
-│  └───────┬──────────┘  └───────┬──────────┘  └───────────┬────────────┘ │
-│          │                     │                         │               │
-├──────────┼─────────────────────┼─────────────────────────┼───────────────┤
-│          │          STATE / VIEWMODEL LAYER               │               │
-│          │     (all targets link SharedCore Swift Pkg)    │               │
-│          │                     │                         │               │
-│  ┌───────┴─────────────────────┴─────────────────────────┴──────────┐   │
-│  │                    WatermarkViewModel (@Observable)               │   │
-│  │  ┌──────────────┐  ┌────────────────┐  ┌───────────────────────┐ │   │
-│  │  │ MediaInputVM │  │ ProcessingVM   │  │  ShareCoordinatorVM   │ │   │
-│  │  │ - source URL │  │ - progress     │  │  - UIActivityVC       │ │   │
-│  │  │ - media type │  │ - result URL   │  │  - temp file cleanup  │ │   │
-│  │  │ - thumbnail  │  │ - error state  │  │                       │ │   │
-│  │  └──────┬───────┘  └───────┬────────┘  └───────────┬───────────┘ │   │
-│  └─────────┼──────────────────┼───────────────────────┼─────────────┘   │
-│            │                  │                       │                 │
-├────────────┼──────────────────┼───────────────────────┼─────────────────┤
-│            │        PROCESSING ENGINE LAYER            │                 │
-│            │     (SharedCore Swift Package)            │                 │
-│            │                  │                       │                 │
-│  ┌─────────┴──────────────────┴───────────────────────┴──────────────┐  │
-│  │                      ProcessingEngine                              │  │
-│  │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐ │  │
-│  │  │ PhotoProcessor   │  │ VideoProcessor   │  │ MetadataPreserver│ │  │
-│  │  │                  │  │                  │  │                  │ │  │
-│  │  │ - CIImage chain  │  │ - AVVideoComp.   │  │ - EXIF passthru  │ │  │
-│  │  │ - CGImageDest.   │  │ - AVAssetExport  │  │ - Color profile  │ │  │
-│  │  │ - Position calc  │  │ - HDR config     │  │ - Orientation    │ │  │
-│  │  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘ │  │
-│  │           │                     │                     │           │
-│  │  ┌────────┴─────────────────────┴─────────────────────┴─────────┐ │  │
-│  │  │                    Core Image Pipeline                         │ │  │
-│  │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐ │ │  │
-│  │  │  │Watermark     │  │TextOverlay   │  │WhiteFrame            │ │ │  │
-│  │  │  │OverlayFilter │  │Generator     │  │Generator             │ │ │  │
-│  │  │  │              │  │(CIAttribText │  │(CIConstantColor +    │ │ │  │
-│  │  │  │CISrcOverComp │  │ ImageGen)    │  │ padding transform)   │ │ │  │
-│  │  │  └──────────────┘  └──────────────┘  └──────────────────────┘ │ │  │
-│  │  └───────────────────────────────────────────────────────────────┘ │  │
-│  └────────────────────────────────────────────────────────────────────┘  │
-│                                                                           │
-├───────────────────────────────────────────────────────────────────────────┤
-│                          DATA / STORAGE LAYER                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────────────┐ │
-│  │ AppGroup     │  │ TempFileMgr  │  │ UserDefaults(suiteName:)         │ │
-│  │ Container    │  │ (.cachesDir) │  │ - Last used position             │ │
-│  │ (ext ↔ app)  │  │              │  │ - Default watermark style        │ │
-│  └──────────────┘  └──────────────┘  └──────────────────────────────────┘ │
-└───────────────────────────────────────────────────────────────────────────┘
-```
+The existing architecture (WatermarkCore Swift Package → 3 targets, App Group sync, actor-based WatermarkEngine, `WatermarkConfigurable` protocol with default implementations) provides strong foundations for all three. No existing component needs to be broken — integration is additive.
 
-### Component Responsibilities
+**The key architectural insight:** Template management is a new data concern (persisted named configurations) that lives in WatermarkCore for cross-target access. Batch processing is a new orchestration concern (sequential multi-item processing with progress aggregation) that also lives in WatermarkCore but is primarily driven by the main app's ViewModel. Process hardening is a GSD tooling concern that does not affect app architecture at all — it modifies scripts and GSD workflow files.
 
-| Component | Responsibility | Typical Implementation |
-|-----------|---------------|----------------------|
-| `MainAppView` | Primary UI: media picker, position grid, style picker, preview, share button | SwiftUI `View` with `@Environment(ViewModel.self)` |
-| `ShareExtensionVC` | Receives media from iOS share sheet, presents watermark UI, triggers share | `UIViewController` hosting SwiftUI via `UIHostingController` |
-| `PhotoEditExtensionVC` | Receives photo/video from Photos app edit mode, applies watermark, returns rendered output | `UIViewController` conforming to `PHContentEditingController` |
-| `WatermarkViewModel` | Central state holder: current media, selected position, overlay style, processing state | `@Observable` class, shared via dependency injection |
-| `MediaInputVM` | Sub-viewmodel: manages media source (URL, type, thumbnail generation) | `@Observable` class, owns `AVAssetImageGenerator` for thumbs |
-| `ProcessingViewModel` | Sub-viewmodel: progress tracking, result URL, error state during processing | `@Observable` class, communicates with ProcessingEngine via async tasks |
-| `ShareCoordinatorVM` | Sub-viewmodel: presents `UIActivityViewController`, manages temp file lifecycle | `@Observable` class, SwiftUI `UIViewControllerRepresentable` bridge |
-| `ProcessingEngine` | Entry point: routes to PhotoProcessor or VideoProcessor based on media type | Actor or class on background queue |
-| `PhotoProcessor` | Constructs CIImage filter graph → renders via `CIContext` → writes via `CGImageDestination` with metadata passthrough | `class` on `.utility` QoS DispatchQueue |
-| `VideoProcessor` | Configures `AVVideoComposition` with custom CIFilter handler → exports via `AVAssetExportSession` (HDR via `AVAssetWriter` if needed) | `class` on background queue |
-| `MetadataPreserver` | Extracts EXIF/color profile from source, re-applies to output. Extracts `AVMetadataItem` array for videos | Utility struct, used by both processors |
-| `WatermarkOverlayFilter` | Constructs CIAffineTransform → CISourceOverCompositing chain for a given position | Pure function returning `CIImage` |
-| `TextOverlayGenerator` | Generates CIAttributedTextImageGenerator output for device metadata text ("Taken by: iPhone") | Pure function returning `CIImage` |
-| `WhiteFrameGenerator` | Generates white border frame with inner content area for watermark + metadata | Pure function using CIConstantColor + scale/translate |
-| `AppGroupContainer` | Shared file storage between main app and extensions (share extension passes media, app reads it) | `FileManager` with App Group container URL |
-| `TempFileManager` | Manages temporary output files in `cachesDirectory`, cleans up after share completes | Singleton, auto-cleanup on launch |
-| `UserDefaults(suiteName:)` | Persists last-used position, preferred overlay style, and default text across app + extensions | App Group `UserDefaults` |
+## New Components
 
-## Recommended Project Structure
+### 1. WatermarkTemplate (Model — WatermarkCore)
 
-```
-Watermark/
-├── App/                              # Main app target
-│   ├── WatermarkApp.swift            # @main App entry point
-│   ├── ContentView.swift             # Root view (NavigationSplitView or TabView)
-│   ├── Features/
-│   │   ├── MediaImport/              # In-app picker flow
-│   │   │   ├── MediaPickerView.swift
-│   │   │   └── MediaPickerViewModel.swift
-│   │   ├── WatermarkConfig/          # Position grid, style selector
-│   │   │   ├── PositionGridView.swift
-│   │   │   ├── StylePickerView.swift
-│   │   │   ├── TextInputView.swift
-│   │   │   └── WatermarkConfigViewModel.swift
-│   │   ├── Preview/                  # Live preview of watermarked result
-│   │   │   └── PreviewView.swift
-│   │   └── Share/                    # Share sheet presentation
-│   │       ├── ShareSheetView.swift
-│   │       └── ShareCoordinator.swift
-│   └── UI/                           # Design system components
-│       ├── Components/               # Reusable UI primitives
-│       └── Extensions/               # View modifiers, CIImage+Extensions
-│
-├── ShareExtension/                   # Share sheet extension target
-│   ├── ShareViewController.swift     # UIViewController + UIHostingController
-│   ├── ShareExtensionView.swift      # SwiftUI view (watermark config + share)
-│   ├── Info.plist                    # NSExtensionActivationRule config
-│   └── ShareExtension.entitlements   # App Group capability
-│
-├── PhotoEditExtension/               # Photos app edit extension target
-│   ├── PhotoEditViewController.swift # PHContentEditingController impl
-│   ├── PhotoEditView.swift           # SwiftUI view (watermark UI)
-│   ├── Info.plist                    # PHSupportedMediaTypes: Image, Video
-│   └── PhotoEditExtension.entitlements # App Group capability
-│
-├── Packages/
-│   └── WatermarkCore/                # LOCAL SWIFT PACKAGE — shared code
-│       ├── Package.swift
-│       ├── Sources/
-│       │   ├── Models/
-│       │   │   ├── WatermarkConfiguration.swift   # Position, style, text
-│       │   │   ├── MediaSource.swift              # URL, type enum
-│       │   │   └── ProcessingResult.swift         # Output URL, metadata
-│       │   ├── Processing/
-│       │   │   ├── ProcessingEngine.swift         # Router: photo vs video
-│       │   │   ├── PhotoProcessor.swift           # CIImage pipeline
-│       │   │   ├── VideoProcessor.swift           # AVVideoComposition pipeline
-│       │   │   └── MetadataPreserver.swift        # EXIF/AVMetadata passthru
-│       │   ├── Rendering/
-│       │   │   ├── WatermarkRenderer.swift        # Overlay compositing
-│       │   │   ├── TextOverlayRenderer.swift      # CIAttributedTextImageGen
-│       │   │   ├── WhiteFrameRenderer.swift       # White border + content inset
-│       │   │   └── PositionCalculator.swift       # 8-position coordinate math
-│       │   ├── Storage/
-│       │   │   ├── AppGroupContainer.swift        # Shared container access
-│       │   │   └── TempFileManager.swift          # Temp output lifecycle
-│       │   └── Utilities/
-│       │       ├── ImageOrientation.swift         # EXIF orientation handling
-│       │       └── DeviceMetadataProvider.swift   # "Taken by: iPhone 15 Pro"
-│       └── Tests/
-│           ├── PhotoProcessorTests.swift
-│           ├── VideoProcessorTests.swift
-│           └── PositionCalculatorTests.swift
-│
-└── Watermark.xcodeproj/
-```
-
-### Structure Rationale
-
-- **`WatermarkCore/` (Local Swift Package):** The most critical architectural decision. All processing logic, models, renderers, and storage utilities live here. Both the main app and both extension targets link this package. This eliminates code duplication, enforces a single source of truth, and keeps extension targets lightweight. The package is marked "Require Only App-Extension-Safe API" to prevent accidental use of forbidden APIs in extensions.
-
-- **`App/Features/`:** Each feature folder is self-contained with its own Views and ViewModels. This prevents "Massive ViewModel" syndrome — each feature owns its state but coordinates through the root WatermarkViewModel when needed.
-
-- **`ShareExtension/` and `PhotoEditExtension/`:** Minimal targets. Each contains only the entry-point view controller, a thin SwiftUI view, and target-specific plist/entitlements. All heavy logic is in `WatermarkCore`. Extensions have strict memory limits (~120MB), so they must not duplicate processing code or load unnecessary resources.
-
-- **`WatermarkCore/Processing/` vs `WatermarkCore/Rendering/`:** Deliberate separation. Processing owns the pipeline lifecycle (setup, progress, completion). Rendering owns the Core Image filter graph construction (pure functions that take config + input → return CIImage). This lets us unit-test rendering logic independently of AVFoundation session management.
-
-## Architectural Patterns
-
-### Pattern 1: MVVM with @Observable (iOS 17+)
-
-**What:** View observes ViewModel via Swift's `@Observable` macro. ViewModel holds UI state and delegates heavy work to service actors. Views are declarative; ViewModels are imperative coordinators.
-
-**When to use:** Every screen in this app. The `@Observable` macro replaces `ObservableObject`/`@Published` with property-level granularity — SwiftUI only redraws views that depend on the specific changed property, critical for preview updates during processing.
-
-**Trade-offs:** Requires iOS 17+ deployment target. Since this is a greenfield 2026 project, this is an acceptable constraint. The granular tracking prevents unnecessary preview re-renders when only the progress value changes.
-
-**Example:**
 ```swift
-// WatermarkCore — shared model
-@Observable
-class WatermarkConfiguration {
-    var selectedPosition: WatermarkPosition = .bottomRight
-    var overlayStyle: OverlayStyle = .watermark
-    var customText: String = ""
-    var watermarkScale: CGFloat = 0.15  // % of image width
+/// A named, persisted watermark configuration used across sessions.
+/// Stored as JSON in the App Group container for cross-target access.
+public struct WatermarkTemplate: Codable, Identifiable, Sendable {
+    public let id: UUID
+    public var name: String
+    public var config: WatermarkConfiguration
+    public let createdAt: Date
+    public var updatedAt: Date
+}
+```
+
+**Why a new model instead of reusing WatermarkConfiguration:** WatermarkConfiguration is the config itself — it has no name, no identity, no creation metadata. Templates add a persistence wrapper: name for UI display, UUID for stable identification across renames, and timestamps for sorting. The config field IS a WatermarkConfiguration — no duplication.
+
+**Codable compatibility:** WatermarkConfiguration, WatermarkLayer, WhiteFrameConfig, and all nested types are already fully Codable. WatermarkTemplate adds no new serialization complexity — just a wrapper around existing Codable types.
+
+### 2. TemplateStore (Storage — WatermarkCore)
+
+```swift
+/// CRUD store for WatermarkTemplate instances persisted as a single JSON file
+/// in the App Group shared container.
+///
+/// Uses file-based storage (one JSON dictionary file) rather than UserDefaults
+/// because:
+/// - CRUD operations on a list are awkward with UserDefaults key-per-template
+/// - File-based approach enables atomic read-modify-write for rename/delete
+/// - Single file is easier to inspect during development
+public struct TemplateStore {
+    public static let shared = TemplateStore()
+    
+    private let storeURL: URL  // App Group container + "templates.json"
+    
+    // CRUD
+    public func save(_ template: WatermarkTemplate) throws
+    public func loadAll() -> [WatermarkTemplate]
+    public func load(id: UUID) -> WatermarkTemplate?
+    public func update(_ template: WatermarkTemplate) throws   // rename, modify config
+    public func delete(id: UUID) throws
+    
+    // Default template
+    public var defaultTemplateID: UUID?     // persisted in UserDefaults(suiteName:)
+    public func defaultTemplate() -> WatermarkTemplate?
+}
+```
+
+**Storage location:** `{AppGroupContainer}/Library/Application Support/templates.json`. The App Group container is already wired (all 3 targets have the entitlement). `UserDefaults(suiteName:)` stores only the `defaultTemplateID` pointer — the actual template data lives in the JSON file.
+
+**Why not AppGroupConfigSync:** AppGroupConfigSync is designed for a single "current config" key-value pair. TemplateStore is a CRUD list manager. They coexist in WatermarkCore but serve different concerns. When the user loads a template, the flow is: TemplateStore.load(id) → assign to WatermarkConfiguration → AppGroupConfigSync.save(config) as normal.
+
+### 3. BatchProcessor (Processing — WatermarkCore)
+
+```swift
+/// Actor-isolated batch processing coordinator.
+///
+/// Processes multiple media items sequentially with a shared watermark
+/// configuration, reporting aggregate progress and collecting results.
+/// Sequential processing avoids memory pressure from concurrent
+/// video exports (each export already uses AVAssetWriter streaming).
+public actor BatchProcessor {
+    public static let shared = BatchProcessor()
+    
+    private let engine = WatermarkEngine.shared
+    
+    /// Result for a single item in a batch.
+    public struct BatchItemResult: Sendable {
+        public let itemIndex: Int
+        public let processingResult: ProcessingResult
+    }
+    
+    /// Progress reported during batch processing.
+    public struct BatchProgress: Sendable {
+        public let currentItemIndex: Int
+        public let totalItems: Int
+        public let currentItemProgress: Double?  // 0-1, nil for photos (fast)
+        public let estimatedTotalTimeRemaining: TimeInterval?
+    }
+    
+    /// Processes all items in the batch sequentially.
+    /// - Parameters:
+    ///   - items: Array of media item descriptors (URL + type + optional per-item config override)
+    ///   - sharedConfig: Base watermark configuration applied to all items
+    ///   - onProgress: Called after each item completes and during video exports
+    /// - Returns: Array of results (one per successfully processed item)
+    /// - Throws: Only if ALL items fail; partial failures are returned in results
+    public func process(
+        items: [BatchItem],
+        sharedConfig: WatermarkConfiguration,
+        onProgress: (@Sendable (BatchProgress) -> Void)?
+    ) async throws -> [BatchItemResult]
+    
+    /// Cancels in-progress batch processing.
+    public func cancel()
+}
+```
+
+```swift
+/// Descriptor for a single item in a batch.
+public struct BatchItem: Sendable, Identifiable {
+    public let id: UUID
+    public let sourceURL: URL
+    public let mediaType: WatermarkEngine.MediaType
+    /// Optional per-item config override. Merged with sharedConfig
+    /// during processing (override takes precedence for set fields).
+    public let configOverride: PerItemConfigOverride?
 }
 
-// Main app — ViewModel
-@Observable
-final class WatermarkViewModel {
-    var config = WatermarkConfiguration()
-    var mediaSource: MediaSource?
-    var processingState: ProcessingState = .idle
-    var previewImage: UIImage?
+/// Per-item adjustments that overlay on top of the shared batch config.
+/// Only non-nil fields override; nil means "use shared config value."
+public struct PerItemConfigOverride: Sendable, Codable {
+    public var customText: String?
+    public var position: WatermarkPosition?
+    public var scale: CGFloat?
+    public var outputFormat: OutputFormat?
+    /// Allows the user to toggle white frame per item.
+    /// true = force enabled, false = force disabled, nil = use shared config.
+    public var whiteFrameEnabled: Bool?
+}
+```
+
+**Why sequential not concurrent:** Video exports already consume significant GPU/encoder resources. Concurrent exports would cause thermal throttling, iOS jetsam termination, and unpredictable export times. Sequential processing lets each export complete before the next begins, with accurate progress reporting.
+
+**PerItemConfigOverride design:** Rather than passing a full WatermarkConfiguration per item (which duplicates layers, output settings, etc.), per-item overrides are a lightweight struct. The most common batch scenario is: "same watermark, but each photo might need the text adjusted" or "same watermark, but this one video shouldn't have a white frame." Overrides cover these cases without config duplication. The merge is: `sharedConfig` with `override` fields replacing only the non-nil values.
+
+### 4. BatchViewModel (ViewModel — Main App Only)
+
+```swift
+/// ViewModel for the batch processing flow in the main app.
+///
+/// Extends the single-item WatermarkViewModel with batch orchestration:
+/// - Manages multi-item selection (already supported via PhotosPicker)
+/// - Holds shared config + per-item overrides
+/// - Coordinates batch processing via BatchProcessor
+/// - Presents batch progress UI and batch share sheet
+@Observable @MainActor
+final class BatchViewModel {
+    var items: [BatchItem] = []
+    var sharedConfig: WatermarkConfiguration
+    var perItemOverrides: [UUID: PerItemConfigOverride] = [:]
+    var batchProgress: BatchProcessor.BatchProgress?
+    var batchResults: [BatchProcessor.BatchItemResult] = []
+    var batchState: BatchState = .idle
     
-    private let engine = ProcessingEngine()
+    enum BatchState {
+        case idle
+        case configuring    // User is reviewing/adjusting per-item configs
+        case processing(BatchProcessor.BatchProgress)
+        case completed
+        case cancelled
+        case error(Error)
+    }
     
-    func process() async {
-        processingState = .processing(progress: 0)
-        guard let source = mediaSource else { return }
-        do {
-            let result = try await engine.process(source, config: config)
-            processingState = .complete(result)
-        } catch {
-            processingState = .error(error)
-        }
+    func startBatch() async
+    func cancelBatch()
+    func shareResults()
+}
+```
+
+**Why main app only:** The share extension and Photos edit extension are fundamentally single-item workflows. The share extension receives one item at a time (its multi-item flow is sequential one-at-a-time, not batch). The Photos edit extension edits one asset at a time. Batch processing is a main-app-only feature.
+
+### 5. Template Management UI (Views — Main App Only)
+
+New SwiftUI views in `App/Views/Templates/`:
+- `TemplateListView` — Lists saved templates with swipe-to-delete
+- `TemplateEditorView` — Name/rename a template
+- `TemplateSaveView` — "Save current config as template" sheet with name input
+- `TemplatePickerView` — Grid of templates for quick load (triggered from ControlsView)
+
+These views consume `TemplateStore` directly. They are main-app-only because template management (saving, renaming, deleting, setting defaults) is a management operation, not a processing operation. Extensions only need to load templates (via TemplateStore.loadAll()) to apply them; they don't need management UI.
+
+## Modified Components
+
+### 1. WatermarkConfigurable Protocol Extension
+
+**Adds:**
+```swift
+extension WatermarkConfigurable {
+    // Template operations (new default implementations)
+    public func applyTemplate(_ template: WatermarkTemplate) {
+        config = template.config
+        // If template has image watermark layers, their PNG data is already in the config.
+        // No rehydration needed — WatermarkTemplate stores the full config, not stripped.
+    }
+    
+    public func loadTemplates() -> [WatermarkTemplate] {
+        (try? TemplateStore.shared.loadAll()) ?? []
     }
 }
 ```
 
-### Pattern 2: Core Image Filter Graph (Lazy Evaluation)
+`applyTemplate` is a one-liner: set `config = template.config`. The existing `didSet { AppGroupConfigSync.save(config) }` in all 3 ViewModels handles cross-target sync automatically. This means loading a template in the main app immediately syncs to the share extension and Photos extension via the existing mechanism.
 
-**What:** Instead of rendering pixel-by-pixel, chain CIImage transforms into a directed acyclic graph. Core Image defers actual rendering until `CIContext.createCGImage()` or similar is called, optimizing the entire chain into a single Metal shader.
+### 2. All 3 ViewModels — Auto-Default on Import
 
-**When to use:** Every photo watermarking operation. For video, the same chain runs inside the `AVVideoComposition` CIFilter handler closure.
+**Modified:** `WatermarkViewModel.handleSelection()`, `ShareExtensionViewModel.loadSharedMedia()`, `PhotosExtensionViewModel.startEditing()`
 
-**Trade-offs:** The lazy graph is extremely memory-efficient (no intermediate buffers), but you must be careful about `extent` management — transformed images have infinite extents unless cropped.
-
-**Example:**
-```swift
-func applyWatermark(
-    to sourceImage: CIImage,
-    watermark: CIImage,
-    position: WatermarkPosition,
-    scale: CGFloat
-) -> CIImage {
-    let sourceExtent = sourceImage.extent
-    let scaledWatermark = watermark.transformed(
-        by: CGAffineTransform(scaleX: scale, y: scale)
-    )
-    let positionedWatermark = scaledWatermark.transformed(
-        by: PositionCalculator.transform(for: position, baseExtent: sourceExtent, watermarkExtent: scaledWatermark.extent)
-    )
-    let composite = CIFilter.sourceOverCompositing()
-    composite.inputImage = positionedWatermark
-    composite.backgroundImage = sourceImage
-    return composite.outputImage!.cropped(to: sourceExtent)
-}
-```
-
-### Pattern 3: Extension-as-Thin-Shell
-
-**What:** Extensions contain only entry-point view controllers, target-specific plist configuration, and a thin SwiftUI view. All shared logic, models, and processing are in the `WatermarkCore` Swift Package.
-
-**When to use:** Both the Share Extension and Photo Edit Extension. Extensions have strict memory limits (~120MB) and cold-start latency requirements — keeping them thin is non-negotiable.
-
-**Trade-offs:** The main app and extensions share state through App Group containers (file-based, not memory). This means passing media requires writing to a shared temp directory and reading from it — adds I/O overhead but is the only option across process boundaries.
-
-**Example:**
-```swift
-// ShareViewController.swift — the ONLY code directly in the extension target
-class ShareViewController: UIViewController {
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        let viewModel = WatermarkViewModel() // from WatermarkCore
-        let contentView = ShareExtensionView(viewModel: viewModel)
-        let host = UIHostingController(rootView: contentView)
-        addChild(host)
-        view.addSubview(host.view)
-        host.view.frame = view.bounds
-        // Load media from extensionContext into viewModel...
-    }
-}
-```
-
-### Pattern 4: Async Processing Pipeline
-
-**What:** Processing operations run on background queues via Swift Concurrency (`async`/`await`). The ViewModel awaits results and publishes progress updates. The UI never blocks.
-
-**When to use:** Both photo and video processing. Video processing is especially long-running (seconds to minutes) and must never block the main thread.
-
-**Trade-offs:** Requires careful cancellation support (Swift `Task` cancellation, `checkCancellation()` calls in processing loops). Video export cancellation is particularly nuanced — `AVAssetExportSession.cancelExport()` must be called.
-
-## Data Flow
-
-### Primary Flow: Main App (In-App Picker)
-
-```
-User taps "+" button
-    ↓
-PHPickerViewController (or UIImagePickerController)
-    ↓ returns URL/Data
-MediaInputVM.loadMedia(from: url)
-    ↓ determines photo vs video, generates thumbnail
-WatermarkViewModel.mediaSource = .photo(url) | .video(url)
-    ↓
-User configures position, style, text via UI
-    ↓ updates config properties (auto-bound by @Observable)
-WatermarkConfigViewModel.config = updated
-    ↓ triggers preview regeneration
-PreviewViewModel.generatePreview(config, source)
-    ↓ calls ProcessingEngine.preview(config, source)
-PhotoProcessor.generatePreview() → CIImage chain → CGImage
-    ↓ rendered on background queue, published to @MainActor
-previewImage published → SwiftUI redraws preview
-    ↓
-User taps "Share"
-    ↓
-ShareCoordinatorVM.share(watermarkedResult)
-    ↓
-ProcessingEngine.process(source, config) [full quality]
-    ↓ PhotoProcessor or VideoProcessor
-    ↓ writes to temp file (cachesDirectory)
-ProcessingState = .complete(ProcessingResult(tempURL, mediaType))
-    ↓
-ShareCoordinator presents UIActivityViewController with tempURL
-    ↓ user shares to Messages, Instagram, TikTok, etc.
-ShareCoordinator schedules temp file cleanup (after 60s delay)
-```
-
-### Secondary Flow: Share Extension
-
-```
-User taps "Share" in another app (Photos, Safari, Files)
-    ↓ iOS presents share sheet, user selects Watermark
-ShareViewController.viewDidLoad()
-    ↓
-extensionContext.inputItems → NSExtensionItem → NSItemProvider
-    ↓ loadFileRepresentation(for: .image) or loadItem(for: .movie)
-MediaSource created from file URL
-    ↓ saved to App Group container (so main app can access history)
-WatermarkViewModel.mediaSource = source
-    ↓
-[Same config/preview/process flow as main app]
-    ↓
-User taps "Share" in extension → UIActivityViewController
-    ↓ OR
-User taps "Open in Watermark" → opens main app via URL scheme
-    ↓ main app loads media from App Group container
-Share extension calls extensionContext.completeRequest()
-    ↓ extension terminated by system
-```
-
-### Tertiary Flow: Photos Edit Extension
-
-```
-User opens photo/video in Photos app → taps Edit → taps "..." → selects Watermark
-    ↓
-PhotoEditViewController.startContentEditing(with: input, placeholderImage:)
-    ↓ input.fullSizeImageURL (photo) or input.audiovisualAsset (video)
-    ↓ input.adjustmentData? (previous edits from this extension, if any)
-WatermarkViewModel loads media from PHContentEditingInput
-    ↓
-[Same config/preview flow as main app]
-    ↓
-User taps "Done"
-    ↓
-PhotoEditViewController.finishContentEditing { completionHandler in
-    ↓
-    let output = PHContentEditingOutput(contentEditingInput: input)
-    ↓
-    ProcessingEngine.process(source, config, outputURL: output.renderedContentURL)
-    ↓
-    output.adjustmentData = PHAdjustmentData(
-        formatIdentifier: "com.watermark.app",
-        formatVersion: "1.0",
-        data: config.serialized()  // JSON-encoded WatermarkConfiguration
-    )
-    ↓
-    completionHandler(output)  // Photos app saves non-destructively
-}
-```
-
-### State Management
-
-```
-WatermarkConfiguration (@Observable, shared model)
-    ├── selectedPosition: WatermarkPosition
-    ├── overlayStyle: OverlayStyle (.watermark | .whiteFrame)
-    ├── customText: String
-    ├── watermarkScale: CGFloat
-    └── watermarkImageData: Data?  // custom watermark image
-
-WatermarkViewModel (@Observable, main coordinator)
-    ├── config: WatermarkConfiguration
-    ├── mediaSource: MediaSource?
-    ├── processingState: ProcessingState { idle, processing(progress), complete(result), error(Error) }
-    ├── previewImage: UIImage?
-    └── thumbnailImage: UIImage?
-
-UserDefaults(suiteName: "group.com.watermark.app") — cross-process persistence
-    ├── "lastUsedPosition" → WatermarkPosition.rawValue
-    ├── "lastUsedStyle" → OverlayStyle.rawValue
-    ├── "defaultText" → String
-    └── "customWatermarkData" → Data?
-
-AppGroupContainer (file-based, cross-process)
-    └── Shared/Inbox/  — share extension drops media here
-    └── Shared/Temp/   — temp processing outputs accessible by both
-```
-
-### Key Data Flows
-
-1. **Media Ingestion Flow:** External source (picker/share/Photos) → URL/Data → MediaSource enum → ViewModel.mediaSource. The ViewModel immediately generates a low-res thumbnail for preview while the full asset URL is retained for processing.
-
-2. **Preview Flow:** Config change (user taps position) → ViewModel.config updates → triggers `generatePreview()` → core processing chain runs at preview resolution (max 1920px) → CGImage → UIImage → published to SwiftUI. This happens on a `.utility` queue, not main.
-
-3. **Processing Flow:** User taps share → engine runs at full resolution → PhotoProcessor (CIImage → CGImageDestination with metadata dict) or VideoProcessor (AVVideoComposition → AVAssetExportSession) → writes to temp file → result URL published → share sheet presented.
-
-4. **Metadata Passthrough Flow:** Source → CGImageSourceCopyProperties (photo) or AVAsset.metadata + AVAssetTrack (video) → MetadataPreserver extracts → output's CGImageDestinationAddImage(properties:) or AVAssetExportSession.metadata = extracted → metadata intact in output.
-
-## Scaling Considerations
-
-This is a local-only, on-device processing app. Traditional "scaling to N users" doesn't apply. Instead, scale concerns are about media size and processing volume.
-
-| Concern | Small media (12MP photo, 30s 1080p video) | Large media (48MP ProRAW, 10min 4K HDR) | Extreme (ProRes 4K, 1hr) |
-|---------|-------------------------------------------|-----------------------------------------|---------------------------|
-| Photo processing | In-memory CIImage, <1s | In-memory still fine, 2-5s | Downscale for preview, process at full res on background |
-| Video processing | AVAssetExportSession with preset, 10-30s | AVAssetWriter for HDR control, 2-5 min | Stream with AVAssetReader → AVAssetWriter, 10min+ |
-| Memory pressure | Negligible | CIContext reuse prevents spikes | Must use tile-based rendering for photos >100MP |
-| Extension memory limit | Well within 120MB | Risk of termination — offload to main app | Extension only for config, main app for processing |
-| Preview responsiveness | Instant | Slight delay acceptable | Always use downscaled preview source |
-
-### Scaling Priorities
-
-1. **First bottleneck:** Large video processing time. Mitigation: show progress bar, allow background processing (iOS background task), use `AVAssetExportSession` with `presetName: AVAssetExportPresetHEVCHighestQuality` for hardware-accelerated encoding.
-
-2. **Second bottleneck:** Extension memory limits on large photos. Mitigation: extensions generate a low-res preview only; tapping "Process" opens the main app to complete full-quality processing.
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Massive ViewModel
-
-**What people do:** Put image processing logic, AVFoundation setup, file I/O, and UI state all in one ViewModel class that grows to 1000+ lines.
-
-**Why it's wrong:** Untestable, unreadable, and blocks the main thread when processing methods are accidentally called synchronously. Extensions can't share any of it.
-
-**Do this instead:** Separate into WatermarkViewModel (UI state), ProcessingEngine (pipeline lifecycle), PhotoProcessor/VideoProcessor (media-specific logic), and pure Rendering functions. Keep ViewModels under 200 lines. ProcessingEngine lives in the shared WatermarkCore package.
-
-### Anti-Pattern 2: Creating CIContext Per Frame
-
-**What people do:** `let context = CIContext()` inside a video frame processing closure or inside every preview generation call.
-
-**Why it's wrong:** `CIContext` initialization is extremely expensive — it allocates GPU resources and compiles shader programs. Creating one per frame (30fps × 60s = 1800 allocations) will cause frame drops and memory churn.
-
-**Do this instead:** Create one `CIContext` instance with `.cacheIntermediates = false` (for video) and reuse it for the lifetime of the processing session. Store it as a property on the processor.
+After loading media (but before generating preview), each ViewModel checks for a default template:
 
 ```swift
-// WRONG: In every frame callback
-func processFrame(_ image: CIImage) -> CGImage? {
-    let ctx = CIContext()  // DO NOT DO THIS
-    return ctx.createCGImage(image, from: image.extent)
-}
-
-// RIGHT: One context, reused
-final class PhotoProcessor {
-    private let context: CIContext = {
-        var opts = CIContextOptions()
-        opts.cacheIntermediates = false  // Important for video
-        return CIContext(options: opts)
-    }()
-    
-    func processFrame(_ image: CIImage) -> CGImage? {
-        context.createCGImage(image, from: image.extent)
-    }
+// Pseudo-code added to each ViewModel's media import path
+if let defaultTemplate = TemplateStore.shared.defaultTemplate() {
+    config = defaultTemplate.config
+    // AppGroupConfigSync.save(config) fires via didSet
 }
 ```
 
-### Anti-Pattern 3: Saving Output to Camera Roll by Default
+This is a 3-line addition in each ViewModel's import path. The `didSet` on `config` handles sync automatically.
 
-**What people do:** Process media → call `PHPhotoLibrary.shared().performChanges` to save the watermarked copy automatically.
+### 2. WatermarkViewModel — Batch Mode Selection
 
-**Why it's wrong:** The core value proposition is "watermark and share without cluttering the camera roll." Auto-saving violates this. Plus, Photos extensions already handle non-destructive storage — you return rendered content to the Photos app; you don't save separately.
+The existing `WatermarkViewModel.handleSelection(_ items:)` already supports multi-select (it loads all selected `PhotosPickerItem`s into the `photos` array). For batch mode, when multiple items are selected, the ViewModel presents a "Configure Batch" mode instead of the single-item config flow. The existing `currentIndex` navigation via thumbnail strip becomes the per-item adjustment browser.
 
-**Do this instead:** Write output to a temp file in `cachesDirectory`. Present `UIActivityViewController` with that temp URL for sharing. Schedule cleanup of temp files after the share completes. Only save to camera roll if the user explicitly chooses "Save Image/Video" from the share sheet.
+### 3. PhotoItem — No Change Needed
 
-### Anti-Pattern 4: Not Preserving HDR During Custom Video Composition
+The existing `PhotoItem` struct already carries `sourceURL`, `videoSourceURL`, and `mediaType`. Batch processing maps `[PhotoItem]` → `[BatchItem]` with optional per-item overrides stored separately (in a `[UUID: PerItemConfigOverride]` dictionary keyed by PhotoItem.id). This avoids modifying the existing model.
 
-**What people do:** Use `AVVideoComposition` with a CIFilter handler but don't configure color properties on the `AVAssetExportSession`, relying on defaults.
+## Data Flow Changes
 
-**Why it's wrong:** Default color properties assume SDR (BT.709). HDR content (HLG, Dolby Vision, HDR10) gets tone-mapped down to SDR, losing brightness range and color fidelity. The output looks flat and washed out.
-
-**Do this instead:** For SDR videos, `AVAssetExportSession` with standard presets is fine. For HDR videos (detected via `AVAssetTrack.hasMediaCharacteristic(.containsHDRVideo)`), use `AVAssetWriter` with explicit 10-bit color properties (BT.2020 primaries, HLG/PQ transfer function, `kVTCompressionPropertyKey_HDRMetadataInsertionMode: kVTHDRMetadataInsertionMode_Auto`). Fall back to export session with warning if HDR preservation isn't critical for v1.
-
-## Integration Points
-
-### External Services
-
-None. This is an entirely on-device app with no network dependencies.
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| App ↔ Share Extension | App Group file container + `UserDefaults(suiteName:)` | Extensions write media to shared inbox; main app reads it. No direct memory sharing. |
-| App ↔ Photo Edit Extension | `PHContentEditingController` protocol (input/output contracts) | Photos framework mediates; extension receives `PHContentEditingInput`, returns `PHContentEditingOutput` |
-| ViewModel ↔ Processing Engine | Async method calls (`async throws`) | ViewModel calls `engine.process()`, engine publishes progress via callback or async stream |
-| Processing Engine ↔ Renderers | Synchronous function calls | Renderers are pure functions: receive config + source → return CIImage |
-| All targets ↔ WatermarkCore | Direct framework linking | All three targets link the same local Swift Package; no IPC needed for shared code |
-
-## Suggested Build Order (Dependency Graph)
-
+### Template Flow
 ```
-                        ┌─────────────────────┐
-                        │   WatermarkCore      │  ← PHASE 1: Foundation
-                        │   Swift Package      │
-                        │  - Models            │
-                        │  - PositionCalc      │
-                        │  - Renderers         │
-                        │  - TempFileMgr       │
-                        │  - AppGroupContainer │
-                        └──────────┬──────────┘
-                                   │
-              ┌────────────────────┼────────────────────┐
-              │                    │                    │
-     ┌────────┴────────┐  ┌───────┴────────┐  ┌────────┴────────┐
-     │  PhotoProcessor │  │ VideoProcessor │  │ MetadataPreserv.│
-     │  (CIImage chain)│  │ (AVVideoComp)  │  │ (EXIF/AVMeta)  │
-     └────────┬────────┘  └───────┬────────┘  └────────┬────────┘
-              │                    │                    │
-              └────────────────────┼────────────────────┘
-                                   │
-                        ┌──────────┴──────────┐
-                        │  ProcessingEngine    │  ← PHASE 2: Core Pipeline
-                        │  (Router + Progress) │
-                        └──────────┬──────────┘
-                                   │
-              ┌────────────────────┼────────────────────┐
-              │                    │                    │
-     ┌────────┴────────┐  ┌───────┴────────┐  ┌────────┴────────┐
-     │ Main App UI     │  │ Share Ext UI   │  │ PhotoEdit UI    │
-     │ - Picker        │  │ - ShareVC      │  │ - PHContentEdit │
-     │ - Config views  │  │ - SwiftUI host │  │ - SwiftUI host  │
-     │ - Preview       │  │                │  │                 │
-     │ - Share coord.  │  │                │  │                 │
-     └────────┬────────┘  └───────┬────────┘  └────────┬────────┘
-              │                    │                    │
-              └────────────────────┼────────────────────┘
-                                   │
-                        ┌──────────┴──────────┐
-                        │  Polish + Testing    │  ← PHASE 3: Integration
-                        │  - HDR validation    │
-                        │  - Metadata tests    │
-                        │  - Edge cases        │
-                        └─────────────────────┘
+User opens template list → TemplateListView { templates: TemplateStore.loadAll() }
+    ↓
+User taps "Save Current" → TemplateSaveView(initialName: "")
+    ↓ captures config from ViewModel
+    → TemplateStore.save(WatermarkTemplate(name: "My Preset", config: currentConfig))
+    → writes to App Group container JSON file
+    ↓
+User taps template → TemplateStore.load(id:)
+    → ViewModel.config = template.config
+    → AppGroupConfigSync.save(config)  (via existing didSet)
+    ↓
+User sets as default → TemplateStore.defaultTemplateID = template.id
+    → UserDefaults(suiteName:).set(id.uuidString, forKey: "defaultTemplateID")
+    ↓
+On next media import → defaultTemplateID? → TemplateStore.load(id) → auto-apply config
 ```
 
-**Phase ordering rationale:**
+### Batch Processing Flow
+```
+User selects 5 photos via PhotosPicker → WatermarkViewModel.handleSelection(items)
+    ↓ photos array now has 5 items
+    ↓ ViewModel detects batch mode (count > 1)
+    ↓ Presents "Configure Batch" UI with shared config
+    ↓
+User configures shared watermark (text, position, white frame, etc.)
+    ↓ config is the "base" applied to all items
+    ↓
+[Optional] User browses individual items via thumbnail strip
+    ↓ tap item → see per-item override controls
+    ↓ adjust text, toggle white frame for this specific item
+    ↓ store in perItemOverrides[item.id]
+    ↓
+User taps "Process Batch" → WatermarkViewModel.startBatch()
+    ↓
+BatchProcessor.process(items: batchItems, sharedConfig: config, onProgress:)
+    ↓ For each BatchItem:
+    ↓   1. Merge sharedConfig with PerItemConfigOverride (if any)
+    ↓   2. Detect media type (photo vs video)
+    ↓   3. engine.process(sourceURL:config:) or engine.processVideo(sourceURL:config:onProgress:)
+    ↓   4. Collect ProcessingResult
+    ↓   5. Report BatchProgress(currentItemIndex, totalItems, currentItemProgress)
+    ↓
+All items processed → batchResults = [BatchItemResult]
+    ↓
+User taps "Share All" → presents UIActivityViewController for first result
+    ↓ on dismiss → presents for next result (sequential sharing)
+    ↓ OR presents combined share for all results (single share sheet with multiple URLs)
+    ↓
+TempFileManager cleanup after all shares complete
+```
 
-- **Phase 1 (WatermarkCore + Models):** Everything depends on shared models and rendering functions. Build PositionCalculator, renderers, and temp file management first. These are pure logic, testable in isolation, and have zero UI dependencies.
+### Template + Batch Integration
+```
+User selects 10 photos → auto-default template applied to all
+    ↓ watermark config pre-populated from default template
+    ↓
+User adjusts text for items 3 and 7 (different caption text per photo)
+    ↓ perItemOverrides[3].customText = "© Alice Photography"
+    ↓ perItemOverrides[7].customText = "© Alice Photography (2026)"
+    ↓
+BatchProcessor merges per-item on processing
+```
 
-- **Phase 2 (Processing Pipeline):** PhotoProcessor and VideoProcessor depend on renderers from Phase 1. MetadataPreserver depends on ImageIO/AVFoundation knowledge. ProcessingEngine ties them together. Once this phase is done, the app CAN process media end-to-end (testable via unit tests and command-line tools).
+## Architectural Boundaries
 
-- **Phase 3 (UI + Extensions):** All three UI targets depend on Phase 2's ProcessingEngine. Main app should be built first (has the most UI complexity and the in-app picker). Share extension next (simpler UI, same engine). Photos edit extension last (most constrained environment, requires PHContentEditingController integration).
+### What Lives in WatermarkCore (Shared)
+| Component | Purpose |
+|-----------|---------|
+| `WatermarkTemplate` (Model) | Codable template struct |
+| `PerItemConfigOverride` (Model) | Codable per-item override struct |
+| `BatchItem` (Model) | Batch item descriptor |
+| `TemplateStore` (Storage) | CRUD operations on templates JSON file |
+| `BatchProcessor` (Processing) | Actor for batch orchestration |
+| `BatchProcessor.BatchProgress` | Progress reporting struct |
+| `BatchProcessor.BatchItemResult` | Per-item result struct |
+| `WatermarkConfigurable.applyTemplate(_:)` | Protocol default implementation |
 
-**Research flags for phases:**
-- Phase 2 (VideoProcessor): HIGH risk — HDR preservation is complex and may need offline investigation with sample HDR footage. Flag for deeper research during planning.
-- Phase 3 (Photo Edit Extension): MEDIUM risk — PHContentEditingController has strict lifecycle requirements (cancelContentEditing, shouldShowCancelConfirmation). These are well-documented but easy to miss.
-- Phase 1 (Renderers): LOW risk — Core Image filter chaining is well-understood, pure functions, highly testable.
+### What Lives in Main App Target Only
+| Component | Purpose |
+|-----------|---------|
+| `BatchViewModel` | Batch mode ViewModel |
+| `TemplateListView` | Template list UI |
+| `TemplateSaveView` | Save template sheet |
+| `TemplatePickerView` | Quick-template grid |
+| `TemplateEditorView` | Template rename sheet |
+| Template-related `@State` in ContentView | Show template sheet flags |
+
+### What Lives in Extensions (Minimal Changes)
+| Target | Change | Rationale |
+|--------|--------|-----------|
+| ShareExtensionViewModel | +3 lines for auto-default check on import | Templates should apply in extensions too |
+| PhotosExtensionViewModel | +3 lines for auto-default check on import | Templates should apply in extensions too |
+| ShareExtensionRootView | No changes | Template management is main app only |
+| PhotosExtensionRootView | No changes | Template management is main app only |
+
+## Build Order (Dependency Graph)
+
+```
+                              ┌─────────────────────────┐
+                              │   PHASE 1: Templates    │  ← Foundation
+                              │   (CUST-01 through      │
+                              │    CUST-04)              │
+                              │                         │
+                              │  WatermarkCore:         │
+                              │  - WatermarkTemplate     │
+                              │  - TemplateStore         │
+                              │  - applyTemplate default │
+                              │                         │
+                              │  All 3 ViewModels:      │
+                              │  - auto-default on import│
+                              │                         │
+                              │  Main App:              │
+                              │  - TemplateListView      │
+                              │  - TemplateSaveView      │
+                              │  - TemplatePickerView    │
+                              │  - TemplateEditorView    │
+                              └───────────┬─────────────┘
+                                          │
+                                          │ Templates provide
+                                          │ default config for
+                                          │ batch items
+                                          ▼
+                              ┌─────────────────────────┐
+                              │   PHASE 2: Batch         │  ← Depends on templates
+                              │   (BATC-01, BATC-02)     │
+                              │                         │
+                              │  WatermarkCore:         │
+                              │  - BatchItem             │
+                              │  - PerItemConfigOverride │
+                              │  - BatchProcessor         │
+                              │                         │
+                              │  Main App:              │
+                              │  - BatchViewModel        │
+                              │  - Batch config UI       │
+                              │  - Batch progress UI     │
+                              │  - Batch share flow      │
+                              │                         │
+                              │  WatermarkViewModel:     │
+                              │  - batch mode branching  │
+                              └───────────┬─────────────┘
+                                          │
+                                          │ Independent
+                                          ▼
+                              ┌─────────────────────────┐
+                              │   PHASE 3: Process       │  ← Independent
+                              │   Hardening               │
+                              │   (PHRO-01, PHRO-02)     │
+                              │                         │
+                              │  GSD tooling only:      │
+                              │  - VERIFICATION.md tmpl  │
+                              │  - worktree-safety fix   │
+                              │                         │
+                              │  Zero app code changes   │
+                              └─────────────────────────┘
+```
+
+### Phase Ordering Rationale
+
+**Phase 1 (Templates) before Phase 2 (Batch):**
+- Templates are simpler — pure data layer + thin UI. They validate the persistence pattern.
+- Batch processing benefits from templates: users want to select a template and apply it to every item in a batch. The auto-default feature (CUST-04) is the bridge — import 10 photos, they all get the default template, then the user tweaks per-item overrides.
+- TemplateStore is a standalone component that can be fully tested in isolation before batch processing touches the processing pipeline.
+- If templates ship first, the "load template → mark as default → import media → batch process" workflow is fully integrated from day one of batch.
+
+**Phase 3 (Process Hardening) is independent:**
+- PHRO-01 and PHRO-02 are GSD workflow/tooling changes that do not touch app Swift code. They can be done in parallel with templates or batch, or deferred to last. Placing them after the functional features avoids slowing down feature delivery with tooling work.
+
+**Why batch and templates are separate phases, not one:**
+- Templates have no processing dependency — they're a pure data persistence concern.
+- Batch processing has both data (per-item overrides) and processing (BatchProcessor) concerns.
+- Building templates first provides a clean "loading" integration point for batch.
+- Each phase has clear, independently testable success criteria.
+
+## App Group Sync Implications
+
+| Concern | Current State | v2.0 Change |
+|---------|---------------|-------------|
+| Current config sync | `AppGroupConfigSync.save/load()` via UserDefaults | No change — loading a template triggers the existing save |
+| Template storage | None | New JSON file in App Group container (`templates.json`) |
+| Default template pointer | None | New `defaultTemplateID` key in UserDefaults(suiteName:) |
+| Cross-target template access | N/A | All 3 targets read `templates.json` via TemplateStore |
+| Template writes | N/A | Main app writes (CRUD UI); extensions are read-only consumers |
+| Batch results | N/A | Temp files in each target's sandbox (existing TempFileManager pattern) |
+
+**No new App Group entitlements needed.** The existing group container (`group.com.watermark.app`) is sufficient for both the `templates.json` file and the `defaultTemplateID` UserDefaults key.
+
+## Components NOT Created
+
+| What might seem needed | Why NOT needed |
+|------------------------|----------------|
+| `BatchEngine` (separate engine) | WatermarkEngine.process already takes config as a parameter. BatchProcessor wraps it with iteration + progress. No engine change required. |
+| `TemplateSyncService` | Existing AppGroupConfigSync pattern proves simple static methods work. TemplateStore follows the same pattern. No service layer needed. |
+| `PerItemConfig` (full config per batch item) | Users adjust 1-2 fields per item (text, maybe position). Full config duplication is wasteful and confusing. PerItemConfigOverride is a focused overlay. |
+| `BatchShareViewModel` | Existing share sheet flow (fullResResult → UIActivityViewController) works for batch results one at a time. A simple loop in BatchViewModel suffices. |
+| `BatchMode` enum in extensions | Extensions are single-item by design. Batch is main-app only. No extension protocol changes needed. |
+| Template iCloud sync | Out of scope — local-only per project constraints. TemplateStore uses the on-device App Group container. |
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Concurrent Batch Processing
+**What people do:** `TaskGroup` or `async let` to process all batch items in parallel.
+**Why it's wrong:** Video exports each allocate AVAssetWriter encoder sessions. Two concurrent 4K HDR exports will trigger thermal throttling, increase export times beyond the sum of sequential, and risk iOS jetsam termination.
+**Do this instead:** Sequential processing in BatchProcessor. Report progress per-item so the user sees forward motion. Support cancellation between items.
+
+### Anti-Pattern 2: Templates as UserDefaults Keys
+**What people do:** Store each template as a separate UserDefaults key: `template_<UUID>`.
+**Why it's wrong:** UserDefaults is not a database. Listing all keys, iterating to find templates, and partial-write atomicity are all fragile. Rename/delete operations require multiple key mutations that can interleave.
+**Do this instead:** A single JSON file in the App Group container. Load the full dictionary, modify in memory, write atomically (write to temp file, then `FileManager.replaceItemAt`). This is the pattern used by Apple's own apps for small, bounded collections.
+
+### Anti-Pattern 3: Per-Item Full Config Duplication
+**What people do:** Attach a full `WatermarkConfiguration` to each batch item for per-item adjustments.
+**Why it's wrong:** A WatermarkConfiguration with multiple layers (text + image + signature + white frame + format settings) encodes to ~2-50KB (depending on image watermark size). For 20 items, that's ~1MB of config data. It's also confusing — which fields are shared vs per-item?
+**Do this instead:** `PerItemConfigOverride` — a lightweight struct with only the fields users actually customize per-item (text, position, scale, output format, white frame toggle). Merge with shared config at processing time.
+
+### Anti-Pattern 4: Template Management UI in Extensions
+**What people do:** Put the full template CRUD UI in the share extension so users can manage templates during the share flow.
+**Why it's wrong:** Extensions have strict memory limits (~120MB) and the expectation of a focused, quick interaction. Template management (saving, renaming, deleting) is a management task, not a processing task. Putting it in an extension bloats the extension and creates a confusing UX.
+**Do this instead:** Extensions can load templates (read-only via TemplateStore.loadAll()) and apply them. All CRUD operations live in the main app. This matches user expectations: manage presets in the main app, use them everywhere.
+
+## Integration Points Summary
+
+| Integration Point | Type | New or Modified | Component |
+|-------------------|------|-----------------|-----------|
+| Template persistence | New | New file in App Group container | TemplateStore |
+| Default template pointer | New | New key in UserDefaults(suiteName:) | TemplateStore.defaultTemplateID |
+| Template application on config | Modified | Protocol default added | WatermarkConfigurable.applyTemplate |
+| Auto-default on import | Modified | +3 lines per ViewModel | All 3 ViewModels |
+| Batch item descriptor | New | New model | BatchItem (WatermarkCore) |
+| Per-item config override | New | New model | PerItemConfigOverride (WatermarkCore) |
+| Batch processing orchestration | New | New actor | BatchProcessor (WatermarkCore) |
+| Batch UI coordination | New | New ViewModel | BatchViewModel (Main App) |
+| Template management UI | New | New Views | TemplateListView, etc. (Main App) |
+| WatermarkEngine.process | **None** | **Unchanged** | Already accepts config as parameter |
 
 ## Sources
 
-- Apple Developer Documentation — AVFoundation: AVVideoComposition, AVAssetExportSession, AVAssetWriter (developer.apple.com). HIGH confidence.
-- Apple Developer Documentation — Photos: PHContentEditingController, PHContentEditingInput, PHContentEditingOutput (developer.apple.com). HIGH confidence.
-- Apple Developer Documentation — Core Image: CIFilter, CIContext, CIAttributedTextImageGenerator, CISourceOverCompositing (developer.apple.com). HIGH confidence.
-- Apple Developer Documentation — ImageIO: CGImageSource, CGImageDestination, metadata preservation (developer.apple.com). HIGH confidence.
-- Apple Developer Documentation — App Extension Programming Guide: Share Extensions, Photo Editing Extensions, App Groups (developer.apple.com). HIGH confidence.
-- Swift Evolution — SE-0395: Observation Framework (@Observable macro, iOS 17+). HIGH confidence.
-- Multiple community sources (Medium, Stack Overflow, dev.to) — project structure patterns, extension architecture, Core Image performance. MEDIUM confidence (community consensus, verified against official docs).
-- Community reports on HDR metadata preservation challenges during custom AVVideoComposition (forasoft.com, nonstrict.eu). MEDIUM confidence (practical experience reports, consistent across multiple sources).
+- Existing codebase analysis — WatermarkCore Package.swift, WatermarkConfiguration.swift, WatermarkEngine.swift, AppGroupConfigSync.swift, WatermarkConfigurable.swift, WatermarkViewModel.swift, ShareExtensionViewModel.swift, PhotosExtensionViewModel.swift, PhotoItem.swift, TempFileManager.swift, ProcessingResult.swift, WhiteFrameConfig.swift. HIGH confidence.
+- Apple Developer Documentation — Codable protocol, FileManager atomic writes, UserDefaults suite, App Group entitlements, Swift Concurrency actors. HIGH confidence.
+- Apple Developer Documentation — AVAssetWriter encoder resource limits and thermal throttling guidance. MEDIUM confidence (informs sequential batch decision).
+- GSD workflow documentation — VERIFICATION.md template pattern, worktree-safety concerns. HIGH confidence (informs Phase 3 independence).
 
 ---
 
-*Architecture research for: iOS Photo/Video Watermarking App*
-*Researched: 2026-06-17*
+*Architecture research for: Watermark v2.0 — Batch Processing, Template Management & Process Hardening*
+*Researched: 2026-06-19*
 *Confidence: HIGH*

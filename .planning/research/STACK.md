@@ -1,150 +1,262 @@
-# Stack Research
+# Stack Research: v2.0 Batch, Templates & Process
 
-**Domain:** iOS Photo/Video Watermarking App
-**Researched:** 2026-06-17
+**Domain:** iOS Photo/Video Watermarking App — Batch Processing, Template Management, Process Hardening
+**Researched:** 2026-06-19
 **Confidence:** HIGH
 
 ## Recommended Stack
 
-### Core Technologies
+### New Additions (v2.0)
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| **Swift** | 6.x (Xcode 18) | Language | Required for modern SwiftUI, Swift Concurrency, and `@Observable`. Swift 6 strict concurrency checking eliminates data-race bugs in async media pipelines. |
-| **SwiftUI** | iOS 18 SDK | UI framework (main app + extension UI) | Declarative, Apple's definitive UI framework since iOS 18. Use `UIHostingController` to bridge into extension entry points where UIKit is mandatory. |
-| **UIKit** | iOS 18 SDK | Extension entry points only | `PHContentEditingController` and `ShareViewController` require UIKit `UIViewController` subclasses. Host SwiftUI inside them — do not build UIKit view hierarchies. |
-| **Xcode** | 18.x | IDE & toolchain | Required for iOS 18 SDK, Swift 6, and modern extension target templates. |
+| **PhotosPicker (multi-select)** | iOS 18 SDK | Batch media import | Already in use (`maxSelectionCount: 20`). Increase to `0` for unlimited batch selection. No new framework needed — PhotosPicker handles multi-select natively via `selection: Binding<[PhotosPickerItem]>`. Live Photo pair detection (`detectLivePhotoPairs`) already handles mixed photo/video batches. |
+| **Swift Concurrency `TaskGroup`** | Swift 6 | Parallel batch processing | `withThrowingTaskGroup(of:returning:body:)` processes multiple media items concurrently with built-in cancellation propagation. Throttle to 3–4 concurrent tasks to prevent memory pressure (each watermarking operation loads a full-res CIImage into GPU memory). **Already in Swift 6 stdlib — no dependency.** |
+| **`Foundation.Progress`** | iOS 18 SDK | Batch progress tracking | Parent-child `Progress` hierarchy: parent tracks `N` items, each child tracks per-item export (0.0–1.0). Parent's `fractionCompleted` auto-aggregates from children. Bridge to SwiftUI via `@Observable @MainActor` wrapper with KVO (`progress.observe(\.fractionCompleted)`). **No dependency — Foundation built-in.** |
+| **`FileManager` App Group container** | iOS 18 SDK | Template JSON persistence | Store each template as a separate `.json` file in `{AppGroupContainer}/templates/`. Uses existing App Group (`group.com.watermark.app`) already configured across all 3 targets. `Codable` serialization via `JSONEncoder`/`JSONDecoder`. No new framework. |
+| **`UserDefaults(suiteName:)`** | iOS 18 SDK | Default template reference | Single string key `"defaultTemplateID"` in existing `AppGroupConfigSync.suiteName` UserDefaults suite. Already used for `watermarkConfiguration` blob — just add one more key. No new setup needed. |
 
-### Media Frameworks
+### Existing Stack (Unchanged — Confirmed Compatible)
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| **PhotosUI (PhotosPicker)** | iOS 18 SDK | In-app media picker | Privacy-first, no photo library permission needed. Supports photos + videos, single/multi select via `maxSelectionCount`, and async `loadTransferable`. Do NOT use `UIImagePickerController` (deprecated pattern) or raw `PHPicker` (PhotosPicker wraps it better). |
-| **AVFoundation** | iOS 18 SDK | Video processing + composition | The only framework for video track manipulation. Use `AVMutableComposition` + `AVVideoComposition` + `AVAssetExportSession`. Modern async APIs via `AVAsset.load(_:)` (iOS 16+). Required for video watermark overlay. |
-| **Core Image** | iOS 18 SDK | GPU-accelerated image watermarking | Use `CIFilter.sourceOverCompositing` to blend watermark onto photo/video frames. Reuse a single `CIContext` across operations. Supports HDR pixel formats via `expandToHDR`. |
-| **ImageIO** | iOS 18 SDK | Metadata + HDR gain map preservation | `CGImageSource` → `CGImageDestination` pipeline preserves all EXIF, color profile, and HDR gain map auxiliary data. Use `CGImageDestinationCopyImageSource` with `kCGImageDestinationMergeMetadata`. |
-| **Core Graphics** | iOS 18 SDK | White frame + text overlay rendering | `UIGraphicsImageRenderer` for drawing the white frame border + device metadata text (e.g., "Taken by: iPhone 16 Pro"). Used for the frame prior to final watermark compositing. |
-| **Photos (PHContentEditingController)** | iOS 18 SDK | Photos app edit extension | Required protocol for the "Edit in Watermark" extension. Receives `PHContentEditingInput`, returns `PHContentEditingOutput` with rendered media. |
-
-### Extension Architecture
-
-| Technology | Purpose | Why Recommended |
-|------------|---------|-----------------|
-| **Share Extension target** | Receive media via iOS share sheet | `NSExtensionPrincipalClass` points to a `UIViewController` subclass hosting SwiftUI. Uses `NSItemProvider` to load incoming photo/video data. |
-| **Photo Editing Extension target** | Edit from within Photos app | Implements `PHContentEditingController`. Hosts same SwiftUI watermarking UI as main app. |
-| **App Groups capability** | Shared container between app + extensions | `group.com.[bundle].watermark` for sharing processed output between extension and main app. Also enables `UserDefaults(suiteName:)` for coordination. |
-| **Swift Package (shared)** | Shared processing logic | Single Swift Package consumed by main app, share extension, and photo extension targets. Contains all watermarking, metadata, and rendering logic. Eliminates code duplication. |
+| Technology | Version | v2.0 Relevance |
+|------------|---------|----------------|
+| **Swift** | 6.x (Xcode 18) | Strict concurrency checking ensures batch `TaskGroup` code is data-race free |
+| **SwiftUI** | iOS 18 SDK | Batch UI (grid of thumbnails, progress overlay) uses existing `@Observable` pattern |
+| **WatermarkCore Swift Package** | — | New `TemplateStore`, `BatchProcessor`, `BatchProgressTracker` added here. All 3 targets consume. |
+| **App Groups capability** | — | Template JSON files + default template ID shared via existing `group.com.watermark.app` |
+| **AVFoundation** | iOS 18 SDK | Video batch processing reuses existing `VideoProcessor` with CALayer overlay |
+| **Core Image** | iOS 18 SDK | Photo batch processing reuses existing `WatermarkEngine.process(sourceURL:config:)` |
+| **ImageIO** | iOS 18 SDK | Metadata/HDR preservation unchanged — one-at-a-time per-item pipeline |
 
 ### Supporting Libraries
 
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| — _(none)_ | — | — | No third-party libraries are needed. Apple system frameworks provide complete coverage for photo/video processing, watermarking, metadata preservation, and HDR handling. Third-party dependencies would add unnecessary complexity to a privacy-focused, on-device-only app. |
+| — _(none)_ | — | — | No third-party libraries needed. All batch processing, template persistence, and progress tracking are covered by Apple system frameworks. Adding third-party deps would violate the privacy constraint (on-device only, no network calls). |
 
 ### Development Tools
 
 | Tool | Purpose | Notes |
 |------|---------|-------|
-| **Xcode 18** | IDE | Required for iOS 18 SDK. Use Swift 6 language mode with strict concurrency checking. |
-| **Swift Testing** | Unit + integration tests | Apple's modern testing framework. Test watermark rendering output, metadata preservation, and extension data flow. |
-| **Xcode Previews** | SwiftUI rapid iteration | Preview watermark layout at 8 positions without building to device. |
-| **Instruments (Allocations, Leaks)** | Memory profiling | Critical for video export — ensure no memory pressure spikes during large file processing. |
-| **exiftool** (CLI) | Metadata validation | Verify EXIF/GPS/XMP and gain map preservation in output files during QA. |
+| **Xcode 18** | IDE | Already configured for iOS 18 SDK, Swift 6. No changes needed. |
+| **Swift Testing** | Unit + integration tests | Test `TemplateStore` CRUD, `BatchProcessor` concurrency, `ProgressTracker` KVO bridge. |
+| **Instruments (Allocations, Leaks)** | Memory profiling | **Critical for batch** — verify memory pressure stays flat during 10+ item batch processing. Watch for GPU memory accumulation from concurrent CIContext renders. |
+| **exiftool** (CLI) | Metadata validation | Verify per-item metadata preservation in batch output (no cross-contamination between items). |
+| **Xcode Previews** | SwiftUI iteration | Preview template list UI, batch thumbnail grid, progress overlay without building to device. |
 
 ## Installation
 
-```bash
-# No package manager needed. Apple frameworks are included with the iOS SDK.
-# Project setup via Xcode:
-
-# 1. Create iOS App target (SwiftUI)
-# 2. Create Swift Package: File > New > Package > "WatermarkEngine"
-# 3. Add Share Extension target: File > New > Target > Share Extension
-# 4. Add Photo Editing Extension target: File > New > Target > Photo Editing Extension
-# 5. Link WatermarkEngine package to all 3 targets
-# 6. Enable App Groups capability on all targets: group.com.[bundle].watermark
+```
+# No new dependencies. All additions use existing Apple frameworks.
+# Project changes:
+# 1. Add TemplateStore.swift → WatermarkCore/Sources/WatermarkCore/Storage/
+# 2. Add WatermarkTemplate.swift → WatermarkCore/Sources/WatermarkCore/Models/
+# 3. Add BatchProcessor.swift → WatermarkCore/Sources/WatermarkCore/Processing/
+# 4. Add BatchProgressTracker.swift → WatermarkCore/Sources/WatermarkCore/UI/
+# 5. Update ContentView.swift: maxSelectionCount → 0 for batch mode
+# 6. Update WatermarkViewModel: add batch processing state + template methods
+# 7. Update ShareExtensionViewModel + PhotosExtensionViewModel: add template loading
 ```
 
 ## Alternatives Considered
 
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| SwiftUI + UIHostingController for extensions | Full UIKit for extensions | Only if targeting iOS 15 or below (not recommended). SwiftUI in hosting controllers is the modern standard. |
-| PhotosPicker (PhotosUI) | PHPicker (PhotosUI) | PHPicker is the lower-level API. Use only if you need `PHPickerConfiguration.selection` behavior not exposed by PhotosPicker. For this project, PhotosPicker covers all needs. |
-| AVAssetExportSession + CALayer overlay | AVAssetWriter + CIFilter per-frame | Use AVAssetWriter when you need frame-by-frame control with Metal shaders or complex compositing beyond CALayer capabilities. For watermark overlays, CALayer-based composition is simpler and sufficient. |
-| Core Image (CIFilter) | vImage / Accelerate | Only if you need maximum performance on very large images and are willing to write manual pixel-level compositing. CIFilter is GPU-accelerated and easier to use. |
-| CGImageDestination (ImageIO) for export | PHPhotoLibrary save | Use PHPhotoLibrary save only when the user explicitly wants to save to camera roll. This app's core flow is share-without-saving, so CGImageDestination writes to temp files. |
-| No third-party libs (recommended) | SDWebImage, GPUImage, etc. | Third-party image libs add dependency risk and often strip metadata/HDR. Apple frameworks handle everything this app needs natively. |
+| Recommended | Alternative | Why Not |
+|-------------|-------------|---------|
+| **JSON files in App Group container** for template persistence | **SwiftData** (`@Model` + `ModelContainer`) | SwiftData requires SQLite store, migration management, `ModelContainer` initialization overhead, and shared container URL configuration. For storing ~dozens of small `WatermarkConfiguration` JSON blobs (each <10KB), a full ORM is architectural overkill. SwiftData also carries the risk of schema migration failures when `Codable` structs change — JSON files degrade gracefully (decode failure → skip file). |
+| **JSON files in App Group container** | **Core Data** (`NSManagedObjectModel`) | Even more overkill than SwiftData. Requires `.xcdatamodeld` file, `NSPersistentContainer`, manual `NSManagedObject` subclasses, and merge policy configuration for cross-target access. Adds ~500+ lines of boilerplate for simple CRUD. |
+| **UserDefaults for ALL templates** | JSON files in App Group container | UserDefaults stores a single `WatermarkConfiguration` blob (`watermarkConfiguration` key). Storing multiple templates as separate UserDefaults keys requires UUID-prefixed key management, has no directory listing (can't enumerate templates), and risks hitting the UserDefaults plist size limit. JSON files in a `templates/` subdirectory give free enumeration via `FileManager.contentsOfDirectory`. |
+| **`TaskGroup` with throttling** (max 3–4 concurrent) | **Unlimited `TaskGroup`** (one task per item) | Processing 20 full-resolution photos in parallel would allocate 20 CIContext-backed CIImage objects simultaneously, risking OOM crashes on devices with <6GB RAM. Throttling to 3–4 concurrent tasks keeps memory pressure predictable. |
+| **`TaskGroup` with throttling** | **Serial processing** (one-at-a-time `for` loop) | Serial processing leaves 5+ CPU cores idle on modern iPhones. A16+ chips have 6 cores — batch watermarking is CPU-bound (CIFilter compositing + CGImageDestination encode), so parallel processing yields 2–3× throughput improvement. |
+| **`Progress` parent-child hierarchy** | **Custom actor-based progress tracking** | `Progress` auto-aggregates child completion into parent `fractionCompleted`. Custom actor requires manual math, race-condition handling, and doesn't integrate with `ProgressView`'s `observedProgress` binding. `Progress` is the system-standard approach. |
+| **`@Observable @MainActor` KVO bridge** for Progress | **`@unchecked Sendable`** on Progress wrapper | `@unchecked Sendable` silences Swift 6 warnings but provides no actual thread safety. The KVO bridge with `@MainActor` isolation is the safe-by-default approach. |
 
 ## What NOT to Use
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| **UIImagePickerController** | Deprecated pattern, requires full photo library permission, no modern async support. | `PhotosPicker` (PhotosUI) |
-| **UIImage** for processing pipeline | Converting to/from `UIImage` strips EXIF metadata, color profiles, and HDR gain maps. This is the #1 cause of "why did my photo lose quality?" bugs. | `CGImageSource` → `CIImage` → `CGImageDestination` pipeline. Only use `UIImage` for transient display in SwiftUI `Image` views. |
-| **PHPicker** directly (without PhotosPicker) | Lower-level Objective-C API. PhotosPicker provides the SwiftUI-native wrapper with cleaner `PhotosPickerItem` / `Transferable` integration. | `PhotosPicker` |
-| **SiriKit** for intents | Dead framework for new integrations since iOS 18. | App Intents (if exposing watermark actions to Siri/Shortcuts in future). Not needed for v1. |
-| **Third-party image processing libraries** | They often don't handle HDR gain maps, strip metadata, or introduce re-encoding quality loss. | Apple system frameworks (Core Image, ImageIO, vImage) |
-| **Saving to camera roll as default flow** | Core product anti-feature — clutters library, contradicts the "watermark and share" value proposition. | Export to temp directory → share sheet → discard temp file. |
-| **iOS 16 or below as minimum target** | Requires maintaining `ObservableObject` alongside `@Observable`, missing modern SwiftUI features, App Intents degraded, and significantly higher maintenance burden for <1% of users in 2026. | iOS 18 minimum |
+| **SwiftData** for template persistence | ORM overhead for ~dozens of small JSON configs. Schema migration complexity. Shared container configuration adds failure points. Violates "simplest thing that works" principle. | JSON files in App Group container `templates/` directory + `Codable` serialization |
+| **Core Data** for template persistence | Massive boilerplate (`.xcdatamodeld`, `NSPersistentContainer`, merge policies). No benefit over JSON files for this data shape. | JSON files in App Group container |
+| **Third-party database libraries** (Realm, Firebase, GRDB) | Add dependency risk, often have networking components (violates privacy constraint), and are unnecessary for local-only config storage. | Apple FileManager + Codable |
+| **`UIImage` intermediate representation** in batch pipeline | Converts to/from `UIImage` strips EXIF, color profile, and HDR gain maps. The existing `CGImageSource → CIImage → CGImageDestination` pipeline must be preserved per-item. | Existing `WatermarkEngine.process(sourceURL:config:)` pipeline |
+| **`AVAssetWriter`** for batch video | More complex than `AVAssetExportSession + CALayer` overlay. Not needed for watermark compositing (no per-frame Metal shader logic). | Existing `VideoProcessor` with `AVAssetExportSession` |
+| **`@unchecked Sendable`** on Progress wrappers | Silences compiler but provides no actual thread safety. Data races on `fractionCompleted` would cause UI glitches. | `@MainActor` `@Observable` class with KVO bridge |
+| **Cloud sync** for templates | Violates privacy constraint (no network calls). Templates are device-local configuration. | App Group container for cross-target local sync only |
+| **Batch save to camera roll** | Core product anti-feature — clutters library. The "watermark and share" value proposition applies to batch too. | Batch export to temp directory → share sheet per item → cleanup |
+| **Real-time preview for ALL batch items** | Rendering full-res previews for 20+ items would consume GPU memory equivalent to 20× the pipeline. | Thumbnail grid from ImageIO downsampling (already in use: `createThumbnail(maxPixelSize: 200)`) |
 
 ## Stack Patterns by Variant
 
-**For photo watermarking:**
-- Use `CGImageSource` to read, extract metadata dictionary + HDR gain map auxiliary data
-- Create `CIImage` from `CGImageSource`, pass through CIFilter pipeline (`CISourceOverCompositing` for watermark)
-- Optionally use `UIGraphicsImageRenderer` for white frame + device text overlay (converted back to `CIImage`)
-- Render via shared `CIContext` to `CGImage`
-- Write via `CGImageDestination` with original metadata + gain map re-attached
-- Export to temp file → present share sheet
+### Batch Photo Processing
 
-**For video watermarking:**
-- Use `AVAsset.load(_:)` async to get tracks + metadata
-- Create `AVMutableComposition` with video + audio tracks
-- Create `AVVideoComposition` with `AVVideoCompositionCoreAnimationTool` using a `CALayer` hierarchy (video layer + watermark overlay layer)
-- Export via `AVAssetExportSession` with HEVC preset (preserves HDR)
-- Monitor progress, cancel on memory pressure
+```
+For each item in batch (via throttled TaskGroup, max 3 concurrent):
+  1. await engine.process(sourceURL: itemURL, config: config)  // reuse shared config
+  2. Attach child Progress(totalUnitCount: 100, parent: batchProgress, pendingUnitCount: 1)
+  3. Report per-item progress via child.completedUnitCount
+  4. Collect ProcessingResult → temp file URL
+  5. Present share sheet for each item OR collect all for batch share
+  6. Cleanup temp files after sharing
+```
 
-**For share extension import:**
-- Receive `NSItemProvider` from `NSExtensionContext`
-- Load as `Data` (for photos) or `URL` (for videos) using async `loadItem`
-- Process in background `Task`, save result to App Group shared container
-- Call `completeRequest(returningItems:completionHandler:)` when done
+### Batch Video Processing
 
-**For Photos edit extension import:**
-- `PHContentEditingController.startContentEditing(with:placeholderImage:)` receives `PHContentEditingInput`
-- Load full-resolution asset from `input.fullSizeImageURL` or `input.audiovisualAsset`
-- Apply watermark within shared WatermarkEngine Swift Package
-- Write to `PHContentEditingOutput.renderedContentURL`
-- Call `finishContentEditing` completion with output
+```
+For each video in batch (serial processing recommended — video export is already GPU-saturated):
+  1. await engine.processVideo(sourceURL: itemURL, config: config, onProgress: { ... })
+  2. Map video's own onProgress callback → child Progress
+  3. Collect ProcessingResult + videoValidation
+  4. Schedule background notification per item (reuse existing VIDX-03 pattern)
+```
+
+### Template CRUD
+
+```
+Load all templates:
+  - Enumerate {AppGroupContainer}/templates/*.json
+  - Decode each as WatermarkTemplate via JSONDecoder
+  - Sort by createdAt (newest first)
+  - Mark isDefault via UserDefaults "defaultTemplateID" match
+
+Save template:
+  - Assign UUID, name, createdAt
+  - Encode as JSON → write to templates/{uuid}.json with .atomic option
+  - If marked isDefault, update UserDefaults "defaultTemplateID"
+
+Delete template:
+  - Remove templates/{uuid}.json
+  - If was default, clear UserDefaults "defaultTemplateID"
+
+Rename template:
+  - Decode existing file → modify name → re-encode → write .atomic
+
+Auto-apply default on import:
+  - On media import: check UserDefaults "defaultTemplateID"
+  - If exists and template file found: decode → set as current config
+  - If not found: fall back to built-in default config
+```
+
+### Progress Tracking
+
+```
+Create parent Progress(totalUnitCount: batchSize)
+
+For each batch item:
+  let child = Progress(totalUnitCount: 100, parent: parent, pendingUnitCount: 1)
+  // For video: bridge existing onProgress callback to child.completedUnitCount
+  // For photo: set child.completedUnitCount = 100 when engine.process completes
+
+@Observable @MainActor wrapper:
+  class BatchProgressTracker {
+      var fractionCompleted: Double = 0.0
+      private var progress: Progress?
+      private var observer: NSKeyValueObservation?
+
+      func startTracking(_ progress: Progress) {
+          self.progress = progress
+          observer = progress.observe(\.fractionCompleted, options: [.new]) { [weak self] p, _ in
+              Task { @MainActor in self?.fractionCompleted = p.fractionCompleted }
+          }
+      }
+  }
+
+SwiftUI:
+  ProgressView(value: tracker.fractionCompleted)
+```
+
+### Template Sync Across Targets
+
+```
+App Group container (group.com.watermark.app):
+  /templates/
+    {uuid1}.json  ← WatermarkTemplate (name + WatermarkConfiguration)
+    {uuid2}.json
+    ...
+
+UserDefaults(suiteName: "group.com.watermark.app"):
+  "watermarkConfiguration" → Data (current config — existing, unchanged)
+  "defaultTemplateID" → String (UUID of default template — NEW)
+
+All 3 targets (Main App, ShareExtension, PhotoEditExtension) read from
+the same App Group container — no additional sync mechanism needed.
+Changes in one target are immediately visible to others via FileManager.
+```
 
 ## Version Compatibility
 
-| Framework | Minimum iOS | Notes |
-|-----------|-------------|-------|
-| `PhotosPicker` (PhotosUI) | iOS 16 | Basic picker; iOS 17 adds `.photosPickerStyle(.inline)`; iOS 18 full maturity |
-| `@Observable` macro | iOS 17 | Required for modern SwiftUI state management |
-| `AVAsset.load(_:)` async | iOS 16 | Modern async asset loading |
-| `CGImageDestinationCopyImageSource` | iOS 16 | Simplest metadata-preserving copy |
-| `expandToHDR` (CIImage) | iOS 17 | HDR-aware image loading for Core Image pipeline |
-| `Transferable` protocol | iOS 16 | Used by PhotosPickerItem for async data loading |
-| `PHContentEditingController` | iOS 8+ | Stable, no version-specific concerns |
-| App Intents (if added later) | iOS 17 basic / iOS 18 full | iOS 18 required for full Apple Intelligence integration |
+| Component | Minimum iOS | v2.0 Notes |
+|-----------|-------------|------------|
+| `PhotosPicker` multi-select | iOS 16 | Already in use. `maxSelectionCount: 0` (unlimited) works from iOS 16. |
+| `TaskGroup` (`withThrowingTaskGroup`) | iOS 15 (Swift 5.5+) | Available since Swift Concurrency introduction. Full maturity in Swift 6. |
+| `Progress` parent-child | iOS 8+ | Foundation class, stable across all iOS versions. |
+| `NSKeyValueObservation` | iOS 11+ | Used for Progress → @Observable KVO bridge. Available since iOS 11. |
+| `FileManager.containerURL(forSecurityApplicationGroupIdentifier:)` | iOS 8+ | Already in use for App Group access. |
+| `JSONEncoder`/`JSONDecoder` | iOS 8+ (Foundation) | Already in use for `WatermarkConfiguration` Codable. |
+| `@Observable` macro | iOS 17 | Already the project's state management pattern. |
 
-**Target: iOS 18 minimum.** This is the industry-standard recommendation for new apps in 2026. It covers >95% of active devices, removes legacy SwiftUI patterns (`ObservableObject`/`StateObject`), provides full App Intents support, and aligns with Swift 6 strict concurrency.
+**Target: iOS 18 minimum (unchanged).** All v2.0 additions work on iOS 16+ (some iOS 15+). No minimum deployment target change needed.
+
+## Integration Points with Existing Architecture
+
+### New Files in WatermarkCore Swift Package
+
+```
+Packages/WatermarkCore/Sources/WatermarkCore/
+  Storage/
+    TemplateStore.swift          ← NEW: actor for template CRUD
+    AppGroupConfigSync.swift     ← MODIFIED: add defaultTemplateID key
+  Models/
+    WatermarkTemplate.swift      ← NEW: template model (Codable)
+    WatermarkConfiguration.swift ← UNCHANGED: already Codable
+  Processing/
+    BatchProcessor.swift         ← NEW: actor for batch orchestration
+  UI/
+    BatchProgressTracker.swift   ← NEW: @Observable Progress wrapper
+```
+
+### Integration into 3 Targets
+
+| Target | Integration Point | What Changes |
+|--------|-------------------|--------------|
+| **Main App** | `WatermarkViewModel` | Add `batchMode: Bool`, `templates: [WatermarkTemplate]`, `TemplateStore` reference, batch `handleSelection` with TaskGroup, template save/load/delete/rename methods |
+| **ShareExtension** | `ShareExtensionViewModel` | Add template loading (read from App Group), auto-apply default template on share import |
+| **PhotoEditExtension** | `PhotosExtensionViewModel` | Add template loading, auto-apply default template on edit session start |
+
+### No Changes to Existing Engine
+
+The `WatermarkEngine` actor (`process`, `processVideo`, `processLivePhoto`) is called per-item — same as current single-item flow. Batch processing is purely ViewModel-level orchestration:
+
+```
+BatchProcessor (ViewModel level)
+  → for each item in throttled TaskGroup:
+      → WatermarkEngine.shared.process(sourceURL: itemURL, config: config)
+      → returns ProcessingResult per item
+      → update Progress
+```
+
+The engine is already `actor`-isolated and `Sendable`-safe — concurrent calls from TaskGroup are naturally serialized by the actor, preventing race conditions on the shared `CIContext`.
+
+### Memory Safety in Batch
+
+| Concern | Mitigation |
+|---------|-----------|
+| GPU memory from concurrent CIContext renders | Throttle to max 3 concurrent tasks. Each `process()` call uses the shared `CIContext` (actor-isolated), so only 3 CIImage graphs exist simultaneously. |
+| Temp file accumulation | `TempFileManager.cleanupOldFiles(olderThan: 3600)` already runs on engine init. Per-item cleanup after sharing. |
+| Video export memory | Video processing is serial in batch mode (AVAssetExportSession already saturates media engine). |
+| Full-res image retention | `PhotoItem` stores thumbnail (ImageIO-downsampled, <200px) and `sourceURL`. Full-res CIImage is scoped to the `process()` call and released when the `TaskGroup` child task completes. |
 
 ## Sources
 
-- Apple Developer Documentation — PhotosPicker, PHContentEditingController, AVFoundation, Core Image, ImageIO
-- Apple Developer — "Supporting HDR images in your app" (WWDC24 session) — HDR gain map preservation via CGImageDestination
-- Apple Developer — "What's new in SwiftUI" (WWDC24) — @Observable migration, modern SwiftUI patterns
-- Apple Developer — "What's new in Photos" (WWDC24) — PhotosPicker enhancements
-- Industry analysis (multiple sources, 2025-2026) — iOS 18 minimum target recommendation for new apps; 95%+ adoption coverage
-- Stack Overflow, Apple Developer Forums — Community validation of CGImageSource → CGImageDestination metadata preservation pipeline
-- Kodeco (formerly raywenderlich.com) — AVVideoCompositionCoreAnimationTool patterns for video watermarking
-- Greg Benz Photography — Technical deep-dive on Apple HDR gain map architecture and preservation techniques
+- Apple Developer Documentation — `Progress`, `withThrowingTaskGroup`, `FileManager.containerURL`, `PhotosPicker`, `NSKeyValueObservation`
+- Apple Developer — Swift Concurrency: `TaskGroup` and structured concurrency (Swift 5.5+)
+- Apple Developer — "What's new in SwiftUI" (WWDC24) — `@Observable` macro and Swift 6 strict concurrency
+- Swift Evolution SE-0414 — Region-based isolation for Swift 6 Sendable checking
+- Multiple sources (2025–2026) — SwiftData is overkill for simple Codable config persistence; JSON files + App Group container are the industry-standard approach for cross-target iOS app configuration
+- Kodeco (formerly raywenderlich.com) — Batch photo loading with PhotosPicker + TaskGroup patterns
+- Swift.org — `withThrowingTaskGroup` documentation and cancellation semantics
+- Stack Overflow, Apple Developer Forums — Community-validated pattern for bridging NSProgress KVO to @Observable in Swift 6
+- Apple Developer Forums — App Group container file coordination patterns; `NSFileCoordinator` for cross-process access (optional — our single-writer pattern avoids contention)
 
 ---
 
-*Stack research for: iOS Photo/Video Watermarking App*
-*Researched: 2026-06-17*
+*Stack research for: v2.0 Batch Processing, Template Management, Process Hardening*
+*Researched: 2026-06-19*
