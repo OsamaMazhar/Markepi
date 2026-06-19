@@ -40,7 +40,7 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
 **Milestone Goal:** Ship deferred v1.0 features: batch processing with per-item config adjustments, full template CRUD + auto-default, and process hardening.
 
 - [x] **Phase 12: Template Management** — Save/load/manage watermark templates with auto-default on import (completed 2026-06-19)
-- [ ] **Phase 13: Batch Processing** — Multi-item watermarking with shared config, per-item adjustments, and progress tracking
+- [ ] **Phase 13: Batch Processing** — Multi-item watermarking with shared config, per-item adjustments, and progress tracking (planned)
 - [ ] **Phase 14: Process Hardening** — VERIFICATION.md templating and worktree-safety fix
 
 ## Phase Details
@@ -93,7 +93,21 @@ Plans:
   4. User can share all successfully watermarked batch results together in a single share sheet
   5. User can adjust watermark position, scale, or text for an individual item within the batch without affecting other items
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 13-01-PLAN.md — WatermarkCore Batch Foundation: BatchProcessingResult, RenderingState.batchProcessing, BatchProcessor actor
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 13-02-PLAN.md — ViewModel + Controls Integration: batch state, methods, overrides, background notification; ControlsView batch share button
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 13-03-PLAN.md — Batch UI Components + Integration: BatchProgressOverlay, BatchItemDetailSheet, ThumbnailStripView enhancements, ContentView wiring
+
 **UI hint**: yes
 
 ### Phase 14: Process Hardening
@@ -124,5 +138,5 @@ Plans:
 | 10. WatermarkConfigurable Protocol Defaults | v1.1 | 2/2 | Complete | 2026-06-18 |
 | 11. Photos Extension HDR Detection | v1.1 | 1/1 | Complete | 2026-06-18 |
 | 12. Template Management | v2.0 | 5/5 | Complete   | 2026-06-19 |
-| 13. Batch Processing | v2.0 | 0/TBD | Not started | — |
+| 13. Batch Processing | v2.0 | 0/3 | Planned | 2026-06-19 |
 | 14. Process Hardening | v2.0 | 0/TBD | Not started | — |
