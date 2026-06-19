@@ -202,6 +202,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
             currentIndex = 0
             Task { await loadSourceForComparison() }
             showPicker = false
+            // Phase 12: Auto-apply default template on import
+            if let defaultTemplate = TemplateStore.shared.defaultTemplate {
+                config = defaultTemplate.config
+            }
         }
     }
 
@@ -558,6 +562,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
             if sourceFormatLabel == nil { sourceFormatLabel = detectSourceFormatLabel(from: data) }
         }
         Task { await loadSourceForComparison() }
+        // Phase 12: Auto-apply default template on import
+        if let defaultTemplate = TemplateStore.shared.defaultTemplate {
+            config = defaultTemplate.config
+        }
     }
 
     // MARK: - Quick Actions (IMPS-02)
@@ -639,6 +647,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
         if !sourceHasHDR { sourceHasHDR = detectHDRSource(from: imageData) }
         if sourceFormatLabel == nil { sourceFormatLabel = detectSourceFormatLabel(from: imageData) }
         Task { await loadSourceForComparison() }
+        // Phase 12: Auto-apply default template on import
+        if let defaultTemplate = TemplateStore.shared.defaultTemplate {
+            config = defaultTemplate.config
+        }
     }
 
     func loadFromClipboard() async {
@@ -671,6 +683,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
         if !sourceHasHDR { sourceHasHDR = detectHDRSource(from: pngData) }
         if sourceFormatLabel == nil { sourceFormatLabel = detectSourceFormatLabel(from: pngData) }
         Task { await loadSourceForComparison() }
+        // Phase 12: Auto-apply default template on import
+        if let defaultTemplate = TemplateStore.shared.defaultTemplate {
+            config = defaultTemplate.config
+        }
     }
 
     // MARK: - App Intents (SYSI-01, SYSI-02)
@@ -698,6 +714,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
                     currentIndex = 0
                     if !sourceHasHDR { sourceHasHDR = detectHDRSource(from: data) }
                     if sourceFormatLabel == nil { sourceFormatLabel = detectSourceFormatLabel(from: data) }
+                    // Phase 12: Auto-apply default template on import
+                    if let defaultTemplate = TemplateStore.shared.defaultTemplate {
+                        config = defaultTemplate.config
+                    }
                 }
             }
         }
