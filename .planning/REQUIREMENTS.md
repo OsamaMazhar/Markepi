@@ -72,26 +72,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TMPL-01 | — | Pending |
-| TMPL-02 | — | Pending |
-| TMPL-03 | — | Pending |
-| TMPL-04 | — | Pending |
-| TMPL-05 | — | Pending |
-| TMPL-06 | — | Pending |
-| BATC-01 | — | Pending |
-| BATC-02 | — | Pending |
-| BATC-03 | — | Pending |
-| BATC-04 | — | Pending |
-| BATC-05 | — | Pending |
-| BATC-06 | — | Pending |
-| BATC-07 | — | Pending |
-| PHRO-01 | — | Pending |
-| PHRO-02 | — | Pending |
+| TMPL-01 | Phase 12 | Pending |
+| TMPL-02 | Phase 12 | Pending |
+| TMPL-03 | Phase 12 | Pending |
+| TMPL-04 | Phase 12 | Pending |
+| TMPL-05 | Phase 12 | Pending |
+| TMPL-06 | Phase 12 | Pending |
+| BATC-01 | Phase 13 | Pending |
+| BATC-02 | Phase 13 | Pending |
+| BATC-03 | Phase 13 | Pending |
+| BATC-04 | Phase 13 | Pending |
+| BATC-05 | Phase 13 | Pending |
+| BATC-06 | Phase 13 | Pending |
+| BATC-07 | Phase 13 | Pending |
+| PHRO-01 | Phase 14 | Pending |
+| PHRO-02 | Phase 14 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15 ⚠️
+- Mapped to phases: 15
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-19*

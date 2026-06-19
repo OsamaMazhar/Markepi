@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Batch, Templates & Process
 status: planning
-last_updated: "2026-06-19T06:16:26.552Z"
+last_updated: "2026-06-19"
 last_activity: 2026-06-19
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,58 +17,42 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-18)
+See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** Add a watermark and share it instantly — without ever cluttering the camera roll.
-**Current focus:** Phase 09 — Wave-Level Build Gate
+**Current focus:** Phase 12 — Template Management
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 12 of 14 (Template Management)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-19 — Milestone v2.0 started
+Status: Ready to plan — roadmap created
+Last activity: 2026-06-19 — v2.0 roadmap created
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
+- Total plans completed (all milestones): 26
+- v2.0 plans completed: 0
 
-- Total plans completed (v1.0): 20
-- Total execution time (v1.0): ~1 day, 137 commits
-- v1.1 plans completed: 0
-
-**By Phase (v1.1):**
+**By Phase (v2.0):**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 8. Traceability | 0/TBD | — | — |
-| 9. Build Gate | 0/TBD | — | — |
-| 10. Protocol Defaults | 0/TBD | — | — |
-| 11. Photos HDR | 0/TBD | — | — |
+| 12. Template Management | 0/TBD | — | — |
+| 13. Batch Processing | 0/TBD | — | — |
+| 14. Process Hardening | 0/TBD | — | — |
 
 *Updated after each plan completion*
-| Phase 08-traceability-reconciliation-recurrence-guard P02 | 2 min | 3 tasks | 3 files |
-| Phase 10-watermarkconfigurable-protocol-defaults P01 | 5min | 2 tasks | 2 files |
-| Phase 10-watermarkconfigurable-protocol-defaults P02 | 7min | 3 tasks | 4 files |
-| Phase 11-photos-extension-hdr-detection P01 | 295 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions logged in PROJECT.md Key Decisions table.
-v1.1-relevant decisions affecting current work:
-
-- [v1.1 roadmap]: TRACE-01 + TRACE-02 grouped (recurrence guard depends on reconciled baseline)
-- [v1.1 roadmap]: BUILD-01 scheduled as Phase 9 BEFORE code-changing phases (10, 11) so the gate protects REFA/PHDR — directly addresses retrospective's "build errors compounded undetected" failure mode
-- [v1.1 roadmap]: REFA-01 and PHDR-01 split into separate phases (10, 11) for crisp independent success criteria; PHDR-01 depends on the refactored PhotosExtensionViewModel
-- [v1.1 roadmap]: Phase numbering continues from v1.0 (8-11), does not reset
-- [Phase ?]: .planning/phases/10-watermarkconfigurable-protocol-defaults/10-01-SUMMARY.md
-- [Phase ?]: .planning/phases/10-watermarkconfigurable-protocol-defaults/10-01-SUMMARY.md
-- [Phase ?]: .planning/phases/10-watermarkconfigurable-protocol-defaults/10-01-SUMMARY.md
-- [Phase ?]: .planning/phases/10-watermarkconfigurable-protocol-defaults/10-01-SUMMARY.md
-- [Phase ?]: .planning/phases/10-watermarkconfigurable-protocol-defaults/10-01-SUMMARY.md
-- [Phase ?]: .planning/phases/10-watermarkconfigurable-protocol-defaults/10-02-SUMMARY.md
+- [v2.0 roadmap]: Phases 12-14 ordered by dependency: Templates (12) → Batch (13) → Process Hardening (14). Templates ship first to validate Codable schema migration before users have data. Batch depends on templates for auto-default-on-import. Process Hardening is independent tooling that can run last.
+- [v2.0 roadmap]: All new components are strictly additive on top of the shipped v1.0 + v1.1 codebase. WatermarkEngine is unchanged. Batch wraps it in a serial processing loop.
 
 ### Pending Todos
 
@@ -76,24 +60,21 @@ None yet.
 
 ### Blockers/Concerns
 
-- **Phase 10 planning**: Refactoring 3 ViewModels to use protocol default implementations must preserve the existing 227 tests' behavior — the protocol extension's `Self`-based mutation pattern needs spec attention (default impls mutating `self` via `var` shadowing or `@discardableResult` returning new config).
-- **Phase 11 planning**: HDR detection from `PHContentEditingInput` may differ from the Main App's `AVAsset`-based path — needs verification that gain map / transfer function inspection works on the Photos extension's `PHContentEditingInput.audiovisualAsset` or `fullSizeImageURL`.
+- **Phase 12**: Codable schema evolution must ship with first template save — retrofitting after users have templates is 3-5× more expensive. Schema versioning + migration functions are non-negotiable in Phase 12.
+- **Phase 13**: Batch memory management is the #1 risk — serial processing with `autoreleasepool` per item is mandatory to avoid iOS jetsam kills. Parallel processing must be avoided (Pitfall #1 per research).
+- **Phase 13**: AVAssetExportSession hardware decoder exhaustion (error -11839) requires serial video export queue with 0.5s inter-export delay (Pitfall #4 per research).
 
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| v1.1 scope | PHRO-01 (per-phase VERIFICATION.md template) | Deferred to future process-hardening milestone | 2026-06-18 |
-| v1.1 scope | PHRO-02 (worktree-safety fix for task-tool branching) | Deferred — GSD tooling concern | 2026-06-18 |
-| v2 scope | Batch processing (BATC-01, BATC-02) | Remains v2+ | — |
-| v2 scope | Customization templates (CUST-01–04) | Remains v2+ | — |
+| v2.1+ | Template folders/categories | Deferred — premature at v2.0 | 2026-06-19 |
+| v2.1+ | Template version history/undo | Deferred — overwrite-on-save sufficient for utility app | 2026-06-19 |
+| v2.1+ | Batch "smart auto-position" (Vision framework) | Deferred — latency per photo kills throughput | 2026-06-19 |
+| v2.1+ | Batch preview — spot check before full batch | Deferred — per-item override provides equivalent value | 2026-06-19 |
 
 ## Session Continuity
 
-Last session: 2026-06-18T17:56:18.663Z
-Stopped at: Phase 11 context gathered
+Last session: 2026-06-19
+Stopped at: v2.0 roadmap creation
 Resume file: None
-
-## Operator Next Steps
-
-- Start the next milestone with /gsd-new-milestone
