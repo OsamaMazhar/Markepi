@@ -13,12 +13,12 @@ Requirements for the v2.0 milestone. Each maps to a roadmap phase.
 
 ### Template Management (TMPL)
 
-- [ ] **TMPL-01**: User can save current watermark configuration as a named, reusable template
-- [ ] **TMPL-02**: User can browse saved templates in a list and apply one with a single tap
-- [ ] **TMPL-03**: User can manage templates — rename, duplicate, and swipe-to-delete any saved template
-- [ ] **TMPL-04**: User can mark a template as default; it auto-applies when new media is imported across all 3 targets (main app, share extension, Photos edit extension)
-- [ ] **TMPL-05**: User can export a template as a `.watermarktemplate` file and import one via share sheet or Files picker
-- [ ] **TMPL-06**: User can see a preview thumbnail of each template applied to the current media while browsing the template list
+- [x] **TMPL-01**: User can save current watermark configuration as a named, reusable template
+- [x] **TMPL-02**: User can browse saved templates in a list and apply one with a single tap
+- [x] **TMPL-03**: User can manage templates — rename, duplicate, and swipe-to-delete any saved template
+- [x] **TMPL-04**: User can mark a template as default; it auto-applies when new media is imported across all 3 targets (main app, share extension, Photos edit extension)
+- [x] **TMPL-05**: User can export a template as a `.watermarktemplate` file and import one via share sheet or Files picker
+- [x] **TMPL-06**: User can see a preview thumbnail of each template applied to the current media while browsing the template list
 
 ### Batch Processing (BATC)
 
@@ -72,12 +72,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TMPL-01 | Phase 12 | Pending |
-| TMPL-02 | Phase 12 | Pending |
-| TMPL-03 | Phase 12 | Pending |
-| TMPL-04 | Phase 12 | Pending |
-| TMPL-05 | Phase 12 | Pending |
-| TMPL-06 | Phase 12 | Pending |
+| TMPL-01 | Phase 12 | Complete |
+| TMPL-02 | Phase 12 | Complete |
+| TMPL-03 | Phase 12 | Complete |
+| TMPL-04 | Phase 12 | Complete |
+| TMPL-05 | Phase 12 | Complete |
+| TMPL-06 | Phase 12 | Complete |
 | BATC-01 | Phase 13 | Pending |
 | BATC-02 | Phase 13 | Pending |
 | BATC-03 | Phase 13 | Pending |
