@@ -27,6 +27,14 @@ created: 2026-06-19
 
 **Design authority:** Apple Human Interface Guidelines (HIG) for iOS. The app already follows HIG patterns established in v1.0/v1.1/Phase 12. Phase 13 extends existing UI components rather than introducing a new design language.
 
+### Visual Hierarchy
+
+**Primary focal point:** "Watermark All" button (`.borderedProminent`, 56pt height, centered in toolbar) — the main action driving the batch workflow.
+
+**Secondary elements:** Thumbnail strip with override dot indicators — shows batch composition at a glance. Preview area with current item — shows what will be watermarked.
+
+**During batch processing:** Progress overlay becomes the primary focal point — determinate progress bar, "X of Y" count, ETA. Cancel button is secondary.
+
 ---
 
 ## Spacing Scale
@@ -59,7 +67,7 @@ SF system font with dynamic type support throughout. Existing app uses these rol
 | Caption | 12pt (`.caption`) | Semibold (600) | Progress percentage, ETA text, dot indicator labels |
 | Body | 17pt (`.body`) | Regular (400) | Description text, summary copy, alert messages |
 | Heading | 22pt (`.title3`) | Semibold (600) | Sheet titles, notification titles, section headers |
-| Display | 28pt (`.title`) | Bold (700) | Primary empty-state heading, batch completion overlay |
+| Display | 28pt (`.title`) | Semibold (600) | Primary empty-state heading, batch completion overlay |
 
 All sizes support Dynamic Type scaling. `.monospacedDigit()` modifier applied to all numeric progress displays (percentage, count, ETA) — consistent with existing ControlsView pattern (line 163).
 
@@ -96,7 +104,7 @@ Apple semantic colors. Consistent with existing ControlsView, ThumbnailStripView
 | Primary CTA (batch complete) | **"Ready to Share All"** — button label when batch completes and results available | Default, consistent with existing "Ready to Share" pattern (ControlsView line 194) |
 | Progress indicator | **"`{current}` of `{total}` — ETA: `{minutes}` min"** — overlaid on preview area during batch processing | CONTEXT.md line 32 |
 | Progress bar percentage | **"`{Int(progress * 100)}%`"** — right-aligned, monospaced digits | Existing pattern (ControlsView lines 159-162) |
-| Cancel button | **"Cancel"** — red-tinted bordered button below progress bar | CONTEXT.md line 32 |
+| Cancel button | **"Stop Processing"** — red-tinted bordered button below progress bar | CONTEXT.md line 32 |
 | Cancel confirmation | **"Cancel batch processing?"** with message: **"Progress on completed items is saved. Remaining items will not be processed. Temp files for cancelled items will be cleaned up."** Buttons: **"Cancel Batch"** (destructive), **"Continue Processing"** (cancel) | Default (extends existing `.confirmationDialog` pattern from ContentView lines 71-78) |
 | Batch notification title | **"Batch Complete"** — system notification delivered via `UNUserNotificationCenter` | CONTEXT.md line 35 |
 | Batch notification body (success) | **"`{successCount}` of `{totalCount}` items watermarked"** — tap opens app to share sheet | CONTEXT.md line 35 |
@@ -180,7 +188,7 @@ The existing `shareButton` switch on `renderingState` (ControlsView lines 126-21
 - **Progress bar:** Determinate `.linear` progress view, spans full width of overlay, `.tint(.blue)`
 - **Count label:** "`current` of `total`" centered above progress bar, `.font(.caption.weight(.semibold))`
 - **ETA label:** "ETA: `{minutes}` min" below count, `.font(.caption2).foregroundStyle(.secondary)`
-- **Cancel button:** Below ETA, red-tinted `.bordered` button "Cancel" at 50pt height
+- **Cancel button:** Below ETA, red-tinted `.bordered` button "Stop Processing" at 50pt height
 - **Cancel behavior:** `Task.checkCancellation()` at each item boundary. Current item finishes. Remaining skipped. Temp files cleaned up. State → `.idle`.
 - **Cancel confirmation:** `.confirmationDialog` "Cancel batch processing?" with destructive confirm
 
