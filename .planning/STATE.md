@@ -4,7 +4,7 @@ milestone: v2.0
 milestone_name: Batch, Templates & Process
 status: verifying
 stopped_at: Completed 13-batch-processing-02-PLAN.md
-last_updated: "2026-06-19T21:48:08.381Z"
+last_updated: "2026-06-19T21:48:12.244Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 3
@@ -70,6 +70,9 @@ Progress: [██████████] 100%
 - [Phase 14-process-hardening]: VERIFICATION.md is per-plan (not per-phase) — populated by executor during execution, consumed by verifier agent post-phase
 - [Phase 14-process-hardening]: Completion gate uses bash exit 1 on three conditions: file missing, status=empty, uat_checks=0 — blocks SUMMARY.md Write call
 - [Phase 14-process-hardening]: Test counts auto-detected via git diff --stat matching *.test.*, *.spec.*, tests/ patterns
+- [Phase ?]: precheckWorktreePath only removes directories that are empty or contain only .planning/ — never removes directories with source code or non-GSD files
+- [Phase ?]: addWorktreeSafe tries primary path first, falls back to timestamp-suffixed path on already exists conflict; both paths occupied returns clear ok:false
+- [Phase ?]: Precheck runs in execute_waves step 3 before any Agent dispatch, not inside the executor agent; idempotent and non-blocking
 
 ### Pending Todos
 
