@@ -88,6 +88,14 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
     /// When true, presents the PhotosPicker for selecting a logo image.
     var showLogoPicker: Bool = false
 
+    // MARK: - Template Management (Phase 12)
+
+    /// When true, presents the Save Template alert for the current config.
+    var showSaveTemplateAlert: Bool = false
+
+    /// When true, presents the TemplateListView sheet.
+    var showTemplateList: Bool = false
+
     // MARK: - Unsaved Changes
 
     /// Drives `shouldShowCancelConfirmation` in the ViewController (Pitfall 5).

@@ -40,6 +40,14 @@ final class WatermarkViewModel: WatermarkConfigurable {
     var errorMessage: String?
     var showError: Bool = false
 
+    // MARK: - Template Management (Phase 12)
+
+    /// When true, presents the Save Template alert for the current config.
+    var showSaveTemplateAlert: Bool = false
+
+    /// When true, presents the TemplateListView sheet.
+    var showTemplateList: Bool = false
+
     var activeLayerIndex: Int = 0
 
     private let engine = WatermarkEngine.shared

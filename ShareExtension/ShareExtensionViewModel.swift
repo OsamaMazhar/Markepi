@@ -85,6 +85,14 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
     /// When true, an error alert is presented to the user.
     var showError: Bool = false
 
+    // MARK: - Template Management (Phase 12)
+
+    /// When true, presents the Save Template alert for the current config.
+    var showSaveTemplateAlert: Bool = false
+
+    /// When true, presents the TemplateListView sheet.
+    var showTemplateList: Bool = false
+
     /// When true, presents the PhotosPicker for selecting a logo image.
     var showLogoPicker: Bool = false
 
