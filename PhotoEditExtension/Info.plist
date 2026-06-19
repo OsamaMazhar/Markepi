@@ -19,5 +19,29 @@
 	</dict>
 	<key>CFBundleDisplayName</key>
 	<string>Watermark</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.watermark.app.template</string>
+			<key>UTTypeDescription</key>
+			<string>Watermark Template</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>watermarktemplate</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/json</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 </dict>
 </plist>
