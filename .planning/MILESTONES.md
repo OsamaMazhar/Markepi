@@ -1,5 +1,20 @@
 # Milestones
 
+## v1.1 Tech Debt Hardening (Shipped: 2026-06-19)
+
+**Phases completed:** 4 phases, 6 plans, 15 tasks
+
+**Key accomplishments:**
+
+- Reconciled v1.0 REQUIREMENTS.md traceability — 15 checkbox flips, 15 traceability table updates, 7 requirements reclassified v2→v1, with Reconciliation Note documenting MILESTONE-AUDIT.md evidence
+- Repo-local bash guard script with gsd-tools delegation, self-contained fixture test, and AGENTS.md documentation — prevents v1.0 traceability drift from recurring by making REQUIREMENTS.md checkbox sync a reproducible, verifiable post-plan step that fails noisily on mismatch.
+- xcodebuild wave-level build gate with self-contained fixture test, replacing file-existence self-checks as source of truth for build pass/fail — directly addressing the v1.0 retrospective's root cause where pre-existing build errors compounded undetected across Phases 5–6.
+- Protocol extension with 9 default implementations (5 method + 1 no-op + 3 computed properties) collapses ~186 lines of duplicated ViewModel code into a single source of truth in WatermarkCore
+- Removed 26 duplicated implementations across 3 ViewModels — ~259 lines collapsed to zero, with all layer-management operations inherited from WatermarkConfigurable protocol extension defaults
+- PhotosExtensionViewModel now populates sourceHasHDR and sourceFormatLabel from PHContentEditingInput, enabling the HDR→JPEG warning alert and Match Source format label in the Photos extension's ControlsView
+
+---
+
 ## v1.0 MVP (Shipped: 2026-06-18)
 
 **Phases completed:** 7 phases, 20 plans, 44 tasks
