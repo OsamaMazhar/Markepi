@@ -64,10 +64,11 @@ struct TemplatePreviewThumbnail: View {
         }
 
         // E) Create downsized thumbnail via ImageIO
-        guard let data = try? Data(contentsOf: result.outputURL),
+        guard let resultURL = result.url,
+              let data = try? Data(contentsOf: resultURL),
               let cgThumb = createThumbnail(from: data, maxPixelSize: 48 * UIScreen.main.scale) else {
             // Clean up temp file
-            try? FileManager.default.removeItem(at: result.outputURL)
+            if let resultURL = result.url { try? FileManager.default.removeItem(at: resultURL) }
             return
         }
 
@@ -80,7 +81,7 @@ struct TemplatePreviewThumbnail: View {
         }
 
         // Clean up temp result file
-        try? FileManager.default.removeItem(at: result.outputURL)
+        if let resultURL = result.url { try? FileManager.default.removeItem(at: resultURL) }
     }
 
     /// Creates a downsized thumbnail from image data using ImageIO.

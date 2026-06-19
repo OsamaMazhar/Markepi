@@ -34,6 +34,10 @@
 		019 /* PhotosExtensionRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 612; };
 		01A /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 620; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		01B /* PhotoEditExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 621; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		723 /* TemplateListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F; };
+		724 /* TemplateRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 720; };
+		725 /* TemplatePreviewThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 721; };
+		726 /* SaveTemplateAlertModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 722; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -70,6 +74,10 @@
 		614 /* PhotoEditExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PhotoEditExtension.entitlements; sourceTree = "<group>"; };
 		620 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		621 /* PhotoEditExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PhotoEditExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		71F /* TemplateListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateListView.swift; sourceTree = "<group>"; };
+		720 /* TemplateRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateRowView.swift; sourceTree = "<group>"; };
+		721 /* TemplatePreviewThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplatePreviewThumbnail.swift; sourceTree = "<group>"; };
+		722 /* SaveTemplateAlertModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTemplateAlertModifier.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -188,6 +196,7 @@
 				333 /* Share */,
 				334 /* Navigation */,
 				335 /* Common */,
+				336 /* Templates */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -238,6 +247,17 @@
 				104 /* ErrorAlertModifier.swift */,
 			);
 			path = Common;
+			sourceTree = "<group>";
+		};
+		336 /* Templates */ = {
+			isa = PBXGroup;
+			children = (
+				71F /* TemplateListView.swift */,
+				720 /* TemplateRowView.swift */,
+				721 /* TemplatePreviewThumbnail.swift */,
+				722 /* SaveTemplateAlertModifier.swift */,
+			);
+			path = Templates;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -397,6 +417,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				723 /* TemplateListView.swift in Sources */,
+				724 /* TemplateRowView.swift in Sources */,
+				725 /* TemplatePreviewThumbnail.swift in Sources */,
+				726 /* SaveTemplateAlertModifier.swift in Sources */,
 				001 /* AsyncButton.swift in Sources */,
 				002 /* ContentView.swift in Sources */,
 				004 /* ErrorAlertModifier.swift in Sources */,

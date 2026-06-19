@@ -51,7 +51,7 @@ public final class TemplateStore {
     // MARK: - Published State
 
     /// The current array of templates. Automatically observed by SwiftUI via `@Observable`.
-    var templates: [Template] = []
+    public var templates: [Template] = []
 
     // MARK: - Init
 
