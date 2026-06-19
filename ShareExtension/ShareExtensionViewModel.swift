@@ -267,6 +267,11 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
 
             // Trigger debounced preview generation
             await generatePreview()
+
+            // Phase 12: Auto-apply default template on import
+            if let defaultTemplate = TemplateStore.shared.defaultTemplate {
+                config = defaultTemplate.config
+            }
         } catch {
             await setError("Failed to load photo: \(error.localizedDescription)")
         }
@@ -312,6 +317,11 @@ final class ShareExtensionViewModel: WatermarkConfigurable {
 
             // Generate static frame preview (D-03)
             await generateVideoPreview()
+
+            // Phase 12: Auto-apply default template on import
+            if let defaultTemplate = TemplateStore.shared.defaultTemplate {
+                config = defaultTemplate.config
+            }
         } catch {
             await setError("Failed to load video: \(error.localizedDescription)")
         }

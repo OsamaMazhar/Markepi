@@ -180,6 +180,12 @@ final class PhotosExtensionViewModel: WatermarkConfigurable {
             self.config = savedConfig
         }
 
+        // Phase 12: Auto-apply default template on fresh edit only (not re-edit)
+        if input.adjustmentData == nil,
+           let defaultTemplate = TemplateStore.shared.defaultTemplate {
+            self.config = defaultTemplate.config
+        }
+
         // Trigger debounced preview generation
         Task { await generatePreview() }
     }
