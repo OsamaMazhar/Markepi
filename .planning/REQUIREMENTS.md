@@ -32,8 +32,8 @@ Requirements for the v2.0 milestone. Each maps to a roadmap phase.
 
 ### Process Hardening (PHRO)
 
-- [ ] **PHRO-01**: A per-phase VERIFICATION.md template is populated during execution with UAT checkboxes, automated test counts, and manual QA steps for each plan
-- [ ] **PHRO-02**: A worktree-safety fix prevents git worktree branching failures from stale worktree directories, with pre-check, prune, and timestamp-suffixed fallback
+- [x] **PHRO-01**: A per-phase VERIFICATION.md template is populated during execution with UAT checkboxes, automated test counts, and manual QA steps for each plan
+- [x] **PHRO-02**: A worktree-safety fix prevents git worktree branching failures from stale worktree directories, with pre-check, prune, and timestamp-suffixed fallback
 
 ## Future Requirements
 
@@ -85,8 +85,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BATC-05 | Phase 13 | Complete |
 | BATC-06 | Phase 13 | Complete |
 | BATC-07 | Phase 13 | Complete |
-| PHRO-01 | Phase 14 | Pending |
-| PHRO-02 | Phase 14 | Pending |
+| PHRO-01 | Phase 14 | Complete |
+| PHRO-02 | Phase 14 | Complete |
 
 **Coverage:**
 - v2.0 requirements: 15 total

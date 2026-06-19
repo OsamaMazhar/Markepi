@@ -41,7 +41,7 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
 
 - [x] **Phase 12: Template Management** — Save/load/manage watermark templates with auto-default on import (completed 2026-06-19)
 - [x] **Phase 13: Batch Processing** — Multi-item watermarking with shared config, per-item adjustments, and progress tracking (planned) (completed 2026-06-19)
-- [ ] **Phase 14: Process Hardening** — VERIFICATION.md templating and worktree-safety fix
+- [x] **Phase 14: Process Hardening** — VERIFICATION.md templating and worktree-safety fix (completed 2026-06-19)
 
 ## Phase Details
 
@@ -125,8 +125,8 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 14-01-PLAN.md — VERIFICATION.md per-plan population: template, execute-plan.md integration, SUMMARY.md schema extension
-- [ ] 14-02-PLAN.md — Worktree safety pre-check: precheckWorktreePath(), addWorktreeSafe(), gsd-tools.cjs wiring, execute-phase.md integration
+- [x] 14-01-PLAN.md — VERIFICATION.md per-plan population: template, execute-plan.md integration, SUMMARY.md schema extension
+- [x] 14-02-PLAN.md — Worktree safety pre-check: precheckWorktreePath(), addWorktreeSafe(), gsd-tools.cjs wiring, execute-phase.md integration
 
 ## Progress
 
@@ -145,4 +145,4 @@ Plans:
 | 11. Photos Extension HDR Detection | v1.1 | 1/1 | Complete | 2026-06-18 |
 | 12. Template Management | v2.0 | 5/5 | Complete   | 2026-06-19 |
 | 13. Batch Processing | v2.0 | 3/3 | Complete   | 2026-06-19 |
-| 14. Process Hardening | v2.0 | 0/2 | Not started | — |
+| 14. Process Hardening | v2.0 | 2/2 | Complete   | 2026-06-19 |
