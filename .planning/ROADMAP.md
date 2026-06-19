@@ -72,7 +72,7 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 12-03-PLAN.md — Template list UI: row view, preview thumbnails, import, context menus
-- [ ] 12-05-PLAN.md — Extension auto-apply + .watermarktemplate UTI registration
+- [x] 12-05-PLAN.md — Extension auto-apply + .watermarktemplate UTI registration
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -123,6 +123,6 @@ Plans:
 | 9. Wave-Level Build Gate | v1.1 | 1/1 | Complete | 2026-06-18 |
 | 10. WatermarkConfigurable Protocol Defaults | v1.1 | 2/2 | Complete | 2026-06-18 |
 | 11. Photos Extension HDR Detection | v1.1 | 1/1 | Complete | 2026-06-18 |
-| 12. Template Management | v2.0 | 3/5 | In Progress|  |
+| 12. Template Management | v2.0 | 4/5 | In Progress|  |
 | 13. Batch Processing | v2.0 | 0/TBD | Not started | — |
 | 14. Process Hardening | v2.0 | 0/TBD | Not started | — |
