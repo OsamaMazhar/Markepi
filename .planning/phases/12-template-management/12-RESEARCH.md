@@ -762,7 +762,7 @@ struct TemplatePreviewThumbnail: View {
 | A4 | The `.watermarktemplate` UTI registered in Info.plist is sufficient for `.fileImporter` filtering in the main app and for Safari/Files "Open In" recognition. | File Format — UTI Registration | If UTI is not properly declared in all 3 Info.plist files, import may accept any JSON file instead of only `.watermarktemplate` files. LOW risk — UTI declarations are well-understood. |
 | A5 | `CGImageSourceCreateThumbnailAtIndex` with `kCGImageSourceThumbnailMaxPixelSize: 48*scale` produces acceptable quality previews for the template list without running the full watermark pipeline. | Preview Thumbnails | If the thumbnail API doesn't preserve the watermark rendering quality, the full engine may need to be called for each preview, impacting performance. LOW risk — the engine is GPU-accelerated and 48×48 is tiny. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should preview thumbnails use the full watermark engine (accurate) or a fast approximate render (quick)?**
    - What we know: The UI-SPEC says to use `CIContext.createCGImage` at 48×48pt. The full engine handles all watermark types correctly. A simplified render would need to duplicate text/image/signature/whiteframe logic.
