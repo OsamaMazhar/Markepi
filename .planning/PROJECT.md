@@ -8,14 +8,20 @@ An iOS app that lets users add watermarks or white-frame metadata overlays to ph
 
 Add a watermark and share it instantly — without ever cluttering the camera roll.
 
-## Current Milestone: v2.0 Batch, Templates & Process
+## Current State
 
-**Goal:** Ship the deferred v1.0 features: batch processing with per-item config adjustments, full template CRUD + auto-default, and process hardening
+**Shipped:** v2.0 (2026-06-19) — 3 phases, 10 plans, 15 requirements all satisfied.
 
-**Target features:**
-- Batch processing — watermark multiple photos/videos with same config + per-item adjustments
-- Customization templates — save, load, rename, delete templates + auto-apply default on import
-- Process hardening — per-phase VERIFICATION.md templating + worktree-safety fix
+**v2.0 delivered:**
+- Template Management — save, load, manage, and auto-apply watermark templates across all 3 targets (6 requirements)
+- Batch Processing — multi-item watermarking with shared config, per-item adjustments, progress tracking, error resilience (7 requirements)
+- Process Hardening — VERIFICATION.md per-plan population gate + worktree safety pre-check/fallback (2 requirements)
+
+**v2.0 stats:** 3 phases, 10 plans, 15/15 requirements satisfied. Built on v1.0 + v1.1 foundation (13,820+ lines Swift, 82+ files, 233+ tests).
+
+## Next Milestone
+
+To start the next milestone, run: `/gsd-new-milestone`
 
 ## Requirements
 
@@ -61,17 +67,14 @@ Add a watermark and share it instantly — without ever cluttering the camera ro
 - ✓ REFA-01 — WatermarkConfigurable protocol defaults collapse ~186 duplicated lines across 3 ViewModels — v1.1
 - ✓ PHDR-01 — PhotosExtensionViewModel populates sourceHasHDR/sourceFormatLabel; HDR→JPEG warning fires — v1.1
 - ✓ BUILD-01 — Wave-level xcodebuild build gate across all 3 targets — v1.1
+- ✓ TMPL-01 through TMPL-06 — Template CRUD + auto-default-on-import across all 3 targets — v2.0
+- ✓ BATC-01 through BATC-07 — Batch processing with per-item adjustments, progress, error resilience — v2.0
+- ✓ PHRO-01 — Per-phase VERIFICATION.md populated during execution — v2.0
+- ✓ PHRO-02 — Worktree safety pre-check + timestamp fallback — v2.0
 
-### Active
+### All Requirements Satisfied
 
-- [ ] BATC-01 — Batch-process multiple photos/videos with shared config + per-item adjustments
-- [ ] BATC-02 — Apply same watermark configuration across an entire batch
-- [ ] CUST-01 — Save watermark configuration as reusable template
-- [ ] CUST-02 — Load previously saved template
-- [ ] CUST-03 — Manage (rename/delete) saved templates
-- [ ] CUST-04 — Set default template auto-applied on import
-- [ ] PHRO-01 — Per-phase VERIFICATION.md template populated during execution
-- [ ] PHRO-02 — Worktree-safety fix for task-tool branching
+All 15 v2.0 requirements shipped. See `.planning/milestones/v2.0-REQUIREMENTS.md`.
 
 ### Out of Scope
 
