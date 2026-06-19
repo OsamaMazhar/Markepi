@@ -102,7 +102,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 13-02-PLAN.md — ViewModel + Controls Integration: batch state, methods, overrides, background notification; ControlsView batch share button
+- [x] 13-02-PLAN.md — ViewModel + Controls Integration: batch state, methods, overrides, background notification; ControlsView batch share button
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -138,5 +138,5 @@ Plans:
 | 10. WatermarkConfigurable Protocol Defaults | v1.1 | 2/2 | Complete | 2026-06-18 |
 | 11. Photos Extension HDR Detection | v1.1 | 1/1 | Complete | 2026-06-18 |
 | 12. Template Management | v2.0 | 5/5 | Complete   | 2026-06-19 |
-| 13. Batch Processing | v2.0 | 1/3 | In Progress|  |
+| 13. Batch Processing | v2.0 | 2/3 | In Progress|  |
 | 14. Process Hardening | v2.0 | 0/TBD | Not started | — |

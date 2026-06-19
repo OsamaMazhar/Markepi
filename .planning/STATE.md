@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Batch, Templates & Process
 status: verifying
-stopped_at: Phase 12 UI-SPEC approved
-last_updated: "2026-06-19T20:36:45.450Z"
+stopped_at: Completed 13-batch-processing-02-PLAN.md
+last_updated: "2026-06-19T20:42:42.681Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 33
 ---
 
@@ -30,7 +30,7 @@ Plan: 5 of 5
 Status: Phase complete — ready for verification
 Last activity: 2026-06-19
 
-Progress: [████████░░] 75%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [████████░░] 75%
 | Phase 12-template-management P05 | 2min | 2 tasks | 5 files |
 | Phase 12-template-management P04 | 1 min | 2 tasks | 2 files |
 | Phase 13-batch-processing P01 | 6min | 2 tasks | 6 files |
+| Phase 13-batch-processing P02 | 1 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -61,6 +62,7 @@ Progress: [████████░░] 75%
 - [v2.0 roadmap]: All new components are strictly additive on top of the shipped v1.0 + v1.1 codebase. WatermarkEngine is unchanged. Batch wraps it in a serial processing loop.
 - [Phase ?]: Auto-apply uses inline if-let pattern at each import path rather than calling a shared method — Keeps each import path's tail explicit and avoids refactoring existing method signatures
 - [Phase 13-batch-processing]: cancelBatchProcessing() added to WatermarkConfigurable protocol with default no-op — share/photo extension ViewModels inherit it without changes
+- [Phase 13-batch-processing]: cancelProcessing() as unified cancel entry point — routes to cancelBatch() or cancelVideoExport() based on active processing state — Keeps ControlsView cancel buttons simple with a single protocol method; dispatch to correct target happens inside ViewModel
 
 ### Pending Todos
 
@@ -83,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T20:36:45.442Z
-Stopped at: Phase 12 UI-SPEC approved
+Last session: 2026-06-19T20:42:38.550Z
+Stopped at: Completed 13-batch-processing-02-PLAN.md
 Resume file: None
