@@ -83,6 +83,28 @@ struct ContentView: View {
                         }
                     }
                 }
+                // Phase 12: Template list sheet
+                .sheet(isPresented: $viewModel.showTemplateList) {
+                    NavigationStack {
+                        TemplateListView(viewModel: viewModel)
+                            .navigationTitle("Templates")
+                            .navigationBarTitleDisplayMode(.inline)
+                    }
+                }
+                // Phase 12: Save template alert
+                .saveTemplateAlert(isPresented: $viewModel.showSaveTemplateAlert) { name in
+                    do {
+                        let template = Template(
+                            name: name,
+                            config: viewModel.config,
+                            isDefault: false
+                        )
+                        try TemplateStore.shared.save(template)
+                    } catch {
+                        viewModel.errorMessage = error.localizedDescription
+                        viewModel.showError = true
+                    }
+                }
                 .task(id: viewModel.previewIdentifier) {
                     guard viewModel.currentPhoto != nil else { return }
                     await viewModel.generatePreview()
