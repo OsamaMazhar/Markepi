@@ -106,7 +106,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 13-03-PLAN.md — Batch UI Components + Integration: BatchProgressOverlay, BatchItemDetailSheet, ThumbnailStripView enhancements, ContentView wiring
+- [x] 13-03-PLAN.md — Batch UI Components + Integration: BatchProgressOverlay, BatchItemDetailSheet, ThumbnailStripView enhancements, ContentView wiring
 
 **UI hint**: yes
 
