@@ -38,6 +38,14 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                 WhiteFrameToggleView(viewModel: viewModel)
                 LayerListView(viewModel: viewModel)
 
+                Divider()
+                    .padding(.horizontal, -16)
+
+                saveTemplateButton
+
+                Divider()
+                    .padding(.horizontal, -16)
+
                 exportOptionsDisclosure
 
                 Divider()
@@ -208,5 +216,20 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.renderingState)
+    }
+
+    private var saveTemplateButton: some View {
+        Button {
+            viewModel.showSaveTemplateAlert = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "square.and.arrow.down.on.square")
+                Text("Save as Template")
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+        }
+        .buttonStyle(.bordered)
+        .tint(.accentColor)
     }
 }
