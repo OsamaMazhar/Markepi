@@ -120,7 +120,13 @@ Plans:
   1. A per-phase VERIFICATION.md template is populated during execution with UAT checkboxes, automated test counts, and manual QA steps — no empty template left unfilled after a plan completes
   2. Git worktree operations are protected against stale worktree directory failures: a pre-check detects stale worktrees, prunes when safe, and falls back to timestamp-suffixed directory names when the primary path is occupied
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 14-01-PLAN.md — VERIFICATION.md per-plan population: template, execute-plan.md integration, SUMMARY.md schema extension
+- [ ] 14-02-PLAN.md — Worktree safety pre-check: precheckWorktreePath(), addWorktreeSafe(), gsd-tools.cjs wiring, execute-phase.md integration
 
 ## Progress
 
@@ -139,4 +145,4 @@ Plans:
 | 11. Photos Extension HDR Detection | v1.1 | 1/1 | Complete | 2026-06-18 |
 | 12. Template Management | v2.0 | 5/5 | Complete   | 2026-06-19 |
 | 13. Batch Processing | v2.0 | 3/3 | Complete   | 2026-06-19 |
-| 14. Process Hardening | v2.0 | 0/TBD | Not started | — |
+| 14. Process Hardening | v2.0 | 0/2 | Not started | — |
