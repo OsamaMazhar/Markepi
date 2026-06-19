@@ -54,8 +54,15 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
   2. User can browse saved templates with preview thumbnails applied to current media, and tap one to apply it instantly
   3. User can rename, duplicate, and swipe-to-delete any saved template from the list
   4. User can mark a template as default; the default template auto-applies when new media is imported in the main app, share extension, and Photos edit extension
-  5. User can export a template as a `.watermarktemplate` file and import one from Files or share sheet into the template library
-**Plans**: TBD
+   5. User can export a template as a `.watermarktemplate` file and import one from Files or share sheet into the template library
+**Plans**: 5 plans
+
+Plans:
+- [ ] 12-01-PLAN.md — Core data layer: Template model, TemplateStore with migration chain, App.entitlements
+- [ ] 12-02-PLAN.md — Protocol additions, Save as Template button, SaveTemplateAlertModifier
+- [ ] 12-03-PLAN.md — Template list UI: row view, preview thumbnails, import, context menus
+- [ ] 12-04-PLAN.md — Main app integration: WatermarkViewModel auto-apply, ContentView sheet+alert
+- [ ] 12-05-PLAN.md — Extension auto-apply + .watermarktemplate UTI registration
 **UI hint**: yes
 
 ### Phase 13: Batch Processing
