@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Address tech debt — REQUIREMENTS drift, ViewModel duplication, Photos HDR detection
-status: Awaiting next milestone
-stopped_at: Phase 11 context gathered
-last_updated: "2026-06-19T05:58:33.476Z"
-last_activity: 2026-06-19 — Milestone v1.1 completed and archived
+milestone: v2.0
+milestone_name: Batch, Templates & Process
+status: planning
+last_updated: "2026-06-19T06:16:26.552Z"
+last_activity: 2026-06-19
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-18)
 
 ## Current Position
 
-Phase: Milestone v1.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-19 — Milestone v1.1 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-19 — Milestone v2.0 started
 
 ## Performance Metrics
 

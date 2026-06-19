@@ -8,11 +8,14 @@ An iOS app that lets users add watermarks or white-frame metadata overlays to ph
 
 Add a watermark and share it instantly — without ever cluttering the camera roll.
 
-## Current State
+## Current Milestone: v2.0 Batch, Templates & Process
 
-**v1.0 + v1.1 shipped.** 13,820 lines of Swift across 82+ files. All 41 requirements delivered across 11 phases and 26 plans. 45 commits over 3 hours for v1.1 (137 over 1 day for v1.0). 233 automated tests (14 pre-existing EXIF orientation test failures in SPM CLI mode — pass under xcodebuild). Dev process hardened: REQUIREMENTS.md traceability automated with recurrence guard, wave-level xcodebuild build gate replaces untrustworthy self-checks, ViewModel duplication collapsed via WatermarkConfigurable protocol defaults, Photos extension HDR warning functional.
+**Goal:** Ship the deferred v1.0 features: batch processing with per-item config adjustments, full template CRUD + auto-default, and process hardening
 
-**Next milestone:** v2.0 — planned. Deferred items from v1.0: batch processing (BATC-01/02), customization templates (CUST-01–04), process hardening (PHRO-01/02).
+**Target features:**
+- Batch processing — watermark multiple photos/videos with same config + per-item adjustments
+- Customization templates — save, load, rename, delete templates + auto-apply default on import
+- Process hardening — per-phase VERIFICATION.md templating + worktree-safety fix
 
 ## Requirements
 
@@ -61,7 +64,14 @@ Add a watermark and share it instantly — without ever cluttering the camera ro
 
 ### Active
 
-None — all 41 requirements shipped across v1.0 and v1.1. Next milestone will define new requirements.
+- [ ] BATC-01 — Batch-process multiple photos/videos with shared config + per-item adjustments
+- [ ] BATC-02 — Apply same watermark configuration across an entire batch
+- [ ] CUST-01 — Save watermark configuration as reusable template
+- [ ] CUST-02 — Load previously saved template
+- [ ] CUST-03 — Manage (rename/delete) saved templates
+- [ ] CUST-04 — Set default template auto-applied on import
+- [ ] PHRO-01 — Per-phase VERIFICATION.md template populated during execution
+- [ ] PHRO-02 — Worktree-safety fix for task-tool branching
 
 ### Out of Scope
 
@@ -71,10 +81,7 @@ None — all 41 requirements shipped across v1.0 and v1.1. Next milestone will d
 - Account creation / sign-in — anti-pattern for utility apps
 - In-app camera / photo capture — users already have iPhone Camera
 - Android version — iOS only
-- Batch processing (BATC-01, BATC-02) — deferred to future milestone
-- Customization templates (CUST-01 through CUST-04) — deferred to future milestone
-- Per-phase VERIFICATION.md templating (PHRO-01) — deferred to process-hardening milestone
-- Worktree-safety fix for task-tool branching (PHRO-02) — GSD tooling concern, deferred
+
 
 ## Context
 
@@ -130,4 +137,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-18 after v1.1 milestone completion*
+*Last updated: 2026-06-19 after v2.0 milestone start*
