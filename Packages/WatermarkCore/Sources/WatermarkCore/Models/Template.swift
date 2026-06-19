@@ -14,7 +14,7 @@ import Foundation
 public struct Template: Sendable, Codable, Identifiable {
 
     /// Unique identifier for this template
-    public let id: UUID
+    public var id: UUID
 
     /// User-visible name (must be unique across all templates)
     public var name: String
@@ -26,7 +26,7 @@ public struct Template: Sendable, Codable, Identifiable {
     public var isDefault: Bool
 
     /// When this template was created
-    public let createdAt: Date
+    public var createdAt: Date
 
     /// Schema version of this template's encoded data.
     /// Bumped by `MigrationChain` when new fields are added.
