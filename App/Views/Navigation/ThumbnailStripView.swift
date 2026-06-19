@@ -1,8 +1,19 @@
 import SwiftUI
+import WatermarkCore
 
 struct ThumbnailStripView: View {
     let photos: [PhotoItem]
     @Binding var currentIndex: Int
+
+    /// Per-item watermark override configs for showing dot indicators.
+    var perItemOverrides: [UUID: WatermarkConfiguration] = [:]
+
+    /// Callback when a thumbnail is tapped (for opening BatchItemDetailSheet).
+    var onItemTapped: ((Int) -> Void)? = nil
+
+    /// Callback when thumbnails are reordered via drag-and-drop.
+    /// The caller updates the photos array and re-evaluates currentIndex.
+    var onReorder: (([PhotoItem]) -> Void)? = nil
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -12,7 +23,11 @@ struct ThumbnailStripView: View {
                         thumbnailCell(for: photo, index: index)
                             .id(photo.id)
                             .onTapGesture {
+                                onItemTapped?(index)
                                 currentIndex = index
+                            }
+                            .onDrag {
+                                NSItemProvider(object: String(index) as NSString)
                             }
                             .accessibilityLabel("Photo \(index + 1) of \(photos.count)")
                             .accessibilityHint("Double tap to select")
@@ -20,6 +35,18 @@ struct ThumbnailStripView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
+                .dropDestination(for: String.self) { items, _ in
+                    guard let sourceStr = items.first,
+                          let sourceIndex = Int(sourceStr),
+                          sourceIndex >= 0, sourceIndex < photos.count else {
+                        return false
+                    }
+                    var reordered = photos
+                    let moved = reordered.remove(at: sourceIndex)
+                    reordered.append(moved)
+                    onReorder?(reordered)
+                    return true
+                }
             }
             .frame(height: 72)
             .background(.ultraThinMaterial)
@@ -48,6 +75,15 @@ struct ThumbnailStripView: View {
             }
         }
         .frame(width: 60, height: 60)
+        .overlay(alignment: .topTrailing) {
+            if perItemOverrides[photo.id] != nil {
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: 6, height: 6)
+                    .padding(4)
+                    .accessibilityLabel("Custom watermark applied")
+            }
+        }
         .overlay(alignment: .center) {
             if isCurrent {
                 RoundedRectangle(cornerRadius: 8)
