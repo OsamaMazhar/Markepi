@@ -64,6 +64,12 @@ public enum RenderingState: Equatable, Sendable {
     /// - Parameter estimatedTimeRemaining: ETA in seconds, or nil when insufficient data
     case renderingVideo(progress: Double, estimatedTimeRemaining: TimeInterval?)
 
+    /// Batch processing in progress with progress tracking.
+    /// - Parameter current: Number of items processed so far
+    /// - Parameter total: Total number of items in the batch
+    /// - Parameter eta: Estimated time remaining in seconds, or nil when insufficient data
+    case batchProcessing(current: Int, total: Int, eta: TimeInterval?)
+
     /// Rendering completed successfully; ready to present share sheet
     case done
 
@@ -76,6 +82,8 @@ public enum RenderingState: Equatable, Sendable {
             return true
         case (.renderingVideo(let p1, let e1), .renderingVideo(let p2, let e2)):
             return p1 == p2 && e1 == e2
+        case (.batchProcessing(let c1, let t1, let eta1), .batchProcessing(let c2, let t2, let eta2)):
+            return c1 == c2 && t1 == t2 && eta1 == eta2
         case (.error, .error):
             return true
         default:

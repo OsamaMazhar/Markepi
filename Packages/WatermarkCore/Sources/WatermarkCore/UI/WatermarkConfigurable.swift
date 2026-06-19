@@ -49,6 +49,11 @@ public protocol WatermarkConfigurable: AnyObject {
     /// The ViewModel cancels the export task and cleans up the incomplete temp file.
     func cancelVideoExport()
 
+    /// Cancels an in-progress batch processing operation.
+    /// Called by ControlsView's Cancel button during .batchProcessing state.
+    /// The ViewModel cancels the batch task and cleans up incomplete temp files.
+    func cancelBatchProcessing()
+
     /// Applies a template's configuration to the current state.
     /// Called from TemplateListView when a row is tapped.
     func applyTemplate(_ template: Template)
@@ -145,4 +150,11 @@ extension WatermarkConfigurable {
     public func applyTemplate(_ template: Template) {
         config = template.config
     }
+
+    // MARK: - Batch Processing (Phase 13)
+
+    /// Default no-op — only the main app ViewModel (WatermarkViewModel)
+    /// implements batch processing. Share and Photos extension ViewModels
+    /// use this default which safely does nothing.
+    public func cancelBatchProcessing() {}
 }

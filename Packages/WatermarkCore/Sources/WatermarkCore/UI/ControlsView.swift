@@ -183,6 +183,35 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 4)
 
+            case .batchProcessing(let current, let total, let eta):
+                VStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        ProgressView(value: total > 0 ? Double(current) / Double(total) : 0, total: 1.0)
+                            .progressViewStyle(.linear)
+                            .tint(.blue)
+                        Text("\(current)/\(total)")
+                            .font(.caption.weight(.medium))
+                            .monospacedDigit()
+                            .frame(minWidth: 48, alignment: .trailing)
+                    }
+                    if let eta = eta {
+                        Text("ETA ~\(Int(max(eta, 0)))s")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Button(role: .destructive) {
+                        viewModel.cancelBatchProcessing()
+                    } label: {
+                        Text("Cancel Batch")
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 36)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+
             case .done:
                 Button {
                     if !reduceMotion {
