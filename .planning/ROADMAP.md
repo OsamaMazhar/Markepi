@@ -63,7 +63,7 @@ See `.planning/milestones/v1.1-ROADMAP.md` for full phase details.
 Plans:
 **Wave 1**
 
-- [ ] 12-01-PLAN.md — Core data layer: Template model, TemplateStore with migration chain, App.entitlements
+- [x] 12-01-PLAN.md — Core data layer: Template model, TemplateStore with migration chain, App.entitlements
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -123,6 +123,6 @@ Plans:
 | 9. Wave-Level Build Gate | v1.1 | 1/1 | Complete | 2026-06-18 |
 | 10. WatermarkConfigurable Protocol Defaults | v1.1 | 2/2 | Complete | 2026-06-18 |
 | 11. Photos Extension HDR Detection | v1.1 | 1/1 | Complete | 2026-06-18 |
-| 12. Template Management | v2.0 | 0/TBD | Not started | — |
+| 12. Template Management | v2.0 | 1/5 | In Progress|  |
 | 13. Batch Processing | v2.0 | 0/TBD | Not started | — |
 | 14. Process Hardening | v2.0 | 0/TBD | Not started | — |
