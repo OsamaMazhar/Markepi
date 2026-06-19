@@ -13,6 +13,10 @@ import Foundation
 /// exhaustion (Pitfalls #1 and #4).
 public actor BatchProcessor {
 
+    // MARK: - Init
+
+    public init() {}
+
     // MARK: - BatchItem
 
     /// A single item in a batch processing run.

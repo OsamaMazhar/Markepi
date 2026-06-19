@@ -50,6 +50,24 @@ final class WatermarkViewModel: WatermarkConfigurable {
 
     var activeLayerIndex: Int = 0
 
+    // MARK: - Batch Processing (Phase 13)
+
+    /// Shared actor instance for batch watermark processing.
+    var batchProcessor: BatchProcessor = BatchProcessor()
+
+    /// Populated after batch completes; nil on cancel/cleanup.
+    var batchResults: BatchProcessingResult? = nil
+
+    /// Per-item watermark configuration overrides keyed by PhotoItem.id.
+    /// Nil entries use the shared `config`. Only populated items override.
+    var perItemOverrides: [UUID: WatermarkConfiguration] = [:]
+
+    /// Whether any per-item overrides exist.
+    var hasBatchOverrides: Bool { !perItemOverrides.isEmpty }
+
+    /// Reference to the in-flight batch processing Task for cancellation.
+    private var batchProcessingTask: Task<Void, Never>?
+
     private let engine = WatermarkEngine.shared
 
     /// Tracks the in-progress video export task for cancellation support.
@@ -286,6 +304,13 @@ final class WatermarkViewModel: WatermarkConfigurable {
     }
 
     func renderAndPrepareShare() async {
+        // Batch mode: when multiple photos are selected, trigger batch processing
+        // and return — the single-item rendering path is skipped entirely.
+        if hasMultiplePhotos {
+            await processBatch()
+            return
+        }
+
         guard let photo = currentPhoto else { return }
 
         // D-13: Branch by media type
@@ -488,11 +513,169 @@ final class WatermarkViewModel: WatermarkConfigurable {
         // State cleanup handled in renderAndShareVideo's CancellationError catch
     }
 
+    // MARK: - Batch Processing Methods
+
+    /// Unified cancel entry point for ControlsView buttons.
+    /// Routes to the correct cancel method based on active processing state.
+    func cancelProcessing() {
+        if batchProcessingTask != nil {
+            cancelBatch()
+        } else {
+            cancelVideoExport()
+        }
+    }
+
+    /// Cancels the in-progress batch processing task.
+    /// State cleanup (temp file removal, renderingState = .idle) happens
+    /// in processBatch()'s CancellationError catch block.
+    func cancelBatch() {
+        batchProcessingTask?.cancel()
+        batchProcessingTask = nil
+    }
+
+    /// Processes all loaded photos sequentially through BatchProcessor.
+    ///
+    /// Only runs when renderingState is .idle and more than one photo is loaded.
+    /// Requests background execution time for completion notification delivery.
+    /// On completion: stores batchResults, sets .done, schedules notification.
+    /// On cancellation: cleans up partial temp files, returns to .idle.
+    func processBatch() async {
+        guard renderingState == .idle, photos.count > 1 else { return }
+
+        renderingState = .batchProcessing(current: 0, total: photos.count, eta: nil)
+
+        let items: [BatchProcessor.BatchItem] = photos.map { photo in
+            BatchProcessor.BatchItem(
+                id: photo.id,
+                sourceURL: photo.sourceURL,
+                mediaType: photo.mediaType,
+                overrideConfig: perItemOverrides[photo.id]
+            )
+        }
+
+        var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask { [weak self] in
+            self?.cancelBatch()
+            UIApplication.shared.endBackgroundTask(backgroundTaskID)
+            backgroundTaskID = .invalid
+        }
+
+        let task = Task { [weak self] in
+            guard let self = self else { return }
+            defer {
+                UIApplication.shared.endBackgroundTask(backgroundTaskID)
+                backgroundTaskID = .invalid
+            }
+
+            let result = await self.batchProcessor.process(
+                items: items,
+                sharedConfig: self.config,
+                onProgress: { @Sendable current, total, eta in
+                    Task { @MainActor [weak self] in
+                        self?.renderingState = .batchProcessing(current: current, total: total, eta: eta)
+                    }
+                }
+            )
+
+            if Task.isCancelled {
+                // Clean up partial temp files from completed items
+                for url in result.successes {
+                    try? TempFileManager.cleanup(url: url)
+                }
+                await MainActor.run {
+                    self.renderingState = .idle
+                }
+            } else {
+                await MainActor.run {
+                    self.batchResults = result
+                    self.renderingState = .done
+                    self.scheduleBatchCompletionNotification(
+                        successCount: result.successCount,
+                        failureCount: result.failureCount
+                    )
+                }
+            }
+        }
+        batchProcessingTask = task
+        await task.value
+    }
+
+    // MARK: - Per-Item Override Methods
+
+    /// Returns the effective watermark configuration for a given item.
+    /// Uses the per-item override if set, otherwise falls back to the shared config.
+    func overrideConfig(for id: UUID) -> WatermarkConfiguration {
+        perItemOverrides[id] ?? config
+    }
+
+    /// Stores a per-item watermark configuration override.
+    /// Does NOT modify the shared `config` (per CONTEXT.md decision D7).
+    func setOverride(_ newConfig: WatermarkConfiguration, for id: UUID) {
+        perItemOverrides[id] = newConfig
+    }
+
+    /// Returns true if a per-item override exists for the given UUID.
+    func hasOverride(for id: UUID) -> Bool {
+        perItemOverrides[id] != nil
+    }
+
+    /// Removes the per-item override for the given UUID.
+    /// The item reverts to using the shared config.
+    func resetOverride(for id: UUID) {
+        perItemOverrides.removeValue(forKey: id)
+    }
+
+    /// Removes all per-item overrides, reverting every item to the shared config.
+    func resetAllOverrides() {
+        perItemOverrides.removeAll()
+    }
+
+    // MARK: - Batch Completion Notification
+
+    /// Schedules a local notification for batch processing completion.
+    /// Stores result count in App Group UserDefaults for notification tap handling.
+    private func scheduleBatchCompletionNotification(successCount: Int, failureCount: Int) {
+        let center = UNUserNotificationCenter.current()
+
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            guard granted else { return }
+
+            let content = UNMutableNotificationContent()
+            content.title = "Batch Complete"
+            if failureCount == 0 {
+                content.body = "\(successCount) of \(self.photos.count) items watermarked"
+            } else {
+                content.body = "\(successCount) watermarked, \(failureCount) failed"
+            }
+            content.sound = .default
+
+            // Store batch result count for notification tap handling
+            UserDefaults(suiteName: AppGroupConfigSync.suiteName)?
+                .set(successCount, forKey: "batchCompletedResultCount")
+
+            let identifier = "com.watermark.app.batch-complete-\(UUID().uuidString)"
+            let request = UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: nil
+            )
+
+            center.add(request) { error in
+                if let error = error {
+                    os_log(.error, "Failed to schedule batch notification: %{public}@",
+                           error.localizedDescription)
+                }
+            }
+        }
+    }
+
     func cleanupTempFile() {
         if let url = fullResResult?.url {
             try? TempFileManager.cleanup(url: url)
         }
         fullResResult = nil
+        batchResults = nil
+        perItemOverrides.removeAll()
         renderingState = .idle
     }
 
@@ -503,10 +686,14 @@ final class WatermarkViewModel: WatermarkConfigurable {
     func confirmCancel() {
         videoExportTask?.cancel()
         videoExportTask = nil
+        batchProcessingTask?.cancel()
+        batchProcessingTask = nil
         photos = []
         currentIndex = 0
         originalSourceImage = nil
         fullResResult = nil
+        batchResults = nil
+        perItemOverrides.removeAll()
         renderingState = .idle
         showPicker = true
     }

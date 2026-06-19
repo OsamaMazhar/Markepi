@@ -26,6 +26,12 @@ public protocol WatermarkConfigurable: AnyObject {
     var errorMessage: String? { get set }
     var showError: Bool { get set }
 
+    /// Returns true when the ViewModel has more than one photo loaded.
+    /// Used by ControlsView to gate batch-mode UI (Watermark All, batch progress).
+    /// Default implementation returns false — share/Photos extension ViewModels
+    /// process single items by design.
+    var hasMultiplePhotos: Bool { get }
+
     // Template Management (Phase 12)
     var showSaveTemplateAlert: Bool { get set }
     var showTemplateList: Bool { get set }
@@ -53,6 +59,11 @@ public protocol WatermarkConfigurable: AnyObject {
     /// Called by ControlsView's Cancel button during .batchProcessing state.
     /// The ViewModel cancels the batch task and cleans up incomplete temp files.
     func cancelBatchProcessing()
+
+    /// Cancels the active processing operation (video export or batch processing).
+    /// Unified cancel entry point for ControlsView buttons. Default implementation
+    /// is empty — WatermarkViewModel overrides with type-aware routing.
+    func cancelProcessing()
 
     /// Applies a template's configuration to the current state.
     /// Called from TemplateListView when a row is tapped.
@@ -157,4 +168,13 @@ extension WatermarkConfigurable {
     /// implements batch processing. Share and Photos extension ViewModels
     /// use this default which safely does nothing.
     public func cancelBatchProcessing() {}
+
+    /// Default no-op — only the main app ViewModel (WatermarkViewModel)
+    /// implements unified cancel. Share and Photos extension ViewModels
+    /// use this default which safely does nothing.
+    public func cancelProcessing() {}
+
+    /// Default returns false — share and Photos extension ViewModels
+    /// process single items by design.
+    public var hasMultiplePhotos: Bool { false }
 }
