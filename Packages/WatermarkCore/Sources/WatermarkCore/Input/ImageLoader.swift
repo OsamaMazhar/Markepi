@@ -127,8 +127,11 @@ public struct ImageLoader {
         ]
         var ciImage = CIImage(contentsOf: url, options: options)
         if ciImage == nil {
-            // Fallback for SDR images or platforms where HDR options are not supported
-            ciImage = CIImage(contentsOf: url)
+            // Fallback for SDR images or platforms where HDR options are not
+            // supported. Orientation MUST still be applied here — otherwise a
+            // rotated source loads with swapped dimensions and the watermark is
+            // positioned in the wrong place (EXIF orientation 5–8).
+            ciImage = CIImage(contentsOf: url, options: [.applyOrientationProperty: true])
         }
         guard let ciImage = ciImage else {
             throw PipelineError.failedToCreateCIImage

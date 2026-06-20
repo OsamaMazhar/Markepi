@@ -75,9 +75,15 @@ struct PreviewView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .overlay {
-                            ProgressView()
+                            // Only spin while a preview is actually being
+                            // generated. If generation finished (e.g. failed),
+                            // show the thumbnail rather than spinning forever —
+                            // any failure is surfaced via the error alert.
+                            if viewModel.isGeneratingPreview {
+                                ProgressView()
+                            }
                         }
-                } else {
+                } else if viewModel.isGeneratingPreview {
                     ProgressView()
                 }
             } else {

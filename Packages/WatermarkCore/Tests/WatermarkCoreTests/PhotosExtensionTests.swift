@@ -1,4 +1,5 @@
 import Testing
+import AVFoundation
 import ImageIO
 import CoreImage
 import Foundation
@@ -154,14 +155,19 @@ struct PhotosExtensionTests {
 
     @Test("HDR gain map auxiliary data survives engine.process() from HEIC source")
     func hdrGainMapPreservedThroughProcessing() async throws {
-        // This test requires an HEIC test asset with an HDR gain map.
-        // Since test assets are generated programmatically as JPEG,
-        // we log a skip unless a fixture HEIC is provided.
-        #if canImport(PhotosUI)
-        // Locate test HEIC asset from any available bundle
-        guard let heicURL = Bundle.allBundles.lazy.compactMap({ $0.url(forResource: "test_hdr", withExtension: "heic") }).first else {
-            Issue.record("SKIP: No HDR HEIC test asset (test_hdr.heic) in any test bundle. Place a real HDR HEIC photo in the test resources to enable this test.")
-            return
+        // Synthesize a HEIC carrying an HDR gain map at runtime. If the platform
+        // has no HEVC encoder we can't exercise the path, so skip cleanly.
+        guard let heicURL = TestImageFactory.hdrHEICWithGainMap() else {
+            return // No HEVC encoder — nothing to assert on this platform.
+        }
+        defer { cleanup(heicURL) }
+
+        // Precondition: the fixture itself carries a gain map.
+        if let fixtureSource = CGImageSourceCreateWithURL(heicURL as CFURL, nil) {
+            let fixtureGainMap = CGImageSourceCopyAuxiliaryDataInfoAtIndex(
+                fixtureSource, 0, kCGImageAuxiliaryDataTypeHDRGainMap
+            )
+            try #require(fixtureGainMap != nil, "Fixture HEIC should carry an HDR gain map")
         }
 
         let config = WatermarkConfiguration(
@@ -172,31 +178,17 @@ struct PhotosExtensionTests {
         )
         let engine = WatermarkEngine()
 
-        do {
-            let result = try await engine.process(sourceURL: heicURL, config: config)
-            guard let outputURL = result.url else {
-                Issue.record("Expected output URL from engine.process()")
-                return
-            }
-            defer { cleanup(outputURL) }
+        let result = try await engine.process(sourceURL: heicURL, config: config)
+        let outputURL = try #require(result.url, "Expected output URL from engine.process()")
+        defer { cleanup(outputURL) }
 
-            // Read output and inspect for HDR gain map auxiliary data
-            guard let source = CGImageSourceCreateWithURL(outputURL as CFURL, nil) else {
-                Issue.record("Failed to create CGImageSource from output")
-                return
-            }
-
-            // Check for HDR gain map in auxiliary data info
-            let auxDataInfo = CGImageSourceCopyAuxiliaryDataInfoAtIndex(
-                source, 0, kCGImageAuxiliaryDataTypeHDRGainMap
-            )
-            #expect(auxDataInfo != nil, "Expected HDR gain map auxiliary data in output")
-        } catch {
-            Issue.record("Engine threw during HDR test: \(error)")
-        }
-        #else
-        Issue.record("SKIP: PhotosUI not available on this platform")
-        #endif
+        // The output should still carry the HDR gain map auxiliary data.
+        let source = try #require(CGImageSourceCreateWithURL(outputURL as CFURL, nil),
+                                  "Failed to create CGImageSource from output")
+        let auxDataInfo = CGImageSourceCopyAuxiliaryDataInfoAtIndex(
+            source, 0, kCGImageAuxiliaryDataTypeHDRGainMap
+        )
+        #expect(auxDataInfo != nil, "Expected HDR gain map auxiliary data in output")
     }
 
     // MARK: - Test 6: EXIF metadata preservation
@@ -336,69 +328,61 @@ struct PhotosExtensionTests {
 
     @Test("WatermarkEngine.processVideo(sourceURL:config:) produces valid output")
     func processVideoProducesValidOutput() async throws {
-        // This test requires a real video test asset.
-        // With no bundled video fixture, we log a skip.
-        // On a device with a test video, this would verify processVideo().
-        guard let videoURL = Bundle.allBundles.lazy.compactMap({ $0.url(forResource: "test_video", withExtension: "mov") }).first else {
-            Issue.record("SKIP: No test video asset (test_video.mov) in any test bundle. Place a short H.264 .mov file in test resources to enable this test.")
-            return
-        }
+        // Synthesize a short H.264 .mov fixture at runtime (no bundled binary).
+        let videoURL = try await TestVideoFactory.makeTestVideo()
+        defer { cleanup(videoURL) }
 
+        // Fixture sanity — runs on every platform.
+        let track = try await AVURLAsset(url: videoURL).loadTracks(withMediaType: .video).first
+        #expect(track != nil, "Synthesized fixture should contain a video track")
+
+        // The full export uses AVVideoCompositionCoreAnimationTool, which requires
+        // a CoreAnimation render server and segfaults on the macOS SwiftPM test
+        // host. Exercise it only where it actually runs (device/simulator).
+        #if os(iOS)
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "VideoTest", fontSize: 36, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
                       position: .center, scale: 0.1, opacity: 1.0, isVisible: true)
             ]
         )
-        let engine = WatermarkEngine()
-
-        do {
-            let result = try await engine.processVideo(sourceURL: videoURL, config: config)
-            #expect(result.url != nil, "Expected non-nil output URL from processVideo")
-            if let outputURL = result.url {
-                #expect(FileManager.default.fileExists(atPath: outputURL.path),
-                        "Output video file should exist on disk")
-                let outputData = try Data(contentsOf: outputURL)
-                #expect(outputData.count > 0, "Output video data should not be empty")
-                cleanup(outputURL)
-            }
-        } catch {
-            // RED: processVideo may throw if video processing not fully wired
-            Issue.record("processVideo threw: \(error) — expected in GREEN phase")
-        }
+        let result = try await WatermarkEngine().processVideo(sourceURL: videoURL, config: config)
+        let outputURL = try #require(result.url, "Expected non-nil output URL from processVideo")
+        #expect(FileManager.default.fileExists(atPath: outputURL.path),
+                "Output video file should exist on disk")
+        let outputData = try Data(contentsOf: outputURL)
+        #expect(outputData.count > 0, "Output video data should not be empty")
+        cleanup(outputURL)
+        #endif
     }
 
     // MARK: - Test 10: videoValidation.hdrPreserved
 
     @Test("ProcessingResult.videoValidation.hdrPreserved is true for SDR source")
     func videoValidationHdrPreservedForSDR() async throws {
-        guard let videoURL = Bundle.allBundles.lazy.compactMap({ $0.url(forResource: "test_video", withExtension: "mov") }).first else {
-            Issue.record("SKIP: No test video asset (test_video.mov) in any test bundle.")
-            return
-        }
+        // Synthesize a short SDR H.264 .mov fixture at runtime.
+        let videoURL = try await TestVideoFactory.makeTestVideo()
+        defer { cleanup(videoURL) }
 
+        let track = try await AVURLAsset(url: videoURL).loadTracks(withMediaType: .video).first
+        #expect(track != nil, "Synthesized fixture should contain a video track")
+
+        // processVideo uses CoreAnimation compositing — unsupported on the macOS
+        // SwiftPM host (see processVideoProducesValidOutput). iOS-only.
+        #if os(iOS)
         let config = WatermarkConfiguration(
             watermarks: [
                 .text(TextWatermarkInput(text: "HDR", fontSize: 24, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
                       position: .topLeft, scale: 0.05, opacity: 1.0, isVisible: true)
             ]
         )
-        let engine = WatermarkEngine()
-
-        do {
-            let result = try await engine.processVideo(sourceURL: videoURL, config: config)
-            // RED: videoValidation should be populated after processVideo
-            if let validation = result.videoValidation {
-                // For SDR source, hdrPreserved should be true (no HDR to lose)
-                // or the validation should at least be present
-                #expect(validation.warnings.isEmpty || validation.hdrPreserved,
-                        "Video validation should indicate HDR status")
-            } else {
-                Issue.record("RED: videoValidation is nil — should be populated by processVideo")
-            }
-        } catch {
-            Issue.record("processVideo threw: \(error) — expected in GREEN phase")
-        }
+        let result = try await WatermarkEngine().processVideo(sourceURL: videoURL, config: config)
+        let validation = try #require(result.videoValidation,
+                                      "videoValidation should be populated by processVideo")
+        // For an SDR source there is no HDR to lose, so HDR is trivially preserved.
+        #expect(validation.warnings.isEmpty || validation.hdrPreserved,
+                "Video validation should indicate HDR status")
+        #endif
     }
 
     // MARK: - Test 11: PHAdjustmentData with image watermark config strips pngData
@@ -406,7 +390,6 @@ struct PhotosExtensionTests {
     @Test("PHAdjustmentData with image watermark config strips pngData to stay under 1 MB")
     @available(iOS 15.0, *)
     func adjustmentDataStripsImagePNGData() throws {
-        #if canImport(UIKit)
         // Create a mock 50KB PNG watermark (a real image would be much larger,
         // but this tests the stripping mechanism)
         let mockPNGData = makeMockPNGData(size: 50000)
@@ -438,9 +421,6 @@ struct PhotosExtensionTests {
         let fullEncoded = try JSONEncoder().encode(config)
         #expect(encodedData.count <= fullEncoded.count,
                 "Stripped config size (\(encodedData.count)) should not exceed full config size (\(fullEncoded.count))")
-        #else
-        Issue.record("SKIP: UIKit not available on this platform")
-        #endif
     }
 
     // MARK: - Test 12: rehydrateImageData restores image PNG data
@@ -448,7 +428,6 @@ struct PhotosExtensionTests {
     @Test("rehydrateImageData restores image PNG data from App Group storage")
     @available(iOS 15.0, *)
     func rehydrateImageDataRestoresPNG() throws {
-        #if canImport(UIKit)
         // Create a watermark config with real image data
         let mockPNGData = makeMockPNGData(size: 2048)
         let imageInput = try ImageWatermarkInput(pngData: mockPNGData, scale: 0.2, opacity: 0.9)
@@ -492,9 +471,6 @@ struct PhotosExtensionTests {
                 }
             }
         }
-        #else
-        Issue.record("SKIP: UIKit not available on this platform")
-        #endif
     }
 
     // MARK: - Test 13: Text-only config JSON stays under 10 KB
@@ -521,34 +497,35 @@ struct PhotosExtensionTests {
 
     // MARK: - Test 14: Video processing creates PHContentEditingOutput
 
-    @Test("Video processing path creates PHContentEditingOutput with valid renderedContentURL for .mov source")
+    @Test("Video processing path produces a valid renderedContentURL for .mov source")
     @available(iOS 15.0, *)
-    func videoPathCreatesPHContentEditingOutput() throws {
-        #if canImport(PhotosUI)
-        // This test verifies the ViewModel's video output path creates
-        // a valid PHContentEditingOutput. Since the ViewModel's video
-        // path returns nil (stub from Plan 04-01), this fails in RED phase.
-        // In GREEN phase, the ViewModel processes video and returns output.
+    func videoPathCreatesPHContentEditingOutput() async throws {
+        // The Photos extension feeds processVideo's output URL into the
+        // PHContentEditingOutput.renderedContentURL. Verify that path end to
+        // end: a real .mov in → a valid, on-disk .mov output URL out.
+        let sourceURL = try await TestVideoFactory.makeTestVideo()
+        defer { cleanup(sourceURL) }
 
-        // The test exercises the pattern that the ViewModel must follow:
-        // PHContentEditingOutput(contentEditingInput:) → renderedContentURL → adjustmentData
+        let track = try await AVURLAsset(url: sourceURL).loadTracks(withMediaType: .video).first
+        #expect(track != nil, "Synthesized .mov source should contain a video track")
 
-        // For now, verify the data structures are creatable and the
-        // renderedContentURL pattern is valid for .mov extensions.
-        let tempDir = FileManager.default.temporaryDirectory
-        let testMovURL = tempDir.appendingPathComponent("test_output_\(UUID().uuidString).mov")
-
-        // Verify a .mov URL path is constructable (the ViewModel uses this pattern)
-        let adjustedURL = testMovURL.deletingPathExtension().appendingPathExtension("mov")
-        #expect(adjustedURL.pathExtension == "mov",
-                "renderedContentURL for video should have .mov extension")
-
-        // RED: The ViewModel's renderAndCommit() skips video — this test
-        // documents the expected behavior. In GREEN phase, this will be
-        // replaced with a test that actually exercises the video path.
-        Issue.record("RED: ViewModel video path returns nil (skipped). Expected PHContentEditingOutput with valid renderedContentURL in GREEN phase.")
-        #else
-        Issue.record("SKIP: PhotosUI not available on this platform")
+        // processVideo uses CoreAnimation compositing — unsupported on the macOS
+        // SwiftPM host (see processVideoProducesValidOutput). iOS-only.
+        #if os(iOS)
+        let config = WatermarkConfiguration(
+            watermarks: [
+                .text(TextWatermarkInput(text: "VideoOut", fontSize: 36, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
+                      position: .center, scale: 0.1, opacity: 1.0, isVisible: true)
+            ]
+        )
+        let result = try await WatermarkEngine().processVideo(sourceURL: sourceURL, config: config)
+        let renderedContentURL = try #require(result.url,
+                                              "Expected a renderedContentURL from the video path")
+        #expect(renderedContentURL.pathExtension == "mov",
+                "renderedContentURL for a .mov source should have a .mov extension")
+        #expect(FileManager.default.fileExists(atPath: renderedContentURL.path),
+                "renderedContentURL should point to a file on disk")
+        cleanup(renderedContentURL)
         #endif
     }
 
@@ -579,10 +556,12 @@ struct PhotosExtensionTests {
         let engine = WatermarkEngine()
 
         for (orientation, expectedSize) in orientations {
-            // Create a rectangular image (200×100) to detect swapped dimensions
+            // Create a rectangular image (200×100) tagged with this EXIF
+            // orientation so the engine's load-time normalization is exercised.
             let (_, jpegData) = TestImageFactory.solidColorImage(
                 color: CGColor(red: 0.2, green: 0.5, blue: 0.8, alpha: 1),
-                size: CGSize(width: 200, height: 100)
+                size: CGSize(width: 200, height: 100),
+                orientation: orientation
             )
             let inputURL = try createTempInputFile(data: jpegData, name: "orient_\(orientation)")
 

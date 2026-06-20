@@ -1,5 +1,6 @@
 import Foundation
 import CoreImage
+import CoreVideo
 import ImageIO
 import UniformTypeIdentifiers
 
@@ -15,8 +16,13 @@ public struct TestImageFactory {
     ///
     /// - Parameters:
     ///   - color: The fill color (use CGColor with sRGB or displayP3)
-    ///   - size: Image dimensions in points
+    ///   - size: Image dimensions in points (the raw, unrotated pixel size)
     ///   - format: CIContext render format (default .RGBA8 for test determinism)
+    ///   - orientation: Optional EXIF orientation value (1–8) written into the
+    ///     JPEG's `kCGImagePropertyOrientation` tag. When non-nil, the encoded
+    ///     image carries this orientation so the engine's load-time normalization
+    ///     (`applyOrientationProperty`) can be exercised. Default: nil (no tag,
+    ///     equivalent to orientation 1).
     /// - Returns: A tuple of `(CGImage, Data)` where Data is JPEG-encoded bytes
     ///
     /// Example:
@@ -29,7 +35,8 @@ public struct TestImageFactory {
     public static func solidColorImage(
         color: CGColor,
         size: CGSize,
-        format: CIFormat = .RGBA8
+        format: CIFormat = .RGBA8,
+        orientation: Int? = nil
     ) -> (CGImage, Data) {
         let rect = CGRect(origin: .zero, size: size)
         let ciImage = CIImage(color: CIColor(cgColor: color)).cropped(to: rect)
@@ -44,7 +51,12 @@ public struct TestImageFactory {
         ) else {
             fatalError("TestImageFactory: Failed to create CGImageDestination")
         }
-        CGImageDestinationAddImage(destination, cgImage, nil)
+        // Embed the EXIF orientation tag when requested so consumers can verify
+        // orientation handling end-to-end.
+        let properties: CFDictionary? = orientation.map {
+            [kCGImagePropertyOrientation: $0] as CFDictionary
+        }
+        CGImageDestinationAddImage(destination, cgImage, properties)
         guard CGImageDestinationFinalize(destination) else {
             fatalError("TestImageFactory: Failed to finalize JPEG data")
         }
@@ -86,5 +98,60 @@ public struct TestImageFactory {
     /// Returns nil if the data does not represent a valid image.
     public static func imageSource(from data: Data) -> CGImageSource? {
         return CGImageSourceCreateWithData(data as CFData, nil)
+    }
+
+    /// Writes a HEIC file that carries an HDR gain map auxiliary data block and
+    /// returns its URL, or `nil` if the platform has no HEVC encoder.
+    ///
+    /// The gain map is a synthetic single-channel (8-bit luminance) image at
+    /// quarter resolution — enough for `CGImageSourceCopyAuxiliaryDataInfoAtIndex`
+    /// to report a `kCGImageAuxiliaryDataTypeHDRGainMap` block on read-back, which
+    /// is what the engine extracts and re-attaches during processing.
+    public static func hdrHEICWithGainMap(
+        size: CGSize = CGSize(width: 64, height: 48)
+    ) -> URL? {
+        let width = Int(size.width)
+        let height = Int(size.height)
+
+        // Main (base) image — a solid color is sufficient.
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(
+            data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: width * 4, space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        ctx.setFillColor(CGColor(red: 0.3, green: 0.5, blue: 0.8, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        guard let mainImage = ctx.makeImage() else { return nil }
+
+        // Gain map — quarter-resolution single-channel luminance.
+        let gainWidth = max(1, width / 2)
+        let gainHeight = max(1, height / 2)
+        let gainBytesPerRow = gainWidth
+        let gainData = Data(repeating: 180, count: gainBytesPerRow * gainHeight)
+        let description: [CFString: Any] = [
+            "Width" as CFString: gainWidth,
+            "Height" as CFString: gainHeight,
+            "BytesPerRow" as CFString: gainBytesPerRow,
+            "PixelFormat" as CFString: Int(kCVPixelFormatType_OneComponent8),
+        ]
+        let auxInfo: [CFString: Any] = [
+            kCGImageAuxiliaryDataInfoData: gainData as CFData,
+            kCGImageAuxiliaryDataInfoDataDescription: description as CFDictionary,
+        ]
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test_hdr_\(UUID().uuidString).heic")
+        guard let destination = CGImageDestinationCreateWithURL(
+            url as CFURL, UTType.heic.identifier as CFString, 1, nil
+        ) else {
+            return nil // No HEVC encoder available on this platform.
+        }
+        CGImageDestinationAddImage(destination, mainImage, nil)
+        CGImageDestinationAddAuxiliaryDataInfo(
+            destination, kCGImageAuxiliaryDataTypeHDRGainMap, auxInfo as CFDictionary
+        )
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return url
     }
 }

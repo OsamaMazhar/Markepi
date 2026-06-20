@@ -12,10 +12,13 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // Read the observable value here in `body` so SwiftUI tracks it and
+        // re-renders the toggle when the frame is enabled/disabled elsewhere.
+        let isEnabled = viewModel.whiteFrameEnabled
+        return VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: Binding(
-                get: { viewModel.whiteFrameEnabled },
-                set: { _ in viewModel.toggleWhiteFrame() }
+                get: { isEnabled },
+                set: { viewModel.setWhiteFrameEnabled($0) }
             )) {
                 Text("White Frame")
                     .font(.title3.weight(.semibold))

@@ -133,10 +133,24 @@ extension WatermarkConfigurable {
     // MARK: White Frame
 
     public func toggleWhiteFrame() {
-        if config.whiteFrame?.isEnabled == true {
-            config.whiteFrame = nil
+        setWhiteFrameEnabled(!whiteFrameEnabled)
+    }
+
+    /// Sets the white frame to an explicit on/off state.
+    ///
+    /// Prefer this over `toggleWhiteFrame()` when driving a `Toggle`: it is
+    /// idempotent, so a stray or duplicated `set` call from SwiftUI cannot leave
+    /// the frame stuck on (the bug where the frame could be enabled but not
+    /// disabled). Enabling preserves any existing frame configuration.
+    public func setWhiteFrameEnabled(_ enabled: Bool) {
+        if enabled {
+            if config.whiteFrame == nil {
+                config.whiteFrame = WhiteFrameConfig(isEnabled: true)
+            } else {
+                config.whiteFrame?.isEnabled = true
+            }
         } else {
-            config.whiteFrame = WhiteFrameConfig(isEnabled: true)
+            config.whiteFrame = nil
         }
     }
 

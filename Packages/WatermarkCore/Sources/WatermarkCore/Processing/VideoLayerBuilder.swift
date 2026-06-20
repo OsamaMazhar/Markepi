@@ -91,9 +91,16 @@ public struct VideoLayerBuilder {
         wmLayer.contents = cgImage
         wmLayer.contentsGravity = .resizeAspect
 
-        // Scale the watermark extent relative to video dimensions
-        let scaledWidth = CGFloat(cgImage.width) * scale
-        let scaledHeight = CGFloat(cgImage.height) * scale
+        // Scale the watermark extent relative to the video width (scale is a
+        // fraction of width — see WatermarkScaling), matching the photo path
+        // in WatermarkEngine.buildFilterGraph for full parity.
+        let factor = WatermarkScaling.transformFactor(
+            layerScale: scale,
+            naturalWidth: CGFloat(cgImage.width),
+            baseWidth: videoSize.width
+        )
+        let scaledWidth = CGFloat(cgImage.width) * factor
+        let scaledHeight = CGFloat(cgImage.height) * factor
         let scaledExtent = CGRect(x: 0, y: 0, width: scaledWidth, height: scaledHeight)
 
         // Calculate position using shared PositionCalculator (CIImage bottom-left coords)

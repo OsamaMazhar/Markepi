@@ -20,7 +20,9 @@ final class WatermarkViewModel: WatermarkConfigurable {
         .text(
             TextWatermarkInput(text: "", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
             position: .bottomRight,
-            scale: 0.15,
+            // scale is a fraction of image width (see WatermarkScaling) — 0.30
+            // keeps the text clearly legible regardless of source resolution.
+            scale: 0.30,
             opacity: 1.0,
             isVisible: true
         )
@@ -91,7 +93,12 @@ final class WatermarkViewModel: WatermarkConfigurable {
     var hasMultiplePhotos: Bool { photos.count > 1 }
 
     var previewIdentifier: String {
-        var parts: [String] = ["\(currentIndex)"]
+        // Include the photo's identity (not just currentIndex) so importing the
+        // first photo into index 0 changes the identifier and re-triggers the
+        // preview .task. Without this, a fresh import at index 0 with the default
+        // config produces the same string as the empty initial state, so the
+        // .task never re-runs and the preview spins forever.
+        var parts: [String] = ["\(currentIndex)", currentPhoto?.id.uuidString ?? "none"]
         for layer in config.watermarks {
             switch layer {
             case .text(let input, let pos, let scl, _, _):
@@ -272,11 +279,25 @@ final class WatermarkViewModel: WatermarkConfigurable {
         try? await Task.sleep(for: .milliseconds(350))
         guard !Task.isCancelled else { return }
 
-        let result = try? await engine.process(sourceURL: sourceURL, config: config)
-        if let url = result?.url,
-           let data = try? Data(contentsOf: url),
-           let uiImage = UIImage(data: data) {
+        do {
+            let result = try await engine.process(sourceURL: sourceURL, config: config)
+            // The .task may have been cancelled (e.g. config changed) while the
+            // engine was running; don't clobber state for a stale render.
+            guard !Task.isCancelled else { return }
+            guard let url = result.url else { throw PipelineError.renderFailed }
+            let data = try Data(contentsOf: url)
+            guard let uiImage = UIImage(data: data) else {
+                throw PipelineError.renderFailed
+            }
             previewImage = uiImage
+        } catch is CancellationError {
+            // Superseded by a newer preview request — not a user-facing error.
+            return
+        } catch {
+            // A genuine processing failure: surface it instead of spinning forever.
+            errorMessage = (error as? LocalizedError)?.errorDescription
+                ?? error.localizedDescription
+            showError = true
         }
     }
 

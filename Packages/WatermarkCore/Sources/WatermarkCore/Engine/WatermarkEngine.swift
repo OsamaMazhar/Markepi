@@ -239,9 +239,17 @@ public actor WatermarkEngine {
                 watermarkImage = try SignatureRenderer.render(input: signatureInput)
             }
 
-            // Scale watermark relative to base image
+            // Scale watermark relative to the base image width (scale is a
+            // fraction of image width — see WatermarkScaling). This keeps the
+            // watermark legible at any source resolution instead of being a
+            // fixed multiple of the rendered text/PNG size.
+            let factor = WatermarkScaling.transformFactor(
+                layerScale: watermark.scale,
+                naturalWidth: watermarkImage.extent.width,
+                baseWidth: extent.width
+            )
             let scaled = watermarkImage.transformed(
-                by: CGAffineTransform(scaleX: watermark.scale, y: watermark.scale)
+                by: CGAffineTransform(scaleX: factor, y: factor)
             )
 
             // MULT-02: Per-layer opacity via CIFilter.colorMatrix
