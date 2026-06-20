@@ -103,6 +103,12 @@ None.
 - No automated tests created — plan explicitly marked automated verification as MISSING; manual grep verification passed all checks
 
 ---
+## Self-Check: PASSED
+
+- SUMMARY.md: FOUND at `.planning/phases/14-process-hardening/14-02-SUMMARY.md`
+- Commit: FOUND `1f099c0` — `docs(14-process-hardening): complete worktree pre-check and safe-add plan`
+
+---
 *Phase: 14-process-hardening*
 *Plan: 02*
 *Completed: 2026-06-19*
