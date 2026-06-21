@@ -1,0 +1,110 @@
+# Requirements: Watermark — v2.1 UI Redesign
+
+**Defined:** 2026-06-21
+**Core Value:** Add a watermark and share it instantly — without ever cluttering the camera roll.
+
+> Scope note: v2.1 is a **pure presentation-layer redesign**. No requirement here changes the
+> `WatermarkEngine`, the `WatermarkConfigurable` protocol surface, the ViewModels' public behavior,
+> or the data/config model. Every requirement is an observable change to how the existing
+> functionality looks and feels.
+
+## v2.1 Requirements
+
+Requirements for the UI Redesign milestone. Each maps to exactly one roadmap phase.
+
+### Layout & Shell (LYT)
+
+- [ ] **LYT-01**: The photo/video preview fills the screen as a full-bleed hero behind the controls
+- [ ] **LYT-02**: Controls live in a resizable bottom sheet with detents (a peek state and an expanded state)
+- [ ] **LYT-03**: The primary action (Share / Watermark All) is always reachable via a pinned action bar
+- [ ] **LYT-04**: The UI renders correctly in both system light and dark appearance
+
+### Visual System (VIS)
+
+- [ ] **VIS-01**: Navigation and control chrome use iOS 26 Liquid Glass (toolbar, floating buttons, sheet surface), with graceful fallback on the iOS 18 deployment floor
+- [ ] **VIS-02**: Controls are organized into grouped inset section cards with a clear typographic hierarchy (no wall of equal-weight section titles)
+- [ ] **VIS-03**: A single consistent button language is applied across primary, secondary, and destructive actions
+- [ ] **VIS-04**: Scroll-edge effects keep controls legible as content scrolls beneath them
+
+### Redesigned Controls (CTL)
+
+- [ ] **CTL-01**: A visual 9-position picker replaces the TL/TC/TR text grid, showing placement glanceably
+- [ ] **CTL-02**: The text watermark input is redesigned with a cleaner field and inline affordances
+- [ ] **CTL-03**: The scale control is redesigned with a live value readout
+- [ ] **CTL-04**: The Logo and Signature pickers share consistent add / preview / remove affordances
+- [ ] **CTL-05**: White Frame is presented as an integrated grouped row within the controls
+- [ ] **CTL-06**: The layer list is redesigned with clear active-layer selection and remove controls
+- [ ] **CTL-07**: Export Options are redesigned using native Menus/pickers
+- [ ] **CTL-08**: The Save-as-Template action conforms to the new button language
+
+### Cross-Target Parity (XTG)
+
+- [ ] **XTG-01**: The redesigned `ControlsView` renders and functions correctly in the Share Extension
+- [ ] **XTG-02**: The redesigned `ControlsView` renders and functions correctly in the Photos Edit Extension
+
+### Polish & Accessibility (UXQ)
+
+- [ ] **UXQ-01**: Dynamic Type is supported across redesigned controls with no truncation or overlap up to 200%
+- [ ] **UXQ-02**: VoiceOver labels and hints are preserved or improved relative to the current UI
+- [ ] **UXQ-03**: Reduce Motion and Reduce Transparency settings are respected
+- [ ] **UXQ-04**: The empty state (no photo loaded) is redesigned
+
+## Future Requirements
+
+Deferred to a later milestone. Tracked but not in this roadmap.
+
+### Visual System (VIS)
+
+- **VIS-05**: Direct-manipulation drag-to-position of watermarks on the preview (beyond the 9 presets)
+- **VIS-06**: Live glass-morph transitions between control states using `glassEffectID` namespaces
+
+## Out of Scope
+
+Explicitly excluded for v2.1 to prevent scope creep.
+
+| Feature | Reason |
+|---------|--------|
+| Any change to `WatermarkEngine` rendering | v2.1 is presentation-only; engine is frozen |
+| New watermark types or capabilities | Redesign reskins existing features, adds none |
+| Changes to `WatermarkConfigurable` protocol surface | Would ripple into ViewModels + extensions; out of scope |
+| New onboarding / tutorial flows | Not a redesign requirement |
+| iPad-specific split layouts | iPhone-first; revisit if iPad becomes a target |
+| Drag-to-reposition watermark (free placement) | Deferred to VIS-05 (future) |
+
+## Traceability
+
+Which phases cover which requirements. Filled during roadmap creation.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| LYT-01 | TBD | Pending |
+| LYT-02 | TBD | Pending |
+| LYT-03 | TBD | Pending |
+| LYT-04 | TBD | Pending |
+| VIS-01 | TBD | Pending |
+| VIS-02 | TBD | Pending |
+| VIS-03 | TBD | Pending |
+| VIS-04 | TBD | Pending |
+| CTL-01 | TBD | Pending |
+| CTL-02 | TBD | Pending |
+| CTL-03 | TBD | Pending |
+| CTL-04 | TBD | Pending |
+| CTL-05 | TBD | Pending |
+| CTL-06 | TBD | Pending |
+| CTL-07 | TBD | Pending |
+| CTL-08 | TBD | Pending |
+| XTG-01 | TBD | Pending |
+| XTG-02 | TBD | Pending |
+| UXQ-01 | TBD | Pending |
+| UXQ-02 | TBD | Pending |
+| UXQ-03 | TBD | Pending |
+| UXQ-04 | TBD | Pending |
+
+**Coverage:**
+- v2.1 requirements: 22 total
+- Mapped to phases: 0 (pending roadmap)
+- Unmapped: 22 ⚠️
+
+---
+*Requirements defined: 2026-06-21*
+*Last updated: 2026-06-21 at v2.1 milestone start*
