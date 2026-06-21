@@ -30,6 +30,9 @@ public struct BatchItemDetailSheet: View {
     /// Internal proxy that conforms to WatermarkConfigurable for sub-view binding.
     @State private var proxy: BatchItemConfigProxy
 
+    /// Whether the current per-item config differs from the shared config.
+    @State private var isModified: Bool = false
+
     public init(
         itemIndex: Int,
         perItemConfig: Binding<WatermarkConfiguration>,
@@ -53,7 +56,7 @@ public struct BatchItemDetailSheet: View {
 
                 // Reused sub-views from WatermarkCore/UI/, each scoped to proxy
                 TextWatermarkInputView(viewModel: proxy)
-                PositionGridView(viewModel: proxy)
+                positionMenuRow
                 ScaleStepperView(viewModel: proxy)
                 WhiteFrameToggleView(viewModel: proxy)
 
@@ -62,6 +65,7 @@ public struct BatchItemDetailSheet: View {
                 // "Reset to Batch Config" button — bordered, accentColor
                 Button {
                     proxy.config = sharedConfig
+                    isModified = false
                 } label: {
                     Label("Reset to Batch Config", systemImage: "arrow.counterclockwise")
                         .frame(maxWidth: .infinity)
@@ -69,7 +73,7 @@ public struct BatchItemDetailSheet: View {
                 }
                 .buttonStyle(.bordered)
                 .tint(.accentColor)
-                .disabled(proxy.config == sharedConfig)
+                .disabled(!isModified)
 
                 Spacer()
             }
@@ -86,10 +90,50 @@ public struct BatchItemDetailSheet: View {
         .onAppear {
             // Sync proxy with current perItemConfig on appear
             proxy.config = perItemConfig
+            isModified = false
+            // Wire up config change callback using JSON comparison
+            proxy.onConfigChanged = { newConfig in
+                perItemConfig = newConfig
+                // Compare JSON representations to detect if config differs from shared
+                let newData = (try? JSONEncoder().encode(newConfig)) ?? Data()
+                let sharedData = (try? JSONEncoder().encode(sharedConfig)) ?? Data()
+                isModified = newData != sharedData
+            }
         }
-        .onChange(of: proxy.config) { _, newConfig in
-            // Write back to the perItemConfig binding on change
-            perItemConfig = newConfig
+    }
+
+    // MARK: - Position Menu (replaces PositionGridView)
+
+    private var positionMenuRow: some View {
+        let idx = proxy.activeLayerIndex
+        let currentPos: WatermarkPosition = {
+            guard idx >= 0, idx < proxy.config.watermarks.count else { return .center }
+            return proxy.config.watermarks[idx].position
+        }()
+        return HStack {
+            Text("Position")
+                .markepiTypography(.controlLabel)
+            Spacer()
+            Menu {
+                ForEach(WatermarkPosition.allCases, id: \.rawValue) { position in
+                    Button(position.displayName) {
+                        let safeIdx = max(0, min(idx, proxy.config.watermarks.count - 1))
+                        proxy.updateLayerPosition(at: safeIdx, position: position)
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(currentPos.displayName)
+                        .markepiTypography(.value)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityLabel("Watermark position, currently \(currentPos.displayName)")
+            .accessibilityHint("Double tap to choose a different position")
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }

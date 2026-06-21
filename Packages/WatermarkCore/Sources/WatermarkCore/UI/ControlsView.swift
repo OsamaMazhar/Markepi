@@ -2,7 +2,7 @@ import SwiftUI
 import WatermarkCore
 
 /// Composite view combining all watermarking controls: text input, position
-/// grid, scale stepper, logo picker, white frame toggle, and layer list.
+/// picker, scale stepper, logo picker, white frame toggle, and layer list.
 ///
 /// Generic over any `WatermarkConfigurable & Observable` ViewModel so both
 /// the main app and share extension can reuse it with their own ViewModels.
@@ -12,6 +12,10 @@ import WatermarkCore
 public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View {
     @State var viewModel: ViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    // Section switching state
+    @State private var section: ControlsSection = .watermark
 
     // Export Options state
     @State private var showHDRLossWarning = false
@@ -31,99 +35,206 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
     }
 
     public var body: some View {
-        ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 20) {
+        VStack(spacing: 0) {
+            switch section {
+            case .watermark:
+                watermarkSectionContent
+            case .style:
+                styleSectionContent
+            case .output:
+                outputSectionContent
+            }
+        }
+        .markepiScrollEdgeProtection {
+            MarkepiPillBar(selection: $section)
+        }
+    }
+
+    // MARK: - Section 1: Watermark
+
+    private var watermarkSectionContent: some View {
+        VStack(spacing: 16) {
+            ControlSection {
                 TextWatermarkInputView(viewModel: viewModel)
-                PositionGridView(viewModel: viewModel)
+            }
+            ControlSection {
+                positionMenuRow
+                Divider()
+                    .padding(.leading, 52)
                 ScaleStepperView(viewModel: viewModel)
-                LogoPickerView(viewModel: viewModel)
-                SignatureCaptureView(viewModel: viewModel)
-                WhiteFrameToggleView(viewModel: viewModel)
-                LayerListView(viewModel: viewModel)
+            }
+        }
+        .padding(.top, 16)
+    }
 
+    private var positionMenuRow: some View {
+        let currentPos = currentPosition
+        return HStack {
+            Text("Position")
+                .markepiTypography(.controlLabel)
+            Spacer()
+            Menu {
+                ForEach(WatermarkPosition.allCases, id: \.rawValue) { position in
+                    Button(position.displayName) {
+                        let idx = safeLayerIndex
+                        viewModel.updateLayerPosition(at: idx, position: position)
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(currentPos.displayName)
+                        .markepiTypography(.value)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityLabel("Watermark position, currently \(currentPos.displayName)")
+            .accessibilityHint("Double tap to choose a different position")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var currentPosition: WatermarkPosition {
+        let idx = safeLayerIndex
+        guard idx < viewModel.config.watermarks.count else { return .center }
+        return viewModel.config.watermarks[idx].position
+    }
+
+    private var safeLayerIndex: Int {
+        let idx = viewModel.activeLayerIndex
+        guard idx >= 0 else { return 0 }
+        return idx
+    }
+
+    // MARK: - Section 2: Style
+
+    private var styleSectionContent: some View {
+        VStack(spacing: 16) {
+            LogoPickerView(viewModel: viewModel)
+                .padding(.bottom, 16)
+            SignatureCaptureView(viewModel: viewModel)
+                .padding(.bottom, 16)
+            WhiteFrameToggleView(viewModel: viewModel)
+                .padding(.bottom, 16)
+            LayerListView(viewModel: viewModel)
+        }
+        .padding(.top, 16)
+    }
+
+    // MARK: - Section 3: Output
+
+    private var outputSectionContent: some View {
+        VStack(spacing: 16) {
+            ControlSection {
+                exportFormatRow
                 Divider()
-                    .padding(.horizontal, -16)
+                    .padding(.leading, 52)
+                qualitySliderRow
+            }
+            .alert("HDR Will Be Lost", isPresented: $showHDRLossWarning) {
+                Button("Convert to JPEG") {
+                    // Keep JPEG selection — config already changed
+                    pendingFormatSelection = .preserveSource
+                }
+                Button("Cancel", role: .cancel) {
+                    viewModel.config.outputFormat = .preserveSource
+                }
+            } message: {
+                Text("JPEG does not support HDR. The image will be converted to standard dynamic range.")
+            }
 
+            ControlSection {
                 saveTemplateButton
-
-                Divider()
-                    .padding(.horizontal, -16)
-
-                exportOptionsDisclosure
-
-                Divider()
-                    .padding(.vertical, 4)
-
-                shareButton
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 20)
+
+            shareButton
+                .padding(.horizontal, 16)
         }
-        .scrollIndicators(.hidden)
+        .padding(.top, 16)
     }
 
-    private var exportOptionsDisclosure: some View {
-        DisclosureGroup("Export Options") {
-            VStack(alignment: .leading, spacing: 12) {
-                // Format Picker row
-                HStack {
-                    Text("Format")
-                    Spacer()
-                    Picker("Format", selection: Binding(
-                        get: { viewModel.config.outputFormat },
-                        set: { newValue in
-                            // D-01: HDR→JPEG warning
-                            if newValue == .jpeg && viewModel.sourceHasHDR {
-                                pendingFormatSelection = .jpeg
-                                showHDRLossWarning = true
-                            }
-                            viewModel.config.outputFormat = newValue
-                        }
-                    )) {
-                        Text("HEIC").tag(OutputFormat.heic)
-                        Text("JPEG").tag(OutputFormat.jpeg)
-                        Text("PNG").tag(OutputFormat.png)
-                        Text("TIFF").tag(OutputFormat.tiff)
-                        Text("Match Source\(sourceFormatLabel.map { " (\($0))" } ?? "")").tag(OutputFormat.preserveSource)
-                    }
-                    .pickerStyle(.menu)
-                }
+    // MARK: - Export Format Row
 
-                // Quality Slider row
-                HStack {
-                    Text("Quality")
-                    Spacer()
-                    Text("\(Int(viewModel.config.outputQuality * 100))%")
-                        .foregroundStyle(viewModel.config.outputFormat.isLossless ? .secondary : .primary)
-                        .monospacedDigit()
+    private var exportFormatRow: some View {
+        HStack {
+            Text("Format")
+                .markepiTypography(.controlLabel)
+            Spacer()
+            Menu {
+                Button("HEIC") {
+                    viewModel.config.outputFormat = .heic
                 }
-                Slider(value: Binding(
-                    get: { viewModel.config.outputQuality },
-                    set: { newValue in
-                        // Snap to 1.0 when >= 0.98
-                        if newValue >= 0.98 && newValue < 1.0 {
-                            viewModel.config.outputQuality = 1.0
-                        } else {
-                            viewModel.config.outputQuality = newValue
-                        }
+                Button("JPEG") {
+                    if viewModel.sourceHasHDR {
+                        pendingFormatSelection = .jpeg
+                        showHDRLossWarning = true
                     }
-                ), in: 0.6...1.0, step: 0.01)
-                .disabled(viewModel.config.outputFormat.isLossless)
+                    viewModel.config.outputFormat = .jpeg
+                }
+                Button("PNG") {
+                    viewModel.config.outputFormat = .png
+                }
+                Button("TIFF") {
+                    viewModel.config.outputFormat = .tiff
+                }
+                Button("Match Source\(sourceFormatLabel.map { " (\($0))" } ?? "")") {
+                    viewModel.config.outputFormat = .preserveSource
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(currentFormatLabel)
+                        .markepiTypography(.value)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(.top, 4)
         }
-        .alert("HDR Will Be Lost", isPresented: $showHDRLossWarning) {
-            Button("Convert to JPEG") {
-                // Keep JPEG selection — config already changed
-                pendingFormatSelection = .preserveSource
-            }
-            Button("Cancel", role: .cancel) {
-                viewModel.config.outputFormat = .preserveSource
-            }
-        } message: {
-            Text("JPEG does not support HDR. The image will be converted to standard dynamic range.")
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var currentFormatLabel: String {
+        switch viewModel.config.outputFormat {
+        case .heic: return "HEIC"
+        case .jpeg: return "JPEG"
+        case .png: return "PNG"
+        case .tiff: return "TIFF"
+        case .preserveSource: return "Match Source\(sourceFormatLabel.map { " (\($0))" } ?? "")"
         }
     }
+
+    // MARK: - Quality Slider Row
+
+    private var qualitySliderRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Quality")
+                    .markepiTypography(.controlLabel)
+                Spacer()
+                Text("\(Int(viewModel.config.outputQuality * 100))%")
+                    .markepiTypography(.value)
+            }
+            Slider(value: Binding(
+                get: { viewModel.config.outputQuality },
+                set: { newValue in
+                    // Snap to 1.0 when >= 0.98
+                    if newValue >= 0.98 && newValue < 1.0 {
+                        viewModel.config.outputQuality = 1.0
+                    } else {
+                        viewModel.config.outputQuality = newValue
+                    }
+                }
+            ), in: 0.6...1.0, step: 0.01)
+            .disabled(viewModel.config.outputFormat.isLossless)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - Share Button State Machine
 
     private var shareButton: some View {
         Group {
@@ -132,29 +243,25 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                 Button {
                     Task { await viewModel.renderAndPrepareShare() }
                 } label: {
-                    HStack(spacing: 8) {
-                        if isBatchMode {
-                            Image(systemName: "square.and.arrow.up.on.square.fill")
-                            Text("Watermark All")
-                        } else {
-                            Image(systemName: "square.and.arrow.up")
-                            Text("Share")
-                        }
-                    }
+                    Label(
+                        isBatchMode ? "Watermark All" : "Share",
+                        systemImage: isBatchMode ? "square.and.arrow.up.on.square.fill" : "square.and.arrow.up"
+                    )
                     .frame(maxWidth: .infinity)
-                    .frame(height: 50)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.markepiPrimary())
 
             case .rendering:
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.regular)
                     Text("Rendering...")
+                        .markepiTypography(.controlLabel)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .markepiGlass(shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                              isEnabled: !reduceTransparency)
                 .disabled(true)
                 .transition(.opacity.combined(with: .scale))
 
@@ -178,15 +285,14 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
-                    Button(role: .destructive) {
+                    Button {
                         viewModel.cancelProcessing()
                     } label: {
                         Text("Cancel")
                             .frame(maxWidth: .infinity)
                             .frame(height: 36)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(.red)
+                    .buttonStyle(.markepiSecondary())
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 4)
@@ -211,15 +317,14 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
-                    Button(role: .destructive) {
+                    Button {
                         viewModel.cancelProcessing()
                     } label: {
                         Text("Stop Processing")
                             .frame(maxWidth: .infinity)
                             .frame(height: 36)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(.red)
+                    .buttonStyle(.markepiSecondary())
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 4)
@@ -231,50 +336,55 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                     }
                     viewModel.presentShareSheet()
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                        if isBatchMode {
-                            Text("Ready to Share All")
-                        } else {
-                            Text("Ready to Share")
-                        }
-                    }
+                    Label(
+                        isBatchMode ? "Ready to Share All" : "Ready to Share",
+                        systemImage: "checkmark.circle.fill"
+                    )
                     .frame(maxWidth: .infinity)
-                    .frame(height: 50)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
+                .buttonStyle(.markepiPrimary())
 
             case .error:
                 Button {
                     Task { await viewModel.renderAndPrepareShare() }
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.clockwise")
-                        Text("Retry")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
+                    Label("Retry", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
-                .tint(.orange)
+                .buttonStyle(.markepiSecondary())
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.renderingState)
     }
 
+    // MARK: - Save-as-Template Button
+
     private var saveTemplateButton: some View {
         Button {
             viewModel.showSaveTemplateAlert = true
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "square.and.arrow.down.on.square")
-                Text("Save as Template")
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
+            Label("Save as Template", systemImage: "square.and.arrow.down.on.square")
+                .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.bordered)
-        .tint(.accentColor)
+        .buttonStyle(.markepiSecondary())
+    }
+}
+
+// MARK: - ControlSection
+
+private struct ControlSection<Content: View>: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .markepiGlass(
+            shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
+            isEnabled: !reduceTransparency
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, 16)
     }
 }
