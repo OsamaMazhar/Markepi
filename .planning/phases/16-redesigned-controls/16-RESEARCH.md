@@ -430,6 +430,30 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
 **Missing dependencies with no fallback:** None
 **Missing dependencies with fallback:** None
 
+## Security Domain
+
+> `security_enforcement` is not explicitly disabled in `.planning/config.json` (key absent → enabled per GSD defaults).
+
+### Applicable ASVS Categories
+
+| ASVS Category | Applies | Standard Control |
+|---------------|---------|------------------|
+| V2 Authentication | No | No authentication — fully offline app, no user accounts |
+| V3 Session Management | No | No sessions — no network calls, no server-side state |
+| V4 Access Control | No | No access control — single-user app, on-device only |
+| V5 Input Validation | No in this phase | Input validation lives in `WatermarkEngine` (frozen). Phase 16 only restyles text fields — does not add or modify input paths |
+| V6 Cryptography | No | No cryptographic operations — no keys, no encryption, no hashing in the UI layer |
+
+### Known Threat Patterns for SwiftUI UI Reskin
+
+| Pattern | STRIDE | Standard Mitigation |
+|---------|--------|---------------------|
+| Accidental removal of VoiceOver labels during view replacement | Information Disclosure (accessibility gap) | Preserve/improve all `.accessibilityLabel`/`.accessibilityHint` from current sub-views — documented in Pitfall 4 |
+| User data exposure via SwiftUI Previews using live ViewModel | Information Disclosure | Phase 15 PreviewCatalog uses mock data; ControlsView Previews should follow same pattern — no real photos in preview code |
+| SwiftUI `@State` in reused controls mutating shared ViewModel | Tampering (unintended) | Existing pattern: sub-views use `@Bindable var viewModel` — already single-source-of-truth. No change to this pattern |
+
+**Phase 16 security assessment:** LOW risk. This is a pure UI reskin phase — no new data paths, no new processing, no network calls, no authentication, no cryptography. The only security concern is preserving existing accessibility annotations (Pitfall 4). The frozen `WatermarkEngine` and `WatermarkConfigurable` protocol ensure no behavior changes can be introduced through the UI layer.
+
 ## Common Pitfalls
 
 ### Pitfall 1: Double ScrollView Nesting
