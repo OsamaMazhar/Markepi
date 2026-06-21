@@ -21,10 +21,10 @@ Requirements for the UI Redesign milestone. Each maps to exactly one roadmap pha
 
 ### Visual System (VIS)
 
-- [ ] **VIS-01**: Navigation and control chrome use iOS 26 Liquid Glass (toolbar, floating buttons, sheet surface), with graceful fallback on the iOS 18 deployment floor
-- [ ] **VIS-02**: Controls are organized into grouped inset section cards with a clear typographic hierarchy (no wall of equal-weight section titles)
-- [ ] **VIS-03**: A single consistent button language is applied across primary, secondary, and destructive actions
-- [ ] **VIS-04**: Scroll-edge effects keep controls legible as content scrolls beneath them
+- [x] **VIS-01**: Navigation and control chrome use iOS 26 Liquid Glass (toolbar, floating buttons, sheet surface), with graceful fallback on the iOS 18 deployment floor
+- [x] **VIS-02**: Controls are organized into grouped inset section cards with a clear typographic hierarchy (no wall of equal-weight section titles)
+- [x] **VIS-03**: A single consistent button language is applied across primary, secondary, and destructive actions
+- [x] **VIS-04**: Scroll-edge effects keep controls legible as content scrolls beneath them
 
 ### Redesigned Controls (CTL)
 
@@ -77,10 +77,10 @@ Which phases cover which requirements.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VIS-01 | Phase 15 | Pending |
-| VIS-02 | Phase 15 | Pending |
-| VIS-03 | Phase 15 | Pending |
-| VIS-04 | Phase 15 | Pending |
+| VIS-01 | Phase 15 | Complete |
+| VIS-02 | Phase 15 | Complete |
+| VIS-03 | Phase 15 | Complete |
+| VIS-04 | Phase 15 | Complete |
 | CTL-01 | Phase 16 | Pending |
 | CTL-02 | Phase 16 | Pending |
 | CTL-03 | Phase 16 | Pending |
