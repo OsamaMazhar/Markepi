@@ -10,6 +10,7 @@ import UIKit
 /// the main app and share extension can reuse it without code duplication.
 public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observable>: View {
     @Bindable var viewModel: ViewModel
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     public init(viewModel: ViewModel) {
         self.viewModel = viewModel
@@ -24,36 +25,42 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
         #endif
     }
 
-    /// Returns the appropriate semantic separator color for the current platform.
-    private var separatorColor: Color {
-        #if canImport(UIKit)
-        Color(UIColor.separator)
-        #else
-        Color(.separatorColor)
-        #endif
-    }
-
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Watermark Text")
-                .font(.title3.weight(.semibold))
+        VStack(spacing: 0) {
+            // Section header
+            Text("Text")
+                .markepiTypography(.sectionHeader)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
 
-            ZStack(alignment: .topLeading) {
-                if currentText.isEmpty {
-                    Text("Watermark text")
-                        .foregroundColor(placeholderColor)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 8)
+            // Row container with glass backing
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Watermark Text")
+                        .markepiTypography(.controlLabel)
+
+                    ZStack(alignment: .topLeading) {
+                        if currentText.isEmpty {
+                            Text("Watermark text")
+                                .foregroundColor(placeholderColor)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 8)
+                        }
+                        TextEditor(text: textBinding)
+                            .font(.body)
+                            .frame(minHeight: 80, maxHeight: 120)
+                            .scrollContentBackground(.hidden)
+                    }
                 }
-                TextEditor(text: textBinding)
-                    .font(.body)
-                    .frame(minHeight: 80, maxHeight: 120)
-                    .scrollContentBackground(.hidden)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(separatorColor)
+            .markepiGlass(
+                shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                isEnabled: !reduceTransparency
             )
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 16)
         }
         .onChange(of: currentText) { _, newValue in
             if newValue.count > 500 {

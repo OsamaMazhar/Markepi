@@ -18,26 +18,23 @@ public struct ScaleStepperView<ViewModel: WatermarkConfigurable & Observable>: V
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack {
             Text("Scale")
-                .font(.title3.weight(.semibold))
-
-            HStack {
-                Text("Scale: \(Int(currentScale * 100))%")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Stepper(
-                    "",
-                    value: scaleBinding,
-                    in: 0.01...0.90,
-                    step: 0.05
-                )
-                .labelsHidden()
-            }
+                .markepiTypography(.controlLabel)
+            Spacer()
+            Text("\(Int(currentScale * 100))%")
+                .markepiTypography(.value)
+            Stepper(
+                "",
+                value: scaleBinding,
+                in: 0.01...0.90,
+                step: 0.05
+            )
+            .labelsHidden()
+            .frame(width: 100)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .accessibilityLabel("Watermark scale")
         .accessibilityHint("Adjust watermark size. Current value: \(Int(currentScale * 100)) percent")
     }
