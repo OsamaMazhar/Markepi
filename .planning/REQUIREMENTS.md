@@ -28,14 +28,14 @@ Requirements for the UI Redesign milestone. Each maps to exactly one roadmap pha
 
 ### Redesigned Controls (CTL)
 
-- [ ] **CTL-01**: A visual 9-position picker replaces the TL/TC/TR text grid, showing placement glanceably
+- [x] **CTL-01**: A visual 9-position picker replaces the TL/TC/TR text grid, showing placement glanceably
 - [ ] **CTL-02**: The text watermark input is redesigned with a cleaner field and inline affordances
 - [ ] **CTL-03**: The scale control is redesigned with a live value readout
 - [ ] **CTL-04**: The Logo and Signature pickers share consistent add / preview / remove affordances
 - [ ] **CTL-05**: White Frame is presented as an integrated grouped row within the controls
 - [ ] **CTL-06**: The layer list is redesigned with clear active-layer selection and remove controls
-- [ ] **CTL-07**: Export Options are redesigned using native Menus/pickers
-- [ ] **CTL-08**: The Save-as-Template action conforms to the new button language
+- [x] **CTL-07**: Export Options are redesigned using native Menus/pickers
+- [x] **CTL-08**: The Save-as-Template action conforms to the new button language
 
 ### Cross-Target Parity (XTG)
 
@@ -81,14 +81,14 @@ Which phases cover which requirements.
 | VIS-02 | Phase 15 | Complete |
 | VIS-03 | Phase 15 | Complete |
 | VIS-04 | Phase 15 | Complete |
-| CTL-01 | Phase 16 | Pending |
+| CTL-01 | Phase 16 | Complete |
 | CTL-02 | Phase 16 | Pending |
 | CTL-03 | Phase 16 | Pending |
 | CTL-04 | Phase 16 | Pending |
 | CTL-05 | Phase 16 | Pending |
 | CTL-06 | Phase 16 | Pending |
-| CTL-07 | Phase 16 | Pending |
-| CTL-08 | Phase 16 | Pending |
+| CTL-07 | Phase 16 | Complete |
+| CTL-08 | Phase 16 | Complete |
 | LYT-01 | Phase 17 | Pending |
 | LYT-02 | Phase 17 | Pending |
 | LYT-03 | Phase 17 | Pending |
