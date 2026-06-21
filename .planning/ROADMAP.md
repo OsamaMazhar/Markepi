@@ -27,7 +27,11 @@
   2. Controls within `ControlsView` are grouped into inset section cards with a clear typographic hierarchy instead of a flat stack of equal-weight section titles
   3. Primary, secondary, and destructive actions share one consistent button language (one shape/weight/tint vocabulary) wherever they appear
   4. Content scrolling beneath the chrome stays legible via scroll-edge effects (no text colliding illegibly with floating controls)
-**Plans**: TBD
+**Plans**: 3 plans in 3 waves
+Plans:
+- [ ] 15-01-PLAN.md — Foundation Primitives (directory scaffold, View.modify utility, MarkepiGlassModifier, MarkepiTypography)
+- [ ] 15-02-PLAN.md — Interaction Primitives (MarkepiButtonStyle, MarkepiPillBar, MarkepiScrollEdgeProtection)
+- [ ] 15-03-PLAN.md — Preview Catalog + Cross-Target Verification
 **UI hint**: yes
 
 ### Phase 16: Redesigned Controls
@@ -70,7 +74,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 15. Visual Design System & Shared Primitives | 0/TBD | Not started | - |
+| 15. Visual Design System & Shared Primitives | 0/3 | Not started | - |
 | 16. Redesigned Controls | 0/TBD | Not started | - |
 | 17. Inspector Bottom-Sheet Shell | 0/TBD | Not started | - |
 | 18. Cross-Target Parity & Accessibility Polish | 0/TBD | Not started | - |
