@@ -73,38 +73,38 @@ Explicitly excluded for v2.1 to prevent scope creep.
 
 ## Traceability
 
-Which phases cover which requirements. Filled during roadmap creation.
+Which phases cover which requirements.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LYT-01 | TBD | Pending |
-| LYT-02 | TBD | Pending |
-| LYT-03 | TBD | Pending |
-| LYT-04 | TBD | Pending |
-| VIS-01 | TBD | Pending |
-| VIS-02 | TBD | Pending |
-| VIS-03 | TBD | Pending |
-| VIS-04 | TBD | Pending |
-| CTL-01 | TBD | Pending |
-| CTL-02 | TBD | Pending |
-| CTL-03 | TBD | Pending |
-| CTL-04 | TBD | Pending |
-| CTL-05 | TBD | Pending |
-| CTL-06 | TBD | Pending |
-| CTL-07 | TBD | Pending |
-| CTL-08 | TBD | Pending |
-| XTG-01 | TBD | Pending |
-| XTG-02 | TBD | Pending |
-| UXQ-01 | TBD | Pending |
-| UXQ-02 | TBD | Pending |
-| UXQ-03 | TBD | Pending |
-| UXQ-04 | TBD | Pending |
+| VIS-01 | Phase 15 | Pending |
+| VIS-02 | Phase 15 | Pending |
+| VIS-03 | Phase 15 | Pending |
+| VIS-04 | Phase 15 | Pending |
+| CTL-01 | Phase 16 | Pending |
+| CTL-02 | Phase 16 | Pending |
+| CTL-03 | Phase 16 | Pending |
+| CTL-04 | Phase 16 | Pending |
+| CTL-05 | Phase 16 | Pending |
+| CTL-06 | Phase 16 | Pending |
+| CTL-07 | Phase 16 | Pending |
+| CTL-08 | Phase 16 | Pending |
+| LYT-01 | Phase 17 | Pending |
+| LYT-02 | Phase 17 | Pending |
+| LYT-03 | Phase 17 | Pending |
+| LYT-04 | Phase 17 | Pending |
+| XTG-01 | Phase 18 | Pending |
+| XTG-02 | Phase 18 | Pending |
+| UXQ-01 | Phase 18 | Pending |
+| UXQ-02 | Phase 18 | Pending |
+| UXQ-03 | Phase 18 | Pending |
+| UXQ-04 | Phase 18 | Pending |
 
 **Coverage:**
 - v2.1 requirements: 22 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 22 ⚠️
+- Mapped to phases: 22 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-21*
-*Last updated: 2026-06-21 at v2.1 milestone start*
+*Last updated: 2026-06-21 — roadmap created, all 22 requirements mapped to Phases 15-18*
