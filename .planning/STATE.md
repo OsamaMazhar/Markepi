@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: UI Redesign
-status: planning
-stopped_at: Phase 15 context gathered
-last_updated: "2026-06-21T13:24:32.085Z"
-last_activity: 2026-06-21 — v2.1 roadmap created (Phases 15-18, 22/22 requirements mapped)
+status: All 3 plans executed, build gate passed
+stopped_at: Phase 16 context gathered
+last_updated: "2026-06-21T14:55:45.159Z"
+last_activity: 2026-06-21 -- Phase 15 execution complete
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
+  percent: 25
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-21)
 
 **Core value:** Add a watermark and share it instantly — without ever cluttering the camera roll.
-**Current focus:** Phase 15 — Visual Design System & Shared Primitives
+**Current focus:** Phase 15 complete — next: Phase 16
 
 ## Current Position
 
-Phase: 15 — Visual Design System & Shared Primitives (not started)
-Plan: —
-Status: Roadmap created; ready to plan Phase 15
-Last activity: 2026-06-21 — v2.1 roadmap created (Phases 15-18, 22/22 requirements mapped)
+Phase: 15 (visual-design-system-shared-primitives) — COMPLETE
+Plans: 3 of 3
+Status: All 3 plans executed, build gate passed
+Last activity: 2026-06-21 -- Phase 15 execution complete
 
-Progress: [░░░░░░░░░░] 0/4 phases
+Progress: [███░░░░░░░] 1/4 phases
 
 ### v2.1 Phase Map
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
-| 15. Visual Design System & Shared Primitives | Shared Liquid Glass chrome, section cards, button language, scroll-edge | VIS-01, VIS-02, VIS-03, VIS-04 |
+| 15. Visual Design System & Shared Primitives | Shared Liquid Glass chrome, section cards, button language, scroll-edge | VIS-01, VIS-02, VIS-03, VIS-04 ✓ |
 | 16. Redesigned Controls | Rebuild every ControlsView control on the new design system | CTL-01..CTL-08 |
 | 17. Inspector Bottom-Sheet Shell | Full-bleed hero + detent control sheet + pinned action bar | LYT-01, LYT-02, LYT-03, LYT-04 |
 | 18. Cross-Target Parity & Accessibility Polish | Extension parity + a11y + empty state | XTG-01, XTG-02, UXQ-01, UXQ-02, UXQ-03, UXQ-04 |
@@ -90,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-21T13:24:32.078Z
-Stopped at: Phase 15 context gathered
-Resume file: .planning/phases/15-visual-design-system-shared-primitives/15-CONTEXT.md
+Last session: 2026-06-21T14:55:45.147Z
+Stopped at: Phase 16 context gathered
+Resume file: .planning/phases/16-redesigned-controls/16-CONTEXT.md
