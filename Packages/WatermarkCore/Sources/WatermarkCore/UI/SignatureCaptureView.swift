@@ -22,21 +22,34 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
     @State private var inkColor: Color = .black
     @State private var strokeWidth: CGFloat = 3.0
     @State private var showCaptureSheet = false
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     public init(viewModel: ViewModel) {
         self.viewModel = viewModel
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(spacing: 0) {
+            // Section header
             Text("Signature")
-                .font(.title3.weight(.semibold))
+                .markepiTypography(.sectionHeader)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
 
-            if hasSignatureLayer {
-                signatureSelectedView
-            } else {
-                addSignatureButton
+            // Row container with glass backing
+            VStack(spacing: 0) {
+                if hasSignatureLayer {
+                    signatureSelectedView
+                } else {
+                    addSignatureButton
+                }
             }
+            .markepiGlass(
+                shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                isEnabled: !reduceTransparency
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 16)
         }
         .sheet(isPresented: $showCaptureSheet) {
             signatureCaptureSheet
@@ -65,12 +78,9 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
         Button {
             showCaptureSheet = true
         } label: {
-            HStack {
-                Image(systemName: "signature")
-                Text("Add Signature")
-            }
+            Label("Add Signature", systemImage: "signature")
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.markepiPrimary())
         .accessibilityLabel("Add signature watermark")
         .accessibilityHint("Open the signature capture canvas to draw your signature")
     }
@@ -79,20 +89,19 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
         HStack {
             Image(systemName: "signature")
                 .foregroundStyle(.secondary)
+                .frame(width: 24)
 
             Text("Signature")
-                .font(.body)
-                .foregroundStyle(.primary)
+                .markepiTypography(.controlLabel)
 
             Spacer()
 
             Button {
                 showCaptureSheet = true
             } label: {
-                Text("Edit")
-                    .font(.body)
-                    .foregroundStyle(.blue)
+                Label("Edit", systemImage: "pencil")
             }
+            .buttonStyle(.markepiPrimary())
 
             Button {
                 if let index = signatureLayerIndex {
@@ -102,10 +111,11 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
                 }
             } label: {
                 Text("Remove")
-                    .font(.body)
-                    .foregroundStyle(.red)
             }
+            .buttonStyle(.markepiDestructive())
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 
     // MARK: - Capture Sheet
@@ -237,26 +247,34 @@ struct SignatureCanvasView: UIViewRepresentable {
 public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable>: View {
     @Bindable var viewModel: ViewModel
     @State private var showCaptureSheet = false
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     public init(viewModel: ViewModel) {
         self.viewModel = viewModel
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(spacing: 0) {
             Text("Signature")
-                .font(.title3.weight(.semibold))
+                .markepiTypography(.sectionHeader)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
 
-            Button {
-                showCaptureSheet = true
-            } label: {
-                HStack {
-                    Image(systemName: "signature")
-                    Text("Add Signature")
+            VStack(spacing: 0) {
+                Button {
+                    showCaptureSheet = true
+                } label: {
+                    Label("Add Signature", systemImage: "signature")
                 }
+                .buttonStyle(.markepiPrimary())
+                .disabled(true)
             }
-            .buttonStyle(.bordered)
-            .disabled(true)
+            .markepiGlass(
+                shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                isEnabled: !reduceTransparency
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 16)
         }
         .sheet(isPresented: $showCaptureSheet) {
             VStack(spacing: 16) {
@@ -270,7 +288,7 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
                 Button("Close") {
                     showCaptureSheet = false
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.markepiSecondary())
             }
             .padding()
         }

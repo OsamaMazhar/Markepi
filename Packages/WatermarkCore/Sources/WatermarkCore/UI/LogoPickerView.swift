@@ -13,21 +13,34 @@ public struct LogoPickerView<ViewModel: WatermarkConfigurable & Observable>: Vie
     @State private var showPhotosPicker = false
     @State private var showFileImporter = false
     @State private var logoPickerItems: [PhotosPickerItem] = []
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     public init(viewModel: ViewModel) {
         self.viewModel = viewModel
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Logo Watermark")
-                .font(.title3.weight(.semibold))
+        VStack(spacing: 0) {
+            // Section header
+            Text("Logo")
+                .markepiTypography(.sectionHeader)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
 
-            if hasLogoLayer {
-                logoSelectedView
-            } else {
-                addLogoButton
+            // Row container with glass backing
+            VStack(spacing: 0) {
+                if hasLogoLayer {
+                    logoSelectedView
+                } else {
+                    addLogoButton
+                }
             }
+            .markepiGlass(
+                shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                isEnabled: !reduceTransparency
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 16)
         }
         .confirmationDialog("Add Logo Watermark", isPresented: $showConfirmationDialog) {
             Button("From Photos") {
@@ -85,12 +98,9 @@ public struct LogoPickerView<ViewModel: WatermarkConfigurable & Observable>: Vie
         Button {
             showConfirmationDialog = true
         } label: {
-            HStack {
-                Image(systemName: "photo.badge.plus")
-                Text("Add Logo")
-            }
+            Label("Add Logo", systemImage: "photo.badge.plus")
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.markepiPrimary())
         .accessibilityLabel("Add logo watermark")
         .accessibilityHint("Choose a logo image from your photo library or files")
     }
@@ -99,10 +109,10 @@ public struct LogoPickerView<ViewModel: WatermarkConfigurable & Observable>: Vie
         HStack {
             Image(systemName: "photo")
                 .foregroundStyle(.secondary)
+                .frame(width: 24)
 
             Text("Logo")
-                .font(.body)
-                .foregroundStyle(.primary)
+                .markepiTypography(.controlLabel)
 
             Spacer()
 
@@ -113,8 +123,10 @@ public struct LogoPickerView<ViewModel: WatermarkConfigurable & Observable>: Vie
             } label: {
                 Text("Remove")
                     .font(.body)
-                    .foregroundStyle(.red)
             }
+            .buttonStyle(.markepiDestructive())
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 }
