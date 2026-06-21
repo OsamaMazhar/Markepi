@@ -19,9 +19,24 @@ Add a watermark and share it instantly — without ever cluttering the camera ro
 
 **v2.0 stats:** 3 phases, 10 plans, 15/15 requirements satisfied. Built on v1.0 + v1.1 foundation (13,820+ lines Swift, 82+ files, 233+ tests).
 
-## Next Milestone
+## Current Milestone: v2.1 UI Redesign
 
-To start the next milestone, run: `/gsd-new-milestone`
+**Goal:** Rebuild the watermark editor's presentation layer into a polished, professional iOS 26 experience — without touching the rendering engine, ViewModels, or data model.
+
+**Target features:**
+- Inspector bottom-sheet layout — photo as full-bleed hero; controls in a resizable detent sheet with a pinned Share action bar
+- Grouped, sectioned controls (inset cards) replacing the flat stack of heavy section titles; clear typographic hierarchy
+- Liquid Glass navigation/control layer — floating glass chrome, scroll-edge effects, adaptive tint on the primary action only
+- Visual 9-position picker replacing the cryptic TL/TC/TR text grid
+- Native components throughout — Menus, segmented controls, refined steppers/sliders; one consistent button language
+- Adaptive light/dark appearance
+- Redesign flows to all 3 targets (App, ShareExtension, PhotoEditExtension) via the shared `ControlsView`
+
+**Key context / constraints:**
+- Pure presentation-layer change. `WatermarkConfigurable` protocol, ViewModels, and `WatermarkEngine` are unchanged.
+- Risk concentrated in the shared `ControlsView` (consumed by all 3 targets) — redesign must not break extension reuse.
+- Targets iOS 26+ Liquid Glass APIs with graceful behavior on the existing iOS 18 deployment floor where required.
+- Continues phase numbering at Phase 15.
 
 ## Requirements
 
@@ -140,4 +155,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-19 after v2.0 milestone start*
+*Last updated: 2026-06-21 after v2.1 UI Redesign milestone start*
