@@ -123,7 +123,7 @@ public struct PreviewCatalog: View {
         VStack {
             ForEach(0..<20, id: \.self) { i in
                 Text("Scrolling content line \(i)")
-                    .markepiTypography(.body)
+                    .markepiTypography(.controlLabel)
             }
         }
         .markepiScrollEdgeProtection {
