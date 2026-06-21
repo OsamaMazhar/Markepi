@@ -4,8 +4,8 @@ milestone: v2.1
 milestone_name: UI Redesign
 status: executing
 stopped_at: Phase 16 context gathered
-last_updated: "2026-06-21T19:01:32.488Z"
-last_activity: 2026-06-21 -- Phase 16 planning complete
+last_updated: "2026-06-21T19:17:11.943Z"
+last_activity: 2026-06-21 -- Phase 16 execution started
 progress:
   total_phases: 4
   completed_phases: 1
@@ -21,14 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-21)
 
 **Core value:** Add a watermark and share it instantly — without ever cluttering the camera roll.
-**Current focus:** Phase 15 complete — next: Phase 16
+**Current focus:** Phase 16 — redesigned-controls
 
 ## Current Position
 
-Phase: 15 (visual-design-system-shared-primitives) — COMPLETE
+Phase: 16 (redesigned-controls) — EXECUTING
+Plan: 1 of 2
 Plans: 3 of 3
-Status: Ready to execute
-Last activity: 2026-06-21 -- Phase 16 planning complete
+Status: Executing Phase 16
+Last activity: 2026-06-21 -- Phase 16 execution started
 
 Progress: [███░░░░░░░] 1/4 phases
 

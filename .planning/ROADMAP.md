@@ -45,8 +45,8 @@ Plans:
    4. The Save-as-Template action conforms to the new button language, and all existing control behaviors (positions, scale, layers, export, HDR→JPEG warning) function unchanged
 **Plans**: 2 plans in 1 wave
 Plans:
-- [ ] 16-01-PLAN.md — ControlsView core restructure: pill bar + position Menu + export Menu + button restyling (CTL-01, CTL-07, CTL-08)
-- [ ] 16-02-PLAN.md — Sub-view row restyling: text/scale/logo/signature/whiteFrame/layerList on Markepi design system (CTL-02, CTL-03, CTL-04, CTL-05, CTL-06)
+- [x] 16-01-PLAN.md — ControlsView core restructure: pill bar + position Menu + export Menu + button restyling (CTL-01, CTL-07, CTL-08)
+- [x] 16-02-PLAN.md — Sub-view row restyling: text/scale/logo/signature/whiteFrame/layerList on Markepi design system (CTL-02, CTL-03, CTL-04, CTL-05, CTL-06)
 **UI hint**: yes
 
 ### Phase 17: Inspector Bottom-Sheet Shell
@@ -78,7 +78,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 15. Visual Design System & Shared Primitives | 0/3 | Not started | - |
-| 16. Redesigned Controls | 0/2 | Not started | - |
+| 16. Redesigned Controls | 2/2 | Complete   | 2026-06-21 |
 | 17. Inspector Bottom-Sheet Shell | 0/TBD | Not started | - |
 | 18. Cross-Target Parity & Accessibility Polish | 0/TBD | Not started | - |
 
