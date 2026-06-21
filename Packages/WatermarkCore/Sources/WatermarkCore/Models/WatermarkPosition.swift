@@ -78,3 +78,31 @@ public enum WatermarkPosition: String, CaseIterable, Sendable, Codable {
         return CGAffineTransform(translationX: x, y: y)
     }
 }
+
+extension WatermarkPosition {
+    /// Human-readable display name for the 9-position picker Menu.
+    /// Maps rawValue enum cases to natural language labels.
+    var displayName: String {
+        switch self {
+        case .topLeft: return "Top Left"
+        case .topCenter: return "Top Center"
+        case .topRight: return "Top Right"
+        case .middleLeft: return "Middle Left"
+        case .center: return "Center"
+        case .middleRight: return "Middle Right"
+        case .bottomLeft: return "Bottom Left"
+        case .bottomCenter: return "Bottom Center"
+        case .bottomRight: return "Bottom Right"
+    }
+}
+
+}
+
+extension Array {
+    /// Safe subscript that returns `nil` when index is out of bounds,
+    /// instead of crashing. Used by scale stepper and other UI views
+    /// that query layer properties at the active layer index.
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
