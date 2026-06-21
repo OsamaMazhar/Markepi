@@ -42,8 +42,11 @@ Plans:
   1. A visual 9-position picker shows watermark placement glanceably, replacing the TL/TC/TR text grid, and still drives the same 9 placement values
   2. The text watermark field, scale control (with live value readout), logo picker, and signature picker present clean fields and consistent add / preview / remove affordances
   3. White Frame appears as an integrated grouped row, the layer list shows clear active-layer selection plus remove controls, and Export Options use native Menus/pickers
-  4. The Save-as-Template action conforms to the new button language, and all existing control behaviors (positions, scale, layers, export, HDR→JPEG warning) function unchanged
-**Plans**: TBD
+   4. The Save-as-Template action conforms to the new button language, and all existing control behaviors (positions, scale, layers, export, HDR→JPEG warning) function unchanged
+**Plans**: 2 plans in 1 wave
+Plans:
+- [ ] 16-01-PLAN.md — ControlsView core restructure: pill bar + position Menu + export Menu + button restyling (CTL-01, CTL-07, CTL-08)
+- [ ] 16-02-PLAN.md — Sub-view row restyling: text/scale/logo/signature/whiteFrame/layerList on Markepi design system (CTL-02, CTL-03, CTL-04, CTL-05, CTL-06)
 **UI hint**: yes
 
 ### Phase 17: Inspector Bottom-Sheet Shell
@@ -75,7 +78,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 15. Visual Design System & Shared Primitives | 0/3 | Not started | - |
-| 16. Redesigned Controls | 0/TBD | Not started | - |
+| 16. Redesigned Controls | 0/2 | Not started | - |
 | 17. Inspector Bottom-Sheet Shell | 0/TBD | Not started | - |
 | 18. Cross-Target Parity & Accessibility Polish | 0/TBD | Not started | - |
 
