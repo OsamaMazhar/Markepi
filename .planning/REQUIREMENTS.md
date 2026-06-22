@@ -39,8 +39,8 @@ Requirements for the UI Redesign milestone. Each maps to exactly one roadmap pha
 
 ### Cross-Target Parity (XTG)
 
-- [ ] **XTG-01**: The redesigned `ControlsView` renders and functions correctly in the Share Extension
-- [ ] **XTG-02**: The redesigned `ControlsView` renders and functions correctly in the Photos Edit Extension
+- [x] **XTG-01**: The redesigned `ControlsView` renders and functions correctly in the Share Extension
+- [x] **XTG-02**: The redesigned `ControlsView` renders and functions correctly in the Photos Edit Extension
 
 ### Polish & Accessibility (UXQ)
 
@@ -93,8 +93,8 @@ Which phases cover which requirements.
 | LYT-02 | Phase 17 | Complete |
 | LYT-03 | Phase 17 | Complete |
 | LYT-04 | Phase 17 | Complete |
-| XTG-01 | Phase 18 | Pending |
-| XTG-02 | Phase 18 | Pending |
+| XTG-01 | Phase 18 | Complete |
+| XTG-02 | Phase 18 | Complete |
 | UXQ-01 | Phase 18 | Complete |
 | UXQ-02 | Phase 18 | Complete |
 | UXQ-03 | Phase 18 | Complete |
