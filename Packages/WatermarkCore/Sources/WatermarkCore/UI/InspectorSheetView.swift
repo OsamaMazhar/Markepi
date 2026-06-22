@@ -25,12 +25,17 @@ public enum SheetDetent: Equatable {
 /// The detent is owned by the parent (e.g., `ContentView`) via `@Binding`,
 /// and the drag gesture on the indicator capsule drives detent transitions.
 ///
+/// The parent computes `expandedHeight` from `GeometryReader` as
+/// `geometry.size.height * 0.55` and passes it in. The sheet itself does
+/// not need to know the screen size.
+///
 /// Usage:
 /// ```swift
 /// @State private var detent: SheetDetent = .peek
 /// InspectorSheetView(
 ///     detent: $detent,
 ///     peekHeight: 60,
+///     expandedHeight: geometry.size.height * 0.55,
 ///     viewModel: viewModel
 /// )
 /// ```
@@ -44,10 +49,15 @@ public struct InspectorSheetView<ViewModel: WatermarkConfigurable & Observable>:
     /// The height of the sheet at the peek detent (~60pt).
     public let peekHeight: CGFloat
 
+    /// The height of the sheet at the expanded detent, computed by the parent
+    /// as `geometry.size.height * 0.55`.
+    public let expandedHeight: CGFloat
+
     /// The ViewModel driving ControlsView.
     @State var viewModel: ViewModel
 
     /// Live drag offset during gesture (not animated).
+    /// Negative translation (dragging up) increases height, positive (dragging down) decreases.
     @State private var dragOffset: CGFloat = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -58,10 +68,12 @@ public struct InspectorSheetView<ViewModel: WatermarkConfigurable & Observable>:
     public init(
         detent: Binding<SheetDetent>,
         peekHeight: CGFloat,
+        expandedHeight: CGFloat,
         viewModel: ViewModel
     ) {
         self._detent = detent
         self.peekHeight = peekHeight
+        self.expandedHeight = expandedHeight
         self.viewModel = viewModel
     }
 
@@ -70,11 +82,13 @@ public struct InspectorSheetView<ViewModel: WatermarkConfigurable & Observable>:
     public var body: some View {
         VStack(spacing: 0) {
             // D-10: Standard iOS drag indicator — 36pt × 5pt capsule
+            // D-15: DragGesture on indicator ONLY — ControlsView scrolls independently
             RoundedRectangle(cornerRadius: 2.5)
                 .fill(Color.secondary.opacity(0.4))
                 .frame(width: 36, height: 5)
                 .padding(.top, 8)
                 .padding(.bottom, 4)
+                .gesture(dragGesture)
                 .accessibilityLabel("Resize controls")
                 .accessibilityHint("Drag up to show all controls, down to minimize")
 
@@ -119,11 +133,45 @@ public struct InspectorSheetView<ViewModel: WatermarkConfigurable & Observable>:
 
     /// The current height of the sheet based on detent and live drag offset.
     ///
-    /// Clamped to never drop below `peekHeight` (D-04: not dismissible).
-    /// The expanded height is a placeholder (~300pt) — Task 2 makes this
-    /// dynamic via the `expandedHeight` parameter passed from the parent.
+    /// - At `.peek`: starts at `peekHeight`, can stretch upward with negative dragOffset.
+    /// - At `.expanded`: starts at `expandedHeight`, can shrink downward with positive dragOffset.
+    /// - Never drops below `peekHeight` (D-04: not dismissible).
+    /// - Capped at `expandedHeight + 50` for a tactile over-drag feel.
     private var sheetHeight: CGFloat {
-        let base = detent == .peek ? peekHeight : 300
-        return max(peekHeight, base + dragOffset)
+        let base = detent == .peek ? peekHeight : expandedHeight
+        return max(peekHeight, min(expandedHeight + 50, base + dragOffset))
+    }
+
+    // MARK: - Drag Gesture
+
+    /// Drag gesture attached ONLY to the indicator capsule (D-15).
+    ///
+    /// - `.onChanged`: Tracks finger position via `dragOffset` without animation.
+    ///   Negative translation (dragging up) → increases height (expanding).
+    ///   Positive translation (dragging down) → decreases height (collapsing).
+    ///
+    /// - `.onEnded`: Snaps to nearest detent at the midpoint threshold.
+    ///   No `withAnimation` — the `.animation()` modifier on the VStack
+    ///   automatically animates the detent change (per Pitfall 3).
+    ///   Resets `dragOffset = 0` to prevent stale offset in next gesture.
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                // Invert so upward drag increases height
+                dragOffset = -value.translation.height
+            }
+            .onEnded { _ in
+                let currentHeight = sheetHeight
+                let midpoint = (peekHeight + expandedHeight) / 2
+
+                if currentHeight > midpoint {
+                    detent = .expanded
+                } else {
+                    detent = .peek
+                }
+
+                // Critical per Pitfall 3: reset to prevent stale offset
+                dragOffset = 0
+            }
     }
 }

@@ -64,44 +64,49 @@ struct SheetDetentTests {
 @MainActor
 struct InspectorSheetViewInitTests {
 
-    @Test("InspectorSheetView initializes with required parameters (detent, peekHeight, viewModel)")
+    @Test("InspectorSheetView initializes with all required parameters")
     func initializationSucceeds() {
         let vm = MockInspectorViewModel()
         let peek: CGFloat = 60
+        let expanded: CGFloat = 400
         let detent = Binding<SheetDetent>.constant(.peek)
         let view = InspectorSheetView(
             detent: detent,
             peekHeight: peek,
+            expandedHeight: expanded,
             viewModel: vm
         )
-        // Verify struct creation succeeded — if init failed, we wouldn't reach here
         #expect(Bool(true))
-        _ = view  // suppress unused warning
+        _ = view
     }
 
-    @Test("InspectorSheetView peekHeight constant is preserved after init")
+    @Test("InspectorSheetView peekHeight constant is preserved")
     func peekHeightPreserved() {
         let vm = MockInspectorViewModel()
         let peek: CGFloat = 60
+        let expanded: CGFloat = 400
         let detent = Binding<SheetDetent>.constant(.peek)
         let view = InspectorSheetView(
             detent: detent,
             peekHeight: peek,
+            expandedHeight: expanded,
             viewModel: vm
         )
         #expect(view.peekHeight == 60)
     }
 
-    @Test("InspectorSheetView with peek detent renders at peek height")
-    func peekDetentInitialization() {
+    @Test("InspectorSheetView expandedHeight constant is preserved")
+    func expandedHeightPreserved() {
         let vm = MockInspectorViewModel()
         let peek: CGFloat = 60
+        let expanded: CGFloat = 400
         let detent = Binding<SheetDetent>.constant(.peek)
         let view = InspectorSheetView(
             detent: detent,
             peekHeight: peek,
+            expandedHeight: expanded,
             viewModel: vm
         )
-        #expect(view.peekHeight == 60)
+        #expect(view.expandedHeight == 400)
     }
 }
