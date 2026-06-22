@@ -181,6 +181,78 @@ public enum FontCatalog {
             isSystemFont: false,
             fileName: "Pacifico-Regular.ttf"
         ),
+        WatermarkFont(
+            id: "sacramento",
+            displayName: "Sacramento",
+            postScriptName: "Sacramento-Regular",
+            category: .script,
+            isSystemFont: false,
+            fileName: "Sacramento-Regular.ttf"
+        ),
+        WatermarkFont(
+            id: "allura",
+            displayName: "Allura",
+            postScriptName: "Allura-Regular",
+            category: .script,
+            isSystemFont: false,
+            fileName: "Allura-Regular.ttf"
+        ),
+        WatermarkFont(
+            id: "parisienne",
+            displayName: "Parisienne",
+            postScriptName: "Parisienne-Regular",
+            category: .script,
+            isSystemFont: false,
+            fileName: "Parisienne-Regular.ttf"
+        ),
+        WatermarkFont(
+            id: "alex-brush",
+            displayName: "Alex Brush",
+            postScriptName: "AlexBrush-Regular",
+            category: .script,
+            isSystemFont: false,
+            fileName: "AlexBrush-Regular.ttf"
+        ),
+        WatermarkFont(
+            id: "tangerine",
+            displayName: "Tangerine",
+            postScriptName: "Tangerine-Regular",
+            category: .script,
+            isSystemFont: false,
+            fileName: "Tangerine-Regular.ttf"
+        ),
+        WatermarkFont(
+            id: "pinyon-script",
+            displayName: "Pinyon Script",
+            postScriptName: "PinyonScript-Regular",
+            category: .script,
+            isSystemFont: false,
+            fileName: "PinyonScript-Regular.ttf"
+        ),
+        WatermarkFont(
+            id: "marck-script",
+            displayName: "Marck Script",
+            postScriptName: "MarckScript-Regular",
+            category: .script,
+            isSystemFont: false,
+            fileName: "MarckScript-Regular.ttf"
+        ),
+        WatermarkFont(
+            id: "niconne",
+            displayName: "Niconne",
+            postScriptName: "Niconne-Regular",
+            category: .script,
+            isSystemFont: false,
+            fileName: "Niconne-Regular.ttf"
+        ),
+        WatermarkFont(
+            id: "cookie",
+            displayName: "Cookie",
+            postScriptName: "Cookie-Regular",
+            category: .script,
+            isSystemFont: false,
+            fileName: "Cookie-Regular.ttf"
+        ),
 
         // MARK: - Monospace
         WatermarkFont(
