@@ -54,10 +54,10 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
 
     private var watermarkSectionContent: some View {
         VStack(spacing: 16) {
-            ControlSection {
+            ControlSection(label: "Text and position controls") {
                 TextWatermarkInputView(viewModel: viewModel)
             }
-            ControlSection {
+            ControlSection(label: "Text and position controls") {
                 positionMenuRow
                 Divider()
                     .padding(.leading, 52)
@@ -127,7 +127,7 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
 
     private var outputSectionContent: some View {
         VStack(spacing: 16) {
-            ControlSection {
+            ControlSection(label: "Export options") {
                 exportFormatRow
                 Divider()
                     .padding(.leading, 52)
@@ -145,7 +145,7 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                 Text("JPEG does not support HDR. The image will be converted to standard dynamic range.")
             }
 
-            ControlSection {
+            ControlSection(label: "Template controls") {
                 saveTemplateButton
             }
 
@@ -251,12 +251,20 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
 
 private struct ControlSection<Content: View>: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    let label: String
     @ViewBuilder let content: () -> Content
+
+    init(label: String, @ViewBuilder content: @escaping () -> Content) {
+        self.label = label
+        self.content = content
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             content()
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(label)
         .markepiGlass(
             shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
             isEnabled: !reduceTransparency

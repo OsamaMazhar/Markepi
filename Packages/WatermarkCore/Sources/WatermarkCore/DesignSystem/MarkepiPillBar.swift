@@ -46,6 +46,7 @@ public struct MarkepiPillBar: View {
     @Binding var selection: ControlsSection
     @Namespace private var pillNamespace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(selection: Binding<ControlsSection>) {
         self._selection = selection
@@ -65,6 +66,9 @@ public struct MarkepiPillBar: View {
                         .padding(.horizontal, 16)
                         .frame(maxWidth: .infinity)
                 }
+                .accessibilityLabel("\(section.rawValue) controls")
+                .accessibilityHint("Shows \(section.rawValue.lowercased()) settings")
+                .accessibilityAddTraits(selection == section ? [.isButton, .isSelected] : .isButton)
                 .foregroundStyle(selection == section ? .primary : .secondary)
                 .background {
                     if selection == section {
@@ -75,6 +79,8 @@ public struct MarkepiPillBar: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Controls section selector")
         .padding(4) // inner breathing room for the pill indicator
         .markepiGlass(
             shape: Capsule(),
