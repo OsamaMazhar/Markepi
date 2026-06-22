@@ -126,8 +126,11 @@ struct ShareExtensionRootView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
                 }
+            } else if viewModel.sourceURL == nil {
+                // True idle state — no media URL set at all
+                EmptyStateView(onChoosePhoto: nil)
             } else {
-                // No media loaded yet — idle state
+                // Media URL set, preview pending — loading state
                 VStack(spacing: 12) {
                     Image(systemName: "photo")
                         .font(.system(size: 40))
