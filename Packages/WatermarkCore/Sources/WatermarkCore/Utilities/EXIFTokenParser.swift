@@ -33,6 +33,7 @@ public struct EXIFTokenParser {
     private enum Token: String, CaseIterable {
         case camera_model, lens, aperture, focal_length
         case shutter_speed, iso, date, gps
+        case dimensions, format
     }
 
     // MARK: - Public API
@@ -124,6 +125,42 @@ public struct EXIFTokenParser {
 
         case .gps:
             return formatGPS(from: metadata)
+
+        case .dimensions:
+            guard let w = intValue(metadata["PixelWidth"]),
+                  let h = intValue(metadata["PixelHeight"]),
+                  w > 0, h > 0 else { return "--" }
+            return "\(w) × \(h)"
+
+        case .format:
+            // Source UTI is injected by WatermarkEngine as "_SourceUTI".
+            guard let uti = metadata["_SourceUTI"] as? String,
+                  let label = formatLabel(forUTI: uti) else { return "--" }
+            return label
+        }
+    }
+
+    // MARK: - Shared metadata helpers
+
+    /// Reads an integer from a metadata value that may be an Int, Double, or NSNumber.
+    static func intValue(_ any: Any?) -> Int? {
+        if let i = any as? Int { return i }
+        if let n = any as? NSNumber { return n.intValue }
+        if let d = any as? Double { return Int(d) }
+        return nil
+    }
+
+    /// Maps a source UTI to a short, human-readable format label.
+    static func formatLabel(forUTI uti: String) -> String? {
+        switch uti.lowercased() {
+        case "public.heic", "public.heif": return "HEIC"
+        case "public.jpeg": return "JPEG"
+        case "public.png": return "PNG"
+        case "public.tiff": return "TIFF"
+        case "com.adobe.raw-image", "com.adobe.dng": return "DNG"
+        default:
+            // Best-effort: last path component of the UTI, uppercased.
+            return uti.split(separator: ".").last.map { $0.uppercased() }
         }
     }
 

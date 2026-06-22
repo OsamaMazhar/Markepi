@@ -16,18 +16,39 @@ final class WatermarkViewModel: WatermarkConfigurable {
     var selectedItems: [PhotosPickerItem] = []
     var photos: [PhotoItem] = []
     var currentIndex: Int = 0
-    var config = WatermarkConfiguration(watermarks: [
-        .text(
-            TextWatermarkInput(text: "", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-            position: .bottomRight,
-            // scale is a fraction of image width (see WatermarkScaling) — 0.30
-            // keeps the text clearly legible regardless of source resolution.
-            scale: 0.30,
-            opacity: 1.0,
-            isVisible: true
-        )
-    ]) {
+    var config = WatermarkViewModel.makeDefaultConfig() {
         didSet { AppGroupConfigSync.save(config) }
+    }
+
+    /// A clean starting configuration: a single empty text layer at bottom-right.
+    static func makeDefaultConfig() -> WatermarkConfiguration {
+        WatermarkConfiguration(watermarks: [
+            .text(
+                TextWatermarkInput(text: "", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
+                position: .bottomRight,
+                // scale is a fraction of image width (see WatermarkScaling) — 0.30
+                // keeps the text clearly legible regardless of source resolution.
+                scale: 0.30,
+                opacity: 1.0,
+                isVisible: true
+            )
+        ])
+    }
+
+    private static let rememberSettingsKey = "rememberLastSettings"
+
+    /// When true, the app reopens with the watermark used last time; when false
+    /// (default), each launch starts from a clean slate. Persisted in UserDefaults
+    /// and toggled from the Settings pane (gear icon).
+    var rememberLastSettings: Bool = UserDefaults.standard.bool(forKey: WatermarkViewModel.rememberSettingsKey) {
+        didSet { UserDefaults.standard.set(rememberLastSettings, forKey: Self.rememberSettingsKey) }
+    }
+
+    /// Discards the current watermark (text, logo, signature, frame) and returns
+    /// to the clean default. Used by the Settings "Start From Scratch" action.
+    func resetToDefaults() {
+        config = WatermarkViewModel.makeDefaultConfig()
+        activeLayerIndex = 0
     }
 
     var previewImage: UIImage?
@@ -89,8 +110,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
         // render pipeline; register up-front so the dropdown always shows real
         // typefaces instead of falling back to the system font on first open.
         FontRegistry.registerBundledFonts()
-        // Load saved config from App Group if available (D-08 bidirectional sync)
-        if let saved = AppGroupConfigSync.load() {
+        // Only restore the previous session's watermark when the user has opted
+        // in (Settings → Remember Last Settings). By default each launch starts
+        // from a clean slate so old signatures/borders don't reappear.
+        if rememberLastSettings, let saved = AppGroupConfigSync.load() {
             config = saved
         }
         checkPendingIntent()

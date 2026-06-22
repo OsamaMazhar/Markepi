@@ -22,6 +22,9 @@ struct ContentView: View {
     // Editor tool-dock state. Starts on Text so controls are visible on launch.
     @State private var activeTool: EditorTool? = .text
 
+    /// Settings pane (gear icon) presentation state.
+    @State private var showSettings = false
+
     /// Measured height of the active tool panel, used to lift the photo above it.
     @State private var panelHeight: CGFloat = 0
 
@@ -88,6 +91,9 @@ struct ContentView: View {
                 viewModel: viewModel,
                 selectedItemForOverride: $selectedItemForOverride
             ))
+            .sheet(isPresented: $showSettings) {
+                SettingsView(viewModel: viewModel)
+            }
         }
     }
 
@@ -150,6 +156,14 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button {
+                showSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .accessibilityLabel("Settings")
+        }
         if viewModel.hasMultiplePhotos {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Cancel") {
@@ -420,6 +434,44 @@ private struct SheetModifiers: ViewModifier {
                 sharedConfig: viewModel.config,
                 onDismiss: { selectedItemForOverride = nil }
             )
+        }
+    }
+}
+
+// MARK: - Settings
+
+/// App settings pane, presented from the gear icon. Holds the opt-in for
+/// restoring the previous session's watermark and a "start fresh" reset.
+struct SettingsView: View {
+    @Bindable var viewModel: WatermarkViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle("Remember Last Settings", isOn: $viewModel.rememberLastSettings)
+                } footer: {
+                    Text("When on, the app reopens with the watermark you used last time. When off, each launch starts from a clean slate.")
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        viewModel.resetToDefaults()
+                        dismiss()
+                    } label: {
+                        Label("Start From Scratch", systemImage: "arrow.counterclockwise")
+                    }
+                } footer: {
+                    Text("Clears the current text, logo, signature, and frame so you can begin fresh.")
+                }
+            }
+            .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }

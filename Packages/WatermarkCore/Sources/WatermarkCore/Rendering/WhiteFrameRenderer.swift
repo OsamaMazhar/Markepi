@@ -53,7 +53,9 @@ public struct WhiteFrameRenderer {
             if let customText = config.customAttributionText {
                 attributionText = EXIFTokenParser.substitute(customText, metadata: metadata)
             } else {
-                attributionText = DeviceMetadataProvider.attributionText(from: metadata)
+                // Rich default caption: camera · focal · aperture · shutter · ISO ·
+                // dimensions · format (present fields only).
+                attributionText = DeviceMetadataProvider.detailedAttribution(from: metadata)
             }
         } else {
             attributionText = nil
@@ -193,18 +195,25 @@ public struct WhiteFrameRenderer {
         // 3. Render metadata attribution text centered on bottom frame
         if let text = attributionText, frameWidth > 0 {
             let shorterDimension = min(baseExtent.width, baseExtent.height)
-            let fontSize = shorterDimension * config.textFontSizeRatio
             let textColor = platformColor(from: config.textColor)
 
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: platformFont(ofSize: fontSize, weight: .medium),
-                .foregroundColor: textColor,
-            ]
+            func makeAttributed(fontSize size: CGFloat) -> NSAttributedString {
+                NSAttributedString(string: text, attributes: [
+                    .font: platformFont(ofSize: size, weight: .medium),
+                    .foregroundColor: textColor,
+                ])
+            }
 
-            let attributed = NSAttributedString(
-                string: text,
-                attributes: attributes
-            )
+            // Auto-shrink the caption so a long shooting-details line (camera ·
+            // focal · aperture · shutter · ISO · dimensions · format) fits within
+            // the image width instead of clipping at the edges.
+            let fontSize = shorterDimension * config.textFontSizeRatio
+            let maxTextWidth = baseExtent.width * 0.94
+            var attributed = makeAttributed(fontSize: fontSize)
+            let naturalWidth = attributed.size().width
+            if naturalWidth > maxTextWidth, naturalWidth > 0 {
+                attributed = makeAttributed(fontSize: fontSize * (maxTextWidth / naturalWidth))
+            }
 
             let textSize = attributed.size()
 

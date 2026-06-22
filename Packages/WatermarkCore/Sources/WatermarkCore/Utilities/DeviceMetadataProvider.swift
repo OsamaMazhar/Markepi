@@ -64,4 +64,35 @@ public struct DeviceMetadataProvider {
     public static func attributionText(from metadata: [String: Any]) -> String {
         return "Taken by: \(deviceModel(from: metadata))"
     }
+
+    /// Builds a rich, single-line shooting-details caption from the available
+    /// metadata — camera, focal length, aperture, shutter speed, ISO, pixel
+    /// dimensions, and file format — including only the fields that are present
+    /// (missing fields are dropped rather than shown as "--").
+    ///
+    /// Reuses `EXIFTokenParser` so formatting (f/1.8, 1/120s, ISO 100, 6000 × 4000,
+    /// HEIC …) stays consistent with custom token templates. Falls back to the
+    /// simple "Taken by: {model}" line when no shooting metadata is available.
+    public static func detailedAttribution(from metadata: [String: Any]) -> String {
+        let tokens = [
+            "{camera_model}", "{lens}", "{focal_length}", "{aperture}",
+            "{shutter_speed}", "{iso}", "{dimensions}", "{format}",
+        ]
+        // Avoid showing both the lens and a bare focal length when the lens
+        // string already conveys the focal range — keep it simple: include lens
+        // only if focal length is missing.
+        let focal = EXIFTokenParser.substitute("{focal_length}", metadata: metadata)
+        var parts: [String] = []
+        for token in tokens {
+            if token == "{lens}", focal != "--" { continue }
+            let value = EXIFTokenParser.substitute(token, metadata: metadata)
+            if value != "--" && !value.isEmpty {
+                parts.append(value)
+            }
+        }
+        if parts.isEmpty {
+            return attributionText(from: metadata)
+        }
+        return parts.joined(separator: "   ·   ")
+    }
 }

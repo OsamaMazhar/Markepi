@@ -79,11 +79,19 @@ public actor WatermarkEngine {
         // 2. Normalize orientation (Pitfall 3 prevention)
         let normalized = OrientationNormalizer.normalize(loaded.ciImage)
 
-        // 3. Build filter graph (pure CIImage ops, no context needed)
+        // 3. Build filter graph (pure CIImage ops, no context needed).
+        // Inject the source UTI so the white-frame caption's {format} token and
+        // detailed-attribution line can show the file format (HEIC/JPEG/…).
+        var graphMetadata = loaded.metadata
+        graphMetadata["_SourceUTI"] = loaded.sourceUTI
+        // Use the true (orientation-normalized) output size for the {dimensions}
+        // caption token so it's always present and correct.
+        graphMetadata["PixelWidth"] = Int(normalized.extent.width.rounded())
+        graphMetadata["PixelHeight"] = Int(normalized.extent.height.rounded())
         let composited = try buildFilterGraph(
             base: normalized,
             config: config,
-            metadata: loaded.metadata
+            metadata: graphMetadata
         )
 
         // 4. Render via shared CIContext → CGImage

@@ -61,27 +61,15 @@ public struct TextWatermarkRenderer {
                 .cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1))
         }
 
-        // CRITICAL: `attributedTextImageGenerator` always produces a CIImage
-        // in the extended-gray color space, even when the foreground color
-        // is fully saturated RGB (e.g. white). When that gray CIImage is
-        // composited via `sourceOverCompositing`, the result inherits the
-        // inputImage's color space — so the final output is grayscale.
-        //
-        // Promote the gray text to RGB by passing each pixel through a
-        // color matrix that copies the gray's R channel (which holds the
-        // luminance / color intensity) into R, G, and B. Alpha is preserved
-        // so transparency still works. The output is in the working color
-        // space (displayP3 / RGBAh via CIContextProvider), which matches
-        // the base image — so compositing preserves color.
-        let promote = CIFilter.colorMatrix()
-        promote.inputImage = textImage
-        promote.rVector = CIVector(x: 1, y: 0, z: 0, w: 0)
-        promote.gVector = CIVector(x: 1, y: 0, z: 0, w: 0)
-        promote.bVector = CIVector(x: 1, y: 0, z: 0, w: 0)
-        promote.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
-        promote.biasVector = CIVector(x: 0, y: 0, z: 0, w: 0)
-
-        let rgbImage = promote.outputImage ?? textImage
+        // CRITICAL: `attributedTextImageGenerator` always emits an extended-GRAY
+        // CIImage regardless of the foreground color. The previous code "promoted"
+        // it by copying the gray luminance into R, G and B — which forces R==G==B,
+        // i.e. grey, for ANY non-white color (red's luminance ≈ 0.2 → dark grey).
+        // Instead, draw the glyphs white (a clean coverage mask) and shape a SOLID
+        // color image by the text's alpha. This applies the chosen color exactly,
+        // preserves anti-aliasing, and yields an RGB image so compositing keeps
+        // the color (same technique as SignatureRenderer).
+        let rgbImage = tint(textImage, color: config.color, opacity: config.opacity)
 
         // CRITICAL: `attributedTextImageGenerator`'s output extent matches
         // the font's typographic line bounds (ascent + descent + leading),
@@ -98,6 +86,23 @@ public struct TextWatermarkRenderer {
         // extent match what the eye sees, so positioning math produces
         // equal visible spacing on all sides.
         return cropToVisibleGlyphBounds(rgbImage, attributes: attributes)
+    }
+
+    /// Colors a white glyph-coverage image by masking a solid color with the
+    /// text's alpha, then applies element opacity. Produces correctly-colored,
+    /// anti-aliased text in an RGB color space.
+    private static func tint(_ textImage: CIImage, color: CGColor, opacity: CGFloat) -> CIImage {
+        let solid = CIImage(color: CIColor(cgColor: color)).cropped(to: textImage.extent)
+        let masked = CIFilter.sourceInCompositing()
+        masked.inputImage = solid          // foreground: solid text color
+        masked.backgroundImage = textImage // shape/alpha: the rendered glyphs
+        let colored = masked.outputImage ?? textImage
+
+        guard opacity < 1.0 else { return colored }
+        let alpha = CIFilter.colorMatrix()
+        alpha.inputImage = colored
+        alpha.aVector = CIVector(x: 0, y: 0, z: 0, w: opacity)
+        return alpha.outputImage ?? colored
     }
 
     /// Crops the text CIImage to just the visible glyph bounds using the
@@ -201,7 +206,10 @@ public struct TextWatermarkRenderer {
         } else {
             font = UIFont.systemFont(ofSize: config.fontSize, weight: .semibold)
         }
-        let foregroundColor = UIColor(cgColor: config.color).withAlphaComponent(config.opacity)
+        // Draw white; the real color + opacity are applied via an alpha mask in
+        // `tint(_:color:opacity:)` (the generator emits gray, so coloring here
+        // would be lost). White gives the cleanest glyph coverage mask.
+        let foregroundColor = UIColor.white
         #elseif canImport(AppKit)
         let font: NSFont
         if let fontName = config.fontName,
@@ -217,7 +225,8 @@ public struct TextWatermarkRenderer {
         } else {
             font = NSFont.systemFont(ofSize: config.fontSize, weight: .semibold)
         }
-        let foregroundColor = NSColor(cgColor: config.color)?.withAlphaComponent(config.opacity) ?? NSColor.white
+        // Draw white; real color + opacity are applied via an alpha mask in tint().
+        let foregroundColor = NSColor.white
         #endif
 
         return [
