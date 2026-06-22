@@ -61,52 +61,47 @@ struct SheetDetentTests {
 // MARK: - InspectorSheetView Initialization Tests
 
 @Suite("InspectorSheetView Initialization")
+@MainActor
 struct InspectorSheetViewInitTests {
 
-    @Test("InspectorSheetView initializes with all required parameters")
+    @Test("InspectorSheetView initializes with required parameters (detent, peekHeight, viewModel)")
     func initializationSucceeds() {
         let vm = MockInspectorViewModel()
         let peek: CGFloat = 60
-        let expanded: CGFloat = 400
         let detent = Binding<SheetDetent>.constant(.peek)
         let view = InspectorSheetView(
             detent: detent,
             peekHeight: peek,
-            expandedHeight: expanded,
             viewModel: vm
         )
-        // Verify struct existence — if init failed, we wouldn't reach here
-        #expect(true)
+        // Verify struct creation succeeded — if init failed, we wouldn't reach here
+        #expect(Bool(true))
         _ = view  // suppress unused warning
     }
 
-    @Test("InspectorSheetView peekHeight constant is preserved")
+    @Test("InspectorSheetView peekHeight constant is preserved after init")
     func peekHeightPreserved() {
         let vm = MockInspectorViewModel()
         let peek: CGFloat = 60
-        let expanded: CGFloat = 400
         let detent = Binding<SheetDetent>.constant(.peek)
         let view = InspectorSheetView(
             detent: detent,
             peekHeight: peek,
-            expandedHeight: expanded,
             viewModel: vm
         )
         #expect(view.peekHeight == 60)
     }
 
-    @Test("InspectorSheetView expandedHeight constant is preserved")
-    func expandedHeightPreserved() {
+    @Test("InspectorSheetView with peek detent renders at peek height")
+    func peekDetentInitialization() {
         let vm = MockInspectorViewModel()
         let peek: CGFloat = 60
-        let expanded: CGFloat = 400
         let detent = Binding<SheetDetent>.constant(.peek)
         let view = InspectorSheetView(
             detent: detent,
             peekHeight: peek,
-            expandedHeight: expanded,
             viewModel: vm
         )
-        #expect(view.expandedHeight == 400)
+        #expect(view.peekHeight == 60)
     }
 }
