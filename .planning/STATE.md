@@ -4,12 +4,12 @@ milestone: v2.1
 milestone_name: UI Redesign
 status: executing
 stopped_at: Phase 17 context gathered
-last_updated: "2026-06-22T07:02:01.713Z"
-last_activity: 2026-06-21 -- Phase 16 execution started
+last_updated: "2026-06-22T08:31:17.101Z"
+last_activity: 2026-06-22 -- Phase 17 planning complete
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 5
+  total_plans: 8
   completed_plans: 5
   percent: 50
 ---
@@ -28,8 +28,8 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 Phase: 16 (redesigned-controls) — EXECUTING
 Plan: 1 of 2
 Plans: 3 of 3
-Status: Executing Phase 16
-Last activity: 2026-06-21 -- Phase 16 execution started
+Status: Ready to execute
+Last activity: 2026-06-22 -- Phase 17 planning complete
 
 Progress: [███░░░░░░░] 1/4 phases
 

@@ -19,61 +19,83 @@
 ## Phase Details
 
 ### Phase 15: Visual Design System & Shared Primitives
+
 **Goal**: Establish the shared visual language — Liquid Glass chrome, grouped inset section cards, a single button language, and scroll-edge legibility — so every downstream control and shell renders consistently.
 **Depends on**: Nothing (first phase of v2.1; builds on shipped v1.0/v1.1/v2.0 codebase)
 **Requirements**: VIS-01, VIS-02, VIS-03, VIS-04
 **Success Criteria** (what must be TRUE):
+
   1. Navigation and control chrome (toolbar, floating buttons, sheet surface) render with iOS 26 Liquid Glass on iOS 26 devices and fall back gracefully (no broken/blank chrome) on the iOS 18 deployment floor
   2. Controls within `ControlsView` are grouped into inset section cards with a clear typographic hierarchy instead of a flat stack of equal-weight section titles
   3. Primary, secondary, and destructive actions share one consistent button language (one shape/weight/tint vocabulary) wherever they appear
   4. Content scrolling beneath the chrome stays legible via scroll-edge effects (no text colliding illegibly with floating controls)
+
 **Plans**: 3 plans in 3 waves
 Plans:
+
 - [ ] 15-01-PLAN.md — Foundation Primitives (directory scaffold, View.modify utility, MarkepiGlassModifier, MarkepiTypography)
 - [ ] 15-02-PLAN.md — Interaction Primitives (MarkepiButtonStyle, MarkepiPillBar, MarkepiScrollEdgeProtection)
 - [ ] 15-03-PLAN.md — Preview Catalog + Cross-Target Verification
+
 **UI hint**: yes
 
 ### Phase 16: Redesigned Controls
+
 **Goal**: Rebuild every control hosted by the shared `ControlsView` on the new design system so each watermark feature is presented clearly and consistently, with no change to underlying behavior.
 **Depends on**: Phase 15
 **Requirements**: CTL-01, CTL-02, CTL-03, CTL-04, CTL-05, CTL-06, CTL-07, CTL-08
 **Success Criteria** (what must be TRUE):
+
   1. A visual 9-position picker shows watermark placement glanceably, replacing the TL/TC/TR text grid, and still drives the same 9 placement values
   2. The text watermark field, scale control (with live value readout), logo picker, and signature picker present clean fields and consistent add / preview / remove affordances
   3. White Frame appears as an integrated grouped row, the layer list shows clear active-layer selection plus remove controls, and Export Options use native Menus/pickers
    4. The Save-as-Template action conforms to the new button language, and all existing control behaviors (positions, scale, layers, export, HDR→JPEG warning) function unchanged
+
 **Plans**: 2 plans in 1 wave
 Plans:
+
 - [x] 16-01-PLAN.md — ControlsView core restructure: pill bar + position Menu + export Menu + button restyling (CTL-01, CTL-07, CTL-08)
 - [x] 16-02-PLAN.md — Sub-view row restyling: text/scale/logo/signature/whiteFrame/layerList on Markepi design system (CTL-02, CTL-03, CTL-04, CTL-05, CTL-06)
+
 **UI hint**: yes
 
 ### Phase 17: Inspector Bottom-Sheet Shell
+
 **Goal**: Replace the main app's hardcoded 60/40 split with a full-bleed photo hero and a resizable detent control sheet plus a pinned Share action bar, working in both appearances.
 **Depends on**: Phase 16
 **Requirements**: LYT-01, LYT-02, LYT-03, LYT-04
 **Success Criteria** (what must be TRUE):
+
   1. The photo/video preview fills the screen as a full-bleed hero behind the controls
   2. Controls live in a resizable bottom sheet with a peek detent and an expanded detent that the user can drag between
   3. The primary action (Share / Watermark All) stays reachable at all times via a pinned action bar regardless of sheet detent
   4. The entire shell renders correctly in both system light and dark appearance
+
 **Plans**: 3 plans in 2 waves
 Plans:
+**Wave 1**
+
 - [ ] 17-01-PLAN.md — ShareActionButton extraction from ControlsView into standalone DesignSystem component (LYT-03)
 - [ ] 17-02-PLAN.md — InspectorSheetView custom bottom sheet container with detents + drag gesture (LYT-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 17-03-PLAN.md — ContentView restructure to ZStack inspector shell + PreviewView full-bleed (LYT-01, LYT-04)
+
 **UI hint**: yes
 
 ### Phase 18: Cross-Target Parity & Accessibility Polish
+
 **Goal**: Verify the redesigned shared `ControlsView` works in both extensions and finish the accessibility and empty-state polish that makes the redesign production-ready.
 **Depends on**: Phase 17
 **Requirements**: XTG-01, XTG-02, UXQ-01, UXQ-02, UXQ-03, UXQ-04
 **Success Criteria** (what must be TRUE):
+
   1. The redesigned `ControlsView` renders and functions correctly in the Share Extension and the Photos Edit Extension (controls usable, share/render works end-to-end)
   2. Dynamic Type scales redesigned controls up to 200% with no truncation or overlap
   3. VoiceOver labels and hints are preserved or improved relative to the pre-redesign UI, and Reduce Motion / Reduce Transparency settings are respected
   4. The empty state (no photo loaded) is redesigned to match the new visual system
+
 **Plans**: TBD
 **UI hint**: yes
 
