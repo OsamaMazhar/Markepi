@@ -165,7 +165,7 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
                 fontName: resolvedFont(nil)
             )
             viewModel.config.watermarks.append(
-                .text(seed, position: .bottomRight, scale: 0.30, opacity: 1.0, isVisible: true)
+                .text(seed, position: .bottomRight, scale: 0.10, opacity: 1.0, isVisible: true)
             )
             viewModel.activeLayerIndex = viewModel.config.watermarks.count - 1
         }

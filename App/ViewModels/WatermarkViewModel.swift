@@ -26,9 +26,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
             .text(
                 TextWatermarkInput(text: "", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
                 position: .bottomRight,
-                // scale is a fraction of image width (see WatermarkScaling) — 0.30
-                // keeps the text clearly legible regardless of source resolution.
-                scale: 0.30,
+                // For text, scale is the font height as a fraction of image
+                // height (see WatermarkEngine) — 0.10 is a clear default and
+                // stays put as the text is edited.
+                scale: 0.10,
                 opacity: 1.0,
                 isVisible: true
             )

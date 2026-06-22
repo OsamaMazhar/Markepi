@@ -57,6 +57,12 @@ struct ToolPanelView: View {
         }
     }
 
+    /// True when any layer matches the predicate — used to show position/size
+    /// controls only once the relevant layer (logo/signature) actually exists.
+    private func hasLayer(matching predicate: (WatermarkLayer) -> Bool) -> Bool {
+        viewModel.config.watermarks.contains(where: predicate)
+    }
+
     // MARK: - Header
 
     private var header: some View {
@@ -91,8 +97,22 @@ struct ToolPanelView: View {
             }
         case .logo:
             LogoPickerView(viewModel: viewModel)
+            if hasLayer(matching: { if case .image = $0 { return true }; return false }) {
+                EditorCard {
+                    positionRow
+                    Divider().padding(.leading, 16)
+                    ScaleStepperView(viewModel: viewModel)
+                }
+            }
         case .signature:
             SignatureCaptureView(viewModel: viewModel)
+            if hasLayer(matching: { if case .signature = $0 { return true }; return false }) {
+                EditorCard {
+                    positionRow
+                    Divider().padding(.leading, 16)
+                    ScaleStepperView(viewModel: viewModel)
+                }
+            }
         case .frame:
             EditorCard { WhiteFrameToggleView(viewModel: viewModel) }
         case .layers:

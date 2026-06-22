@@ -245,6 +245,11 @@ public actor WatermarkEngine {
         // coordinates so the origin offset is re-applied below.
         let positioningExtent = extent.insetBy(dx: frameInset, dy: frameInset)
 
+        // Edge padding scales with the image instead of being a fixed 20px,
+        // which was invisible on multi-thousand-pixel photos. ~4% of the shorter
+        // dimension gives a comfortable, resolution-independent margin.
+        let effectivePadding = max(config.padding, min(extent.width, extent.height) * 0.04)
+
         // Build layers in order: bottom layer first, top layer last (D-01)
         for watermark in config.watermarks {
             // MULT-02: Skip hidden layers
@@ -264,15 +269,25 @@ public actor WatermarkEngine {
                 watermarkImage = try SignatureRenderer.render(input: signatureInput)
             }
 
-            // Scale watermark relative to the base image width (scale is a
-            // fraction of image width — see WatermarkScaling). This keeps the
-            // watermark legible at any source resolution instead of being a
-            // fixed multiple of the rendered text/PNG size.
-            let factor = WatermarkScaling.transformFactor(
-                layerScale: watermark.scale,
-                naturalWidth: watermarkImage.extent.width,
-                baseWidth: extent.width
-            )
+            // Scale watermark relative to the base image (resolution-independent).
+            // Text scales by HEIGHT so editing the text — which changes its width —
+            // does not change the apparent font size (scale == font height as a
+            // fraction of image height). Image/signature scale by WIDTH, where the
+            // aspect ratio is fixed so width is the natural control.
+            let factor: CGFloat
+            if case .text = watermark {
+                factor = WatermarkScaling.transformFactor(
+                    layerScale: watermark.scale,
+                    naturalWidth: watermarkImage.extent.height,
+                    baseWidth: extent.height
+                )
+            } else {
+                factor = WatermarkScaling.transformFactor(
+                    layerScale: watermark.scale,
+                    naturalWidth: watermarkImage.extent.width,
+                    baseWidth: extent.width
+                )
+            }
             let scaled = watermarkImage.transformed(
                 by: CGAffineTransform(scaleX: factor, y: factor)
             )
@@ -296,7 +311,7 @@ public actor WatermarkEngine {
                 for: watermark.position,
                 watermarkExtent: opacityAdjusted.extent,
                 baseExtent: positioningExtent,
-                padding: config.padding
+                padding: effectivePadding
             )
             // Re-apply the inner rect's origin offset (PositionCalculator is
             // size-relative and assumes a (0,0) origin). No-op when no frame.
