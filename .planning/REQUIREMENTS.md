@@ -44,10 +44,10 @@ Requirements for the UI Redesign milestone. Each maps to exactly one roadmap pha
 
 ### Polish & Accessibility (UXQ)
 
-- [ ] **UXQ-01**: Dynamic Type is supported across redesigned controls with no truncation or overlap up to 200%
-- [ ] **UXQ-02**: VoiceOver labels and hints are preserved or improved relative to the current UI
-- [ ] **UXQ-03**: Reduce Motion and Reduce Transparency settings are respected
-- [ ] **UXQ-04**: The empty state (no photo loaded) is redesigned
+- [x] **UXQ-01**: Dynamic Type is supported across redesigned controls with no truncation or overlap up to 200%
+- [x] **UXQ-02**: VoiceOver labels and hints are preserved or improved relative to the current UI
+- [x] **UXQ-03**: Reduce Motion and Reduce Transparency settings are respected
+- [x] **UXQ-04**: The empty state (no photo loaded) is redesigned
 
 ## Future Requirements
 
@@ -95,10 +95,10 @@ Which phases cover which requirements.
 | LYT-04 | Phase 17 | Complete |
 | XTG-01 | Phase 18 | Pending |
 | XTG-02 | Phase 18 | Pending |
-| UXQ-01 | Phase 18 | Pending |
-| UXQ-02 | Phase 18 | Pending |
-| UXQ-03 | Phase 18 | Pending |
-| UXQ-04 | Phase 18 | Pending |
+| UXQ-01 | Phase 18 | Complete |
+| UXQ-02 | Phase 18 | Complete |
+| UXQ-03 | Phase 18 | Complete |
+| UXQ-04 | Phase 18 | Complete |
 
 **Coverage:**
 - v2.1 requirements: 22 total
