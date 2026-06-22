@@ -56,7 +56,7 @@ public struct MarkepiPillBar: View {
         HStack(spacing: 0) {
             ForEach(ControlsSection.allCases) { section in
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
                         selection = section
                     }
                 } label: {

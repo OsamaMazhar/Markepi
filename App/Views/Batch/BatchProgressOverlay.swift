@@ -20,6 +20,10 @@ public struct BatchProgressOverlay: View {
     /// Cancel callback invoked when the user taps "Stop Processing".
     let onCancel: () -> Void
 
+    /// Reduce Motion accessibility setting — declared here for Plan 18-03
+    /// call site gating (.transition(reduceMotion ? .identity : .opacity)).
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     public init(
         current: Int,
         total: Int,
