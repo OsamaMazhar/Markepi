@@ -16,6 +16,13 @@ import UIKit
 /// Follows the same `struct + static func` pattern as ImageWatermarkRenderer.
 public struct SignatureRenderer {
 
+    /// The stroke width the signature canvas captures at. `SignatureInput.strokeWidth`
+    /// is interpreted relative to this: width == reference renders 1:1, larger
+    /// values thicken the strokes, smaller values thin them. Decoupling capture
+    /// geometry from display thickness lets thickness be adjusted live after
+    /// capture (the "press thick/thin and see it immediately" control).
+    public static let referenceStrokeWidth: CGFloat = 3.0
+
     /// Renders a signature from PencilKit stroke data to a CIImage.
     ///
     /// - Parameter input: Signature configuration (stroke data, ink color, stroke width)
@@ -29,8 +36,20 @@ public struct SignatureRenderer {
             throw PipelineError.invalidImageData
         }
 
-        // Rasterize at 3x scale for Retina-quality output on high-res sources
-        let rasterImage = drawing.image(from: drawing.bounds, scale: 3.0)
+        // Apply the configured stroke width as a thickness multiplier by
+        // rebuilding each stroke's points with scaled `size`. PencilKit bakes
+        // pen width into the per-point geometry, so re-tinting alone cannot
+        // change thickness — the points themselves must be rescaled.
+        let scaledDrawing = scaleStrokeWidth(of: drawing, by: input.strokeWidth / referenceStrokeWidth)
+
+        // Rasterize at 3x scale for Retina-quality output on high-res sources.
+        // Guard against an empty drawing (no strokes) producing a zero-size bounds.
+        let bounds = scaledDrawing.bounds
+        guard bounds.width > 0, bounds.height > 0 else {
+            return CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))
+                .cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+        let rasterImage = scaledDrawing.image(from: bounds, scale: 3.0)
 
         // Convert UIImage → CIImage via CGImage path
         guard let cgImage = rasterImage.cgImage else {
@@ -62,4 +81,32 @@ public struct SignatureRenderer {
             .cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1))
         #endif
     }
+
+    #if canImport(UIKit)
+    /// Rebuilds a `PKDrawing` with every stroke point's `size` multiplied by
+    /// `factor`, producing thicker (factor > 1) or thinner (factor < 1) strokes
+    /// while preserving the drawn shape, ink, transform, and timing. A factor of
+    /// exactly 1 returns the drawing untouched (the common, hot path).
+    private static func scaleStrokeWidth(of drawing: PKDrawing, by factor: CGFloat) -> PKDrawing {
+        let clamped = max(0.1, min(factor, 6.0))
+        guard abs(clamped - 1.0) > 0.001 else { return drawing }
+
+        let scaledStrokes: [PKStroke] = drawing.strokes.map { stroke in
+            let points: [PKStrokePoint] = stroke.path.map { point in
+                PKStrokePoint(
+                    location: point.location,
+                    timeOffset: point.timeOffset,
+                    size: CGSize(width: point.size.width * clamped, height: point.size.height * clamped),
+                    opacity: point.opacity,
+                    force: point.force,
+                    azimuth: point.azimuth,
+                    altitude: point.altitude
+                )
+            }
+            let newPath = PKStrokePath(controlPoints: points, creationDate: stroke.path.creationDate)
+            return PKStroke(ink: stroke.ink, path: newPath, transform: stroke.transform, mask: stroke.mask)
+        }
+        return PKDrawing(strokes: scaledStrokes)
+    }
+    #endif
 }

@@ -220,6 +220,23 @@ public actor WatermarkEngine {
         var layers: [(CIImage, CGPoint)] = []
         let extent = composited.extent
 
+        // When the white frame is enabled it is composited as an opaque band on
+        // TOP of the watermark layers (see below). If watermarks were positioned
+        // against the full image edge, corner/edge placements would be hidden
+        // underneath that band. To make the frame respect watermark placement,
+        // position watermarks within the inner content rect — inset by the frame
+        // width — so edge/corner watermarks land just inside the border and stay
+        // fully visible. Frame width matches WhiteFrameRenderer exactly:
+        // shorter dimension × frameWidthRatio.
+        let frameInset: CGFloat = {
+            guard let frame = config.whiteFrame, frame.isEnabled else { return 0 }
+            return min(extent.width, extent.height) * frame.frameWidthRatio
+        }()
+        // Inner rect the watermarks are positioned against. Origin shifts to
+        // (frameInset, frameInset); PositionCalculator works in size-relative
+        // coordinates so the origin offset is re-applied below.
+        let positioningExtent = extent.insetBy(dx: frameInset, dy: frameInset)
+
         // Build layers in order: bottom layer first, top layer last (D-01)
         for watermark in config.watermarks {
             // MULT-02: Skip hidden layers
@@ -265,13 +282,18 @@ public actor WatermarkEngine {
             }
 
             // Calculate position using CIImage bottom-left origin coordinates
-            // Uses configurable padding from WatermarkConfiguration (default 20)
-            let position = PositionCalculator.position(
+            // Uses configurable padding from WatermarkConfiguration (default 20).
+            // Positioned against the (possibly frame-inset) inner content rect.
+            var position = PositionCalculator.position(
                 for: watermark.position,
                 watermarkExtent: opacityAdjusted.extent,
-                baseExtent: extent,
+                baseExtent: positioningExtent,
                 padding: config.padding
             )
+            // Re-apply the inner rect's origin offset (PositionCalculator is
+            // size-relative and assumes a (0,0) origin). No-op when no frame.
+            position.x += positioningExtent.origin.x
+            position.y += positioningExtent.origin.y
 
             layers.append((opacityAdjusted, position))
         }

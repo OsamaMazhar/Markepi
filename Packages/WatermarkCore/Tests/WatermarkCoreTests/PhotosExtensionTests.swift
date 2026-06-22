@@ -440,7 +440,12 @@ struct PhotosExtensionTests {
             ]
         )
 
-        // Save full config to App Group storage
+        // Save full config to App Group storage.
+        // IMPORTANT: this writes to the real shared suite that the app reads on
+        // launch, so clean it up afterwards — otherwise the mock image-watermark
+        // (2 KB of 0xDEADBEEF) leaks into the app and bricks every preview with
+        // "image data is empty or corrupt".
+        defer { AppGroupConfigSync.clear() }
         AppGroupConfigSync.save(fullConfig)
 
         // Simulate what happens in the extension: encode stripped config as PHAdjustmentData

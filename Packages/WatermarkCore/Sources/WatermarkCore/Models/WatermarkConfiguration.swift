@@ -124,6 +124,50 @@ public enum WatermarkLayer: Sendable {
     }
 }
 
+// MARK: - WatermarkLayer Parametric Copies
+
+extension WatermarkLayer {
+    /// Returns a copy of this layer with a new position, preserving every other
+    /// parameter. Centralizes the otherwise-repeated case switch so callers
+    /// (and the `WatermarkConfigurable` setters) cannot accidentally drop a field.
+    public func withPosition(_ position: WatermarkPosition) -> WatermarkLayer {
+        switch self {
+        case .text(let i, _, let s, let o, let v): return .text(i, position: position, scale: s, opacity: o, isVisible: v)
+        case .image(let i, _, let s, let o, let v): return .image(i, position: position, scale: s, opacity: o, isVisible: v)
+        case .signature(let i, _, let s, let o, let v): return .signature(i, position: position, scale: s, opacity: o, isVisible: v)
+        }
+    }
+
+    /// Returns a copy with a new scale (clamped 0.01–0.90), preserving all else.
+    public func withScale(_ scale: CGFloat) -> WatermarkLayer {
+        let clamped = min(max(scale, 0.01), 0.90)
+        switch self {
+        case .text(let i, let p, _, let o, let v): return .text(i, position: p, scale: clamped, opacity: o, isVisible: v)
+        case .image(let i, let p, _, let o, let v): return .image(i, position: p, scale: clamped, opacity: o, isVisible: v)
+        case .signature(let i, let p, _, let o, let v): return .signature(i, position: p, scale: clamped, opacity: o, isVisible: v)
+        }
+    }
+
+    /// Returns a copy with a new per-layer opacity (clamped 0–1), preserving all else.
+    public func withOpacity(_ opacity: CGFloat) -> WatermarkLayer {
+        let clamped = min(max(opacity, 0), 1)
+        switch self {
+        case .text(let i, let p, let s, _, let v): return .text(i, position: p, scale: s, opacity: clamped, isVisible: v)
+        case .image(let i, let p, let s, _, let v): return .image(i, position: p, scale: s, opacity: clamped, isVisible: v)
+        case .signature(let i, let p, let s, _, let v): return .signature(i, position: p, scale: s, opacity: clamped, isVisible: v)
+        }
+    }
+
+    /// Returns a copy with a new visibility flag, preserving all else.
+    public func withVisibility(_ isVisible: Bool) -> WatermarkLayer {
+        switch self {
+        case .text(let i, let p, let s, let o, _): return .text(i, position: p, scale: s, opacity: o, isVisible: isVisible)
+        case .image(let i, let p, let s, let o, _): return .image(i, position: p, scale: s, opacity: o, isVisible: isVisible)
+        case .signature(let i, let p, let s, let o, _): return .signature(i, position: p, scale: s, opacity: o, isVisible: isVisible)
+        }
+    }
+}
+
 // MARK: - WatermarkLayer Codable
 
 extension WatermarkLayer: Codable {

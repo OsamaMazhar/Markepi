@@ -36,9 +36,9 @@ public struct WhiteFrameConfig: Sendable, Codable {
     /// Default: dark gray (CGColor(gray: 0.333, alpha: 1.0))
     public var textColor: CGColor
 
-    /// Text font size as proportion of frame width.
-    /// 0.4 = 40% of frame width, per RESEARCH.md example.
-    /// Default: 0.4
+    /// Text font size as proportion of the image's shorter dimension.
+    /// 0.018 = 1.8% of shorter dimension (e.g., 54pt for a 3000px image).
+    /// Default: 0.018
     public var textFontSizeRatio: CGFloat
 
     /// Creates a white frame configuration.
@@ -49,14 +49,14 @@ public struct WhiteFrameConfig: Sendable, Codable {
     ///   - metadataTextEnabled: Whether to render device metadata text (default: true)
     ///   - customAttributionText: Custom text override, nil = auto-generate (default: nil)
     ///   - textColor: CGColor for the metadata text (default: dark gray)
-    ///   - textFontSizeRatio: Font size as proportion of frame width (default: 0.4)
+    ///   - textFontSizeRatio: Font size as proportion of image shorter dimension (default: 0.018)
     public init(
         isEnabled: Bool = false,
         frameWidthRatio: CGFloat = 0.04,
         metadataTextEnabled: Bool = true,
         customAttributionText: String? = nil,
         textColor: CGColor = CGColor(gray: 0.333, alpha: 1.0),
-        textFontSizeRatio: CGFloat = 0.4
+        textFontSizeRatio: CGFloat = 0.018
     ) {
         self.isEnabled = isEnabled
         // Clamp to 0.03–0.05 per D-05 (warning-level tolerance, not a throw)

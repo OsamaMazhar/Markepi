@@ -311,7 +311,7 @@ struct WhiteFrameRendererTests {
         #expect(config.frameWidthRatio == 0.04, "Default frameWidthRatio should be 0.04")
         #expect(config.metadataTextEnabled == true, "Default metadataTextEnabled should be true")
         #expect(config.customAttributionText == nil, "Default customAttributionText should be nil")
-        #expect(config.textFontSizeRatio == 0.4, "Default textFontSizeRatio should be 0.4")
+        #expect(config.textFontSizeRatio == 0.018, "Default textFontSizeRatio should be 0.018")
     }
 
     @Test("WhiteFrameConfig full initialization with all properties")

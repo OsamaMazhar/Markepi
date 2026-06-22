@@ -46,11 +46,24 @@ public struct VideoLayerBuilder {
             parentLayer.addSublayer(frameLayer)
         }
 
+        // When the white frame is enabled, position watermarks within the inner
+        // content rect (inset by the frame width) so corner/edge placements land
+        // just inside the border and stay clear of it — matching the photo path
+        // in WatermarkEngine.buildFilterGraph. Frame width matches
+        // WhiteFrameRenderer: shorter dimension × frameWidthRatio.
+        let frameInset: CGFloat = {
+            guard let frame = config.whiteFrame, frame.isEnabled else { return 0 }
+            return min(videoSize.width, videoSize.height) * frame.frameWidthRatio
+        }()
+        let positioningExtent = CGRect(origin: .zero, size: videoSize)
+            .insetBy(dx: frameInset, dy: frameInset)
+
         // Build watermark layers in order: bottom → top (D-01, D-02)
         for watermark in config.watermarks {
             let watermarkLayer = try buildWatermarkLayer(
                 watermark: watermark,
                 videoSize: videoSize,
+                positioningExtent: positioningExtent,
                 padding: config.padding
             )
             parentLayer.addSublayer(watermarkLayer)
@@ -65,6 +78,7 @@ public struct VideoLayerBuilder {
     private static func buildWatermarkLayer(
         watermark: WatermarkLayer,
         videoSize: CGSize,
+        positioningExtent: CGRect,
         padding: CGFloat
     ) throws -> CALayer {
         let cgImage: CGImage
@@ -103,13 +117,17 @@ public struct VideoLayerBuilder {
         let scaledHeight = CGFloat(cgImage.height) * factor
         let scaledExtent = CGRect(x: 0, y: 0, width: scaledWidth, height: scaledHeight)
 
-        // Calculate position using shared PositionCalculator (CIImage bottom-left coords)
-        let ciPosition = PositionCalculator.position(
+        // Calculate position using shared PositionCalculator (CIImage bottom-left coords).
+        // Positioned against the (possibly frame-inset) inner content rect; the
+        // size-relative result is then offset by the inner rect origin.
+        var ciPosition = PositionCalculator.position(
             for: watermark.position,
             watermarkExtent: scaledExtent,
-            baseExtent: CGRect(origin: .zero, size: videoSize),
+            baseExtent: positioningExtent,
             padding: padding
         )
+        ciPosition.x += positioningExtent.origin.x
+        ciPosition.y += positioningExtent.origin.y
 
         // Convert CIImage bottom-left → CALayer top-left coordinates
         // CIImage: (0,0) at bottom-left, +Y up

@@ -20,7 +20,6 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
     @Bindable var viewModel: ViewModel
     @State private var drawing = PKDrawing()
     @State private var inkColor: Color = .black
-    @State private var strokeWidth: CGFloat = 3.0
     @State private var showCaptureSheet = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -58,12 +57,7 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
 
     // MARK: - Layer Detection
 
-    private var hasSignatureLayer: Bool {
-        viewModel.config.watermarks.contains { layer in
-            if case .signature = layer { return true }
-            return false
-        }
-    }
+    private var hasSignatureLayer: Bool { signatureLayerIndex != nil }
 
     private var signatureLayerIndex: Int? {
         viewModel.config.watermarks.firstIndex { layer in
@@ -72,11 +66,17 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
         }
     }
 
+    private var signatureInput: SignatureInput? {
+        guard let index = signatureLayerIndex,
+              case .signature(let input, _, _, _, _) = viewModel.config.watermarks[index] else { return nil }
+        return input
+    }
+
     // MARK: - Buttons
 
     private var addSignatureButton: some View {
         Button {
-            showCaptureSheet = true
+            startNewSignature()
         } label: {
             Label("Add Signature", systemImage: "signature")
         }
@@ -85,37 +85,125 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
         .accessibilityHint("Open the signature capture canvas to draw your signature")
     }
 
+    /// Persistent controls for an existing signature: edit/remove plus LIVE
+    /// thickness and ink-color adjustment that update the preview immediately.
+    @ViewBuilder
     private var signatureSelectedView: some View {
-        HStack {
-            Image(systemName: "signature")
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
+        if let index = signatureLayerIndex {
+            VStack(spacing: 0) {
+                HStack {
+                    Image(systemName: "signature")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24)
+                    Text("Signature")
+                        .markepiTypography(.controlLabel)
+                    Spacer()
+                    Button {
+                        startEditingSignature()
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    .buttonStyle(.markepiPrimary())
 
-            Text("Signature")
-                .markepiTypography(.controlLabel)
+                    Button {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            viewModel.removeLayer(at: index)
+                        }
+                    } label: {
+                        Text("Remove")
+                    }
+                    .buttonStyle(.markepiDestructive())
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
 
-            Spacer()
+                Divider().padding(.leading, 16)
 
-            Button {
-                showCaptureSheet = true
-            } label: {
-                Label("Edit", systemImage: "pencil")
-            }
-            .buttonStyle(.markepiPrimary())
+                // LIVE thickness — the user asked to "press thick/thin and see it
+                // immediately"; this rescales the rendered strokes on every change.
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Thickness")
+                            .markepiTypography(.controlLabel)
+                        Spacer()
+                        Text("\(Int(thicknessBinding(index).wrappedValue.rounded()))")
+                            .markepiTypography(.value)
+                            .monospacedDigit()
+                    }
+                    HStack(spacing: 12) {
+                        Button {
+                            thicknessBinding(index).wrappedValue = max(1, thicknessBinding(index).wrappedValue - 1)
+                        } label: { Image(systemName: "minus.circle.fill").font(.title3) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Thinner")
 
-            Button {
-                if let index = signatureLayerIndex {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        viewModel.removeLayer(at: index)
+                        Slider(value: thicknessBinding(index), in: 1...12, step: 1)
+                            .accessibilityLabel("Signature thickness")
+
+                        Button {
+                            thicknessBinding(index).wrappedValue = min(12, thicknessBinding(index).wrappedValue + 1)
+                        } label: { Image(systemName: "plus.circle.fill").font(.title3) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Thicker")
                     }
                 }
-            } label: {
-                Text("Remove")
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                Divider().padding(.leading, 16)
+
+                HStack {
+                    Text("Ink Color")
+                        .markepiTypography(.controlLabel)
+                    Spacer()
+                    ColorPicker("", selection: inkColorBinding(index), supportsOpacity: false)
+                        .labelsHidden()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Signature ink color")
             }
-            .buttonStyle(.markepiDestructive())
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+    }
+
+    // MARK: - Live Bindings (existing signature)
+
+    private func thicknessBinding(_ index: Int) -> Binding<Double> {
+        Binding(
+            get: { Double(signatureInput?.strokeWidth ?? SignatureRenderer.referenceStrokeWidth) },
+            set: { viewModel.updateSignature(at: index, inkColor: nil, strokeWidth: CGFloat($0)) }
+        )
+    }
+
+    private func inkColorBinding(_ index: Int) -> Binding<Color> {
+        Binding(
+            get: { signatureInput.map { Color(cgColor: $0.inkColor) } ?? .black },
+            set: { viewModel.updateSignature(at: index, inkColor: Self.cgColor(from: $0), strokeWidth: nil) }
+        )
+    }
+
+    // MARK: - Capture / Edit Entry Points
+
+    private func startNewSignature() {
+        drawing = PKDrawing()
+        inkColor = .black
+        showCaptureSheet = true
+    }
+
+    /// Opens the canvas pre-loaded with the existing signature so it can be
+    /// touched up instead of starting blank (the previous behaviour discarded
+    /// the saved drawing on every Edit).
+    private func startEditingSignature() {
+        if let data = signatureInput?.strokeData, let existing = try? PKDrawing(data: data) {
+            drawing = existing
+        } else {
+            drawing = PKDrawing()
+        }
+        if let cg = signatureInput?.inkColor {
+            inkColor = Color(cgColor: cg)
+        }
+        showCaptureSheet = true
     }
 
     // MARK: - Capture Sheet
@@ -125,7 +213,9 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
             SignatureCanvasView(
                 drawing: $drawing,
                 inkColor: UIColor(inkColor),
-                strokeWidth: strokeWidth
+                // Capture at a fixed reference width so geometry is consistent;
+                // display thickness is a live, post-capture render multiplier.
+                strokeWidth: SignatureRenderer.referenceStrokeWidth
             )
             .background(Color(uiColor: .systemBackground))
             .navigationTitle("Draw Signature")
@@ -140,15 +230,19 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
                         let strokeData = drawing.dataRepresentation()
+                        // Preserve the current thickness when editing; default
+                        // to the reference width for a brand-new signature.
+                        let width = signatureInput?.strokeWidth ?? SignatureRenderer.referenceStrokeWidth
                         viewModel.addSignatureLayer(
                             strokeData: strokeData,
-                            inkColor: UIColor(inkColor).cgColor,
-                            strokeWidth: strokeWidth
+                            inkColor: Self.cgColor(from: inkColor),
+                            strokeWidth: width
                         )
                         drawing = PKDrawing()
                         showCaptureSheet = false
                     }
                     .fontWeight(.semibold)
+                    .disabled(drawing.strokes.isEmpty)
                 }
                 ToolbarItemGroup(placement: .bottomBar) {
                     Button {
@@ -172,27 +266,16 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
 
                     Spacer()
 
-                    ColorPicker("", selection: $inkColor)
+                    ColorPicker("", selection: $inkColor, supportsOpacity: false)
                         .labelsHidden()
-
-                    HStack(spacing: 0) {
-                        Button {
-                            strokeWidth = max(1.0, strokeWidth - 1.0)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        Text("\(Int(strokeWidth))pt")
-                            .font(.caption.monospacedDigit())
-                            .frame(width: 32)
-                        Button {
-                            strokeWidth = min(12.0, strokeWidth + 1.0)
-                        } label: {
-                            Image(systemName: "plus.circle")
-                        }
-                    }
                 }
             }
         }
+    }
+
+    /// Converts a SwiftUI `Color` to a `CGColor`.
+    private static func cgColor(from color: Color) -> CGColor {
+        UIColor(color).cgColor
     }
 }
 

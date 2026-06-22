@@ -192,7 +192,8 @@ public struct WhiteFrameRenderer {
 
         // 3. Render metadata attribution text centered on bottom frame
         if let text = attributionText, frameWidth > 0 {
-            let fontSize = frameWidth * config.textFontSizeRatio
+            let shorterDimension = min(baseExtent.width, baseExtent.height)
+            let fontSize = shorterDimension * config.textFontSizeRatio
             let textColor = platformColor(from: config.textColor)
 
             let attributes: [NSAttributedString.Key: Any] = [

@@ -1,7 +1,12 @@
 import SwiftUI
 import WatermarkCore
 
-/// Displays all watermark layers with selection and removal capability.
+/// Layer manager: lists every watermark layer with selection, visibility,
+/// reordering, opacity, and removal — the parametric stack editor.
+///
+/// The stack is bottom-to-top (index 0 composites first / lowest). Tapping a
+/// row makes it the active layer; the type-specific panels (Text, Signature…)
+/// then edit that layer's parameters.
 ///
 /// Generic over any `WatermarkConfigurable & Observable` ViewModel.
 public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View {
@@ -16,21 +21,18 @@ public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View
         if viewModel.config.watermarks.isEmpty { EmptyView() }
         else {
             VStack(spacing: 0) {
-                // Section header
                 Text("Layers")
                     .markepiTypography(.sectionHeader)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
 
-                // Row container with glass backing
                 VStack(spacing: 0) {
                     ForEach(Array(viewModel.config.watermarks.enumerated()), id: \.offset) { index, layer in
                         layerRow(index: index, layer: layer)
                             .transition(.opacity.combined(with: .move(edge: .trailing)))
 
                         if index < viewModel.config.watermarks.count - 1 {
-                            Divider()
-                                .padding(.leading, 52)
+                            Divider().padding(.leading, 52)
                         }
                     }
                 }
@@ -40,52 +42,122 @@ public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .padding(.horizontal, 16)
+
+                Text("Top layer sits in front. Tap a layer to edit it.")
+                    .markepiTypography(.metadata)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
             }
         }
     }
 
     @ViewBuilder
     private func layerRow(index: Int, layer: WatermarkLayer) -> some View {
-        Button {
-            viewModel.activeLayerIndex = index
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: layerIcon(for: layer))
-                    .foregroundStyle(viewModel.activeLayerIndex == index ? Color.accentColor : Color.secondary)
-                    .frame(width: 24)
+        let isActive = viewModel.activeLayerIndex == index
+        let count = viewModel.config.watermarks.count
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(layerTypeName(for: layer))
-                        .markepiTypography(.controlLabel)
-                    Text(layerSubtitle(for: layer))
-                        .markepiTypography(.metadata)
-                        .lineLimit(1)
-                }
+        VStack(spacing: 0) {
+            Button {
+                viewModel.activeLayerIndex = index
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: layerIcon(for: layer))
+                        .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
+                        .frame(width: 24)
 
-                Spacer()
-
-                Button {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        viewModel.removeLayer(at: index)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(layerTypeName(for: layer))
+                            .markepiTypography(.controlLabel)
+                        Text(layerSubtitle(for: layer))
+                            .markepiTypography(.metadata)
+                            .lineLimit(1)
                     }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title3)
+
+                    Spacer()
+
+                    // Visibility toggle — hide a layer without deleting it.
+                    Button {
+                        viewModel.setLayerVisibility(at: index, isVisible: !layer.isVisible)
+                    } label: {
+                        Image(systemName: layer.isVisible ? "eye" : "eye.slash")
+                            .foregroundStyle(layer.isVisible ? Color.secondary : Color.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: 40, height: 40)
+                    .accessibilityLabel(layer.isVisible ? "Hide layer" : "Show layer")
+
+                    // Reorder.
+                    VStack(spacing: 0) {
+                        Button {
+                            viewModel.moveLayer(from: index, to: index + 1)
+                        } label: {
+                            Image(systemName: "chevron.up").font(.caption.weight(.bold))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(index >= count - 1)
+                        .accessibilityLabel("Move layer up")
+
+                        Button {
+                            viewModel.moveLayer(from: index, to: index - 1)
+                        } label: {
+                            Image(systemName: "chevron.down").font(.caption.weight(.bold))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(index <= 0)
+                        .accessibilityLabel("Move layer down")
+                    }
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32)
+
+                    Button {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            viewModel.removeLayer(at: index)
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").font(.title3)
+                    }
+                    .buttonStyle(.markepiDestructive())
+                    .frame(width: 40, height: 40)
+                    .accessibilityLabel("Remove layer: \(layerDescription(for: layer))")
+                    .accessibilityHint("Double tap to remove this watermark layer")
                 }
-                .buttonStyle(.markepiDestructive())
-                .frame(width: 44, height: 44)
-                .accessibilityLabel("Remove layer: \(layerDescription(for: layer))")
-                .accessibilityHint("Double tap to remove this watermark layer")
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(isActive ? Color.accentColor.opacity(0.08) : Color.clear)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                viewModel.activeLayerIndex == index
-                    ? Color.accentColor.opacity(0.08)
-                    : Color.clear
-            )
+            .buttonStyle(.plain)
+
+            // Per-layer opacity for the active layer — a parametric control
+            // available on every layer type.
+            if isActive {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Opacity")
+                            .markepiTypography(.controlLabel)
+                        Spacer()
+                        Text("\(Int((opacityBinding(index).wrappedValue * 100).rounded()))%")
+                            .markepiTypography(.value)
+                            .monospacedDigit()
+                    }
+                    Slider(value: opacityBinding(index), in: 0...1)
+                        .accessibilityLabel("Layer opacity")
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+                .background(Color.accentColor.opacity(0.08))
+            }
         }
-        .buttonStyle(.plain)
+    }
+
+    private func opacityBinding(_ index: Int) -> Binding<Double> {
+        Binding(
+            get: {
+                guard viewModel.config.watermarks.indices.contains(index) else { return 1 }
+                return Double(viewModel.config.watermarks[index].opacity)
+            },
+            set: { viewModel.setLayerOpacity(at: index, opacity: CGFloat($0)) }
+        )
     }
 
     private func layerIcon(for layer: WatermarkLayer) -> String {

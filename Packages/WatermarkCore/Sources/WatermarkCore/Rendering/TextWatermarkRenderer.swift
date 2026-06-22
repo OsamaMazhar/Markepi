@@ -5,7 +5,14 @@ import UIKit
 import AppKit
 #endif
 
-/// Renders a text watermark as a CIImage using SF system fonts (D-02).
+/// Renders a text watermark as a CIImage using configurable fonts.
+///
+/// When `TextWatermarkInput.fontName` is nil, falls back to SF system font
+/// at `.semibold` weight (backward-compatible).
+///
+/// When `fontName` is set, uses `FontRegistry.cascadingFont()` to load the
+/// named font with cascade fallback to HelveticaNeue for missing glyphs
+/// (recursive font support for multilingual text).
 ///
 /// Uses `CIFilter.attributedTextImageGenerator()` to create a CIImage from
 /// an `NSAttributedString`. This stays within Core Image's lazy filter graph
@@ -27,6 +34,16 @@ public struct TextWatermarkRenderer {
     /// Single-line text with `.byTruncatingTail` to prevent unexpected wrapping
     /// (per Open Question #2 in RESEARCH.md).
     public static func render(config: TextWatermarkInput) -> CIImage {
+        // Empty text is allowed (no watermark text yet) — return a fully
+        // transparent CIImage so compositing is a no-op. Without this guard,
+        // `attributedTextImageGenerator` returns nil for empty input and
+        // any caller force-unwrapping the result crashes with
+        // "Unexpectedly found nil while unwrapping an Optional value".
+        if config.text.isEmpty {
+            return CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))
+                .cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+
         // Build the attributed string with SF system font (D-02)
         let attributes = buildAttributes(config: config)
         let attributed = NSAttributedString(string: config.text, attributes: attributes)
@@ -37,9 +54,113 @@ public struct TextWatermarkRenderer {
         filter.text = attributed
         filter.scaleFactor = 1.0
 
-        // force-unwrap is safe per Apple docs: attributedTextImageGenerator always
-        // produces output for valid input
-        return filter.outputImage!
+        guard let textImage = filter.outputImage else {
+            // Filter can return nil for edge-case attribute sets (e.g. nil
+            // font). Return a transparent 1×1 image so compositing stays safe.
+            return CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))
+                .cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+
+        // CRITICAL: `attributedTextImageGenerator` always produces a CIImage
+        // in the extended-gray color space, even when the foreground color
+        // is fully saturated RGB (e.g. white). When that gray CIImage is
+        // composited via `sourceOverCompositing`, the result inherits the
+        // inputImage's color space — so the final output is grayscale.
+        //
+        // Promote the gray text to RGB by passing each pixel through a
+        // color matrix that copies the gray's R channel (which holds the
+        // luminance / color intensity) into R, G, and B. Alpha is preserved
+        // so transparency still works. The output is in the working color
+        // space (displayP3 / RGBAh via CIContextProvider), which matches
+        // the base image — so compositing preserves color.
+        let promote = CIFilter.colorMatrix()
+        promote.inputImage = textImage
+        promote.rVector = CIVector(x: 1, y: 0, z: 0, w: 0)
+        promote.gVector = CIVector(x: 1, y: 0, z: 0, w: 0)
+        promote.bVector = CIVector(x: 1, y: 0, z: 0, w: 0)
+        promote.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+        promote.biasVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+
+        let rgbImage = promote.outputImage ?? textImage
+
+        // CRITICAL: `attributedTextImageGenerator`'s output extent matches
+        // the font's typographic line bounds (ascent + descent + leading),
+        // NOT the visible glyph bounds. When the watermark is positioned
+        // at a corner, the extent bottom/right is placed at `padding` from
+        // the image edge — but the visible glyph bottom/right sits ABOVE/
+        // LEFT of the extent edge by `descent` (and `leading` above). This
+        // makes the visible vertical spacing from the bottom edge larger
+        // than the visible horizontal spacing from the right edge — the
+        // text appears off-center toward the corner.
+        //
+        // Crop the extent to just the visible glyph bounds using the
+        // font's actual ascent/descent metrics. This makes the CIImage
+        // extent match what the eye sees, so positioning math produces
+        // equal visible spacing on all sides.
+        return cropToVisibleGlyphBounds(rgbImage, attributes: attributes)
+    }
+
+    /// Crops the text CIImage to just the visible glyph bounds using the
+    /// font's actual ascent/descent metrics.
+    ///
+    /// `attributedTextImageGenerator` produces an extent that includes
+    /// typographic line metrics (leading above, descent below). For
+    /// watermark positioning, we want the extent to match the visible
+    /// glyphs so that `padding` produces equal visible spacing on all
+    /// sides of the image.
+    private static func cropToVisibleGlyphBounds(
+        _ image: CIImage,
+        attributes: [NSAttributedString.Key: Any]
+    ) -> CIImage {
+        #if canImport(UIKit)
+        guard let font = attributes[.font] as? UIFont else { return image }
+        #elseif canImport(AppKit)
+        guard let font = attributes[.font] as? NSFont else { return image }
+        #endif
+
+        // The attributedTextImageGenerator output extent starts at (0, -leading)
+        // with height = ascent + descent + leading. The visible glyphs occupy
+        // (0, descent) to (width, ascent + descent) within this extent
+        // (CIImage bottom-left origin: y=descent is the baseline, y=ascent+descent
+        // is the top of capital letters). The space y=0 to y=descent below the
+        // baseline is empty for text with no descenders (e.g. "Osama").
+        //
+        // Crop to the visible glyph region starting at the baseline, then
+        // translate the image so the extent bottom aligns with the visible
+        // glyph bottom. This ensures corner-positioning padding produces equal
+        // visible spacing on all sides of the image.
+        let extent = image.extent
+        let ascent = font.ascender
+        let descent = abs(font.descender)
+
+        // Skip if the font metrics are zero/invalid — fallback to original
+        guard ascent > 0, descent > 0 else { return image }
+
+        // Baseline position in the extent coordinate space
+        let baselineY = extent.origin.y + descent
+        let visibleHeight = ascent
+
+        // Guard against invalid rect before cropping
+        guard visibleHeight > 0,
+              baselineY + visibleHeight <= extent.origin.y + extent.height + 0.5 else {
+            return image
+        }
+
+        let visibleRect = CGRect(
+            x: extent.origin.x,
+            y: baselineY,
+            width: extent.width,
+            height: visibleHeight
+        )
+
+        let cropped = image.cropped(to: visibleRect)
+
+        // Translate the cropped image down by baselineY so the extent origin
+        // becomes (0, 0). After this, the visible glyph bottom (the baseline)
+        // sits at the extent's bottom edge, and corner-positioning padding
+        // calculations produce equal visible spacing.
+        let adjusted = cropped.transformed(by: CGAffineTransform(translationX: 0, y: -baselineY))
+        return adjusted
     }
 
     /// Renders a text watermark with EXIF token substitution applied to the text string.
@@ -54,7 +175,8 @@ public struct TextWatermarkRenderer {
             text: substitutedText,
             fontSize: config.fontSize,
             color: config.color,
-            opacity: config.opacity
+            opacity: config.opacity,
+            fontName: config.fontName
         )
         return render(config: substitutedConfig)
     }
@@ -65,10 +187,36 @@ public struct TextWatermarkRenderer {
         paragraphStyle.lineBreakMode = .byTruncatingTail  // Prevent wrapping (Open Question #2)
 
         #if canImport(UIKit)
-        let font = UIFont.systemFont(ofSize: config.fontSize, weight: .semibold)
+        let font: UIFont
+        if let fontName = config.fontName,
+           let watermarkFont = FontCatalog.font(byPostScriptName: fontName) {
+            font = FontRegistry.font(for: watermarkFont, size: config.fontSize)
+        } else if let fontName = config.fontName {
+            font = FontRegistry.cascadingFont(
+                primaryName: fontName,
+                size: config.fontSize,
+                fallbackNames: ["HelveticaNeue"],
+                fallbackToSystemFont: true
+            )
+        } else {
+            font = UIFont.systemFont(ofSize: config.fontSize, weight: .semibold)
+        }
         let foregroundColor = UIColor(cgColor: config.color).withAlphaComponent(config.opacity)
         #elseif canImport(AppKit)
-        let font = NSFont.systemFont(ofSize: config.fontSize, weight: .semibold)
+        let font: NSFont
+        if let fontName = config.fontName,
+           let watermarkFont = FontCatalog.font(byPostScriptName: fontName) {
+            font = FontRegistry.font(for: watermarkFont, size: config.fontSize)
+        } else if let fontName = config.fontName {
+            font = FontRegistry.cascadingFont(
+                primaryName: fontName,
+                size: config.fontSize,
+                fallbackNames: ["HelveticaNeue"],
+                fallbackToSystemFont: true
+            )
+        } else {
+            font = NSFont.systemFont(ofSize: config.fontSize, weight: .semibold)
+        }
         let foregroundColor = NSColor(cgColor: config.color)?.withAlphaComponent(config.opacity) ?? NSColor.white
         #endif
 

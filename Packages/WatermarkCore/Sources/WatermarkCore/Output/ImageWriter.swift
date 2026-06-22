@@ -46,6 +46,10 @@ public struct ImageWriter {
             combinedMetadata[kCGImagePropertyDNGDictionary as String] = dng
         }
 
+        // Pixels were normalized to .up before rendering — reset the orientation
+        // tag so viewers don't re-rotate upright pixels (the "upside-down" bug).
+        resetOrientation(&combinedMetadata)
+
         // Merge quality into combinedMetadata BEFORE CGImageDestinationAddImage
         // (Pitfall 5: single properties dict avoids overwriting metadata)
         combinedMetadata[kCGImageDestinationLossyCompressionQuality as String] = quality
@@ -93,6 +97,10 @@ public struct ImageWriter {
             combinedMetadata[kCGImagePropertyDNGDictionary as String] = dng
         }
 
+        // Pixels were normalized to .up before rendering — reset the orientation
+        // tag so viewers don't re-rotate upright pixels (the "upside-down" bug).
+        resetOrientation(&combinedMetadata)
+
         // Merge quality into combinedMetadata BEFORE CGImageDestinationAddImage
         // (Pitfall 5: single properties dict avoids overwriting metadata)
         combinedMetadata[kCGImageDestinationLossyCompressionQuality as String] = quality
@@ -112,5 +120,23 @@ public struct ImageWriter {
         }
 
         return data as Data
+    }
+
+    // MARK: - Orientation
+
+    /// Forces the orientation metadata to `.up` (1).
+    ///
+    /// The pipeline normalizes pixels to `.up` via `OrientationNormalizer` before
+    /// rendering, but the preserved source metadata still carries the original
+    /// EXIF orientation (e.g. 3 = 180°, 6/8 = 90°). If that tag is written
+    /// unchanged, viewers apply the rotation a second time and the exported image
+    /// (and live preview) appears rotated/upside-down. Resetting both the
+    /// top-level and TIFF orientation tags to 1 keeps the upright pixels upright.
+    private static func resetOrientation(_ metadata: inout [String: Any]) {
+        metadata[kCGImagePropertyOrientation as String] = 1
+
+        var tiff = metadata[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
+        tiff[kCGImagePropertyTIFFOrientation as String] = 1
+        metadata[kCGImagePropertyTIFFDictionary as String] = tiff
     }
 }

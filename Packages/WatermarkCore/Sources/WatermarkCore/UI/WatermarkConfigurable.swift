@@ -41,6 +41,10 @@ public protocol WatermarkConfigurable: AnyObject {
     func removeLayer(at index: Int)
     func updateLayerPosition(at index: Int, position: WatermarkPosition)
     func updateLayerScale(at index: Int, scale: CGFloat)
+    func setLayerOpacity(at index: Int, opacity: CGFloat)
+    func setLayerVisibility(at index: Int, isVisible: Bool)
+    func moveLayer(from source: Int, to destination: Int)
+    func updateSignature(at index: Int, inkColor: CGColor?, strokeWidth: CGFloat?)
     func toggleWhiteFrame()
 
     /// Triggers full-resolution rendering.
@@ -128,6 +132,44 @@ extension WatermarkConfigurable {
         case .signature(let input, _, _, let opacity, let isVisible):
             config.watermarks[index] = .signature(input, position: position, scale: clamped, opacity: opacity, isVisible: isVisible)
         }
+    }
+
+    /// Sets the per-layer compositing opacity (0–1) of the layer at `index`.
+    public func setLayerOpacity(at index: Int, opacity: CGFloat) {
+        guard config.watermarks.indices.contains(index) else { return }
+        config.watermarks[index] = config.watermarks[index].withOpacity(opacity)
+    }
+
+    /// Shows or hides the layer at `index` without removing it.
+    public func setLayerVisibility(at index: Int, isVisible: Bool) {
+        guard config.watermarks.indices.contains(index) else { return }
+        config.watermarks[index] = config.watermarks[index].withVisibility(isVisible)
+    }
+
+    /// Reorders the layer stack, keeping `activeLayerIndex` pointed at the moved
+    /// layer. Index 0 is the bottom of the stack; the last index is the top.
+    public func moveLayer(from source: Int, to destination: Int) {
+        guard config.watermarks.indices.contains(source) else { return }
+        let clampedDest = min(max(destination, 0), config.watermarks.count - 1)
+        guard source != clampedDest else { return }
+        let layer = config.watermarks.remove(at: source)
+        config.watermarks.insert(layer, at: clampedDest)
+        activeLayerIndex = clampedDest
+    }
+
+    /// Updates the ink color and/or stroke width of the signature layer at
+    /// `index`, leaving the captured stroke geometry untouched. Stroke width is
+    /// applied as a live render-time multiplier by `SignatureRenderer`, so the
+    /// preview reflects thick/thin changes immediately.
+    public func updateSignature(at index: Int, inkColor: CGColor? = nil, strokeWidth: CGFloat? = nil) {
+        guard config.watermarks.indices.contains(index),
+              case let .signature(input, position, scale, opacity, isVisible) = config.watermarks[index] else { return }
+        let updated = SignatureInput(
+            strokeData: input.strokeData,
+            inkColor: inkColor ?? input.inkColor,
+            strokeWidth: strokeWidth.map { min(max($0, 1), 12) } ?? input.strokeWidth
+        )
+        config.watermarks[index] = .signature(updated, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
     }
 
     // MARK: White Frame

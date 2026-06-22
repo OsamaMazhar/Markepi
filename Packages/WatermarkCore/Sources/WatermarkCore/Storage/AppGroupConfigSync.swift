@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import os.log
 
 /// Synchronizes `WatermarkConfiguration` between the main app and extensions
@@ -58,10 +59,55 @@ public struct AppGroupConfigSync {
         }
 
         do {
-            return try JSONDecoder().decode(WatermarkConfiguration.self, from: data)
+            var config = try JSONDecoder().decode(WatermarkConfiguration.self, from: data)
+            config = sanitized(config)
+            return config
         } catch {
             os_log(.error, "[AppGroupConfigSync] Failed to decode config: %@", error.localizedDescription)
             return nil
         }
+    }
+
+    /// Removes the persisted configuration from the shared App Group `UserDefaults`.
+    ///
+    /// Used to recover from a corrupt persisted config, and by tests to avoid
+    /// leaking fixture data into the shared suite that the app reads on launch.
+    public static func clear() {
+        UserDefaults(suiteName: suiteName)?.removeObject(forKey: configKey)
+    }
+
+    // MARK: - Sanitization
+
+    /// Drops `.image` watermark layers whose PNG data is empty or cannot be
+    /// decoded as an image. A corrupt or un-rehydrated image layer would
+    /// otherwise make every preview/render throw `invalidImageData`
+    /// ("The image data is empty or corrupt"), blocking the whole pipeline.
+    ///
+    /// Returns the config unchanged when all image layers are valid.
+    private static func sanitized(_ config: WatermarkConfiguration) -> WatermarkConfiguration {
+        var config = config
+        let originalCount = config.watermarks.count
+        config.watermarks.removeAll { layer in
+            guard case .image(let input, _, _, _, _) = layer else { return false }
+            return !isDecodableImageData(input.pngData)
+        }
+        let dropped = originalCount - config.watermarks.count
+        if dropped > 0 {
+            os_log(.error,
+                   "[AppGroupConfigSync] Dropped %d image watermark layer(s) with undecodable PNG data from persisted config",
+                   dropped)
+        }
+        return config
+    }
+
+    /// Whether `data` decodes as a real, readable image.
+    private static func isDecodableImageData(_ data: Data) -> Bool {
+        guard !data.isEmpty,
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(source) > 0,
+              CGImageSourceGetType(source) != nil else {
+            return false
+        }
+        return true
     }
 }

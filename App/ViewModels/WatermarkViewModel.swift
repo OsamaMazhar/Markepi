@@ -77,12 +77,34 @@ final class WatermarkViewModel: WatermarkConfigurable {
 
     // MARK: - Init
 
+    /// True once the default template has been applied for this editing session.
+    /// Prevents importing a second image from silently overwriting the watermark
+    /// settings (font, color, position…) the user just configured for the first
+    /// image. The default template is a *starting point*, applied once — not on
+    /// every import.
+    private var hasAppliedDefaultTemplate = false
+
     init() {
+        // Bundled fonts are needed for both the font picker previews and the
+        // render pipeline; register up-front so the dropdown always shows real
+        // typefaces instead of falling back to the system font on first open.
+        FontRegistry.registerBundledFonts()
         // Load saved config from App Group if available (D-08 bidirectional sync)
         if let saved = AppGroupConfigSync.load() {
             config = saved
         }
         checkPendingIntent()
+    }
+
+    /// Applies the user's default template exactly once per session, the first
+    /// time media is imported. Subsequent imports keep the current configuration
+    /// so settings carry across images instead of being reset.
+    private func applyDefaultTemplateIfNeeded() {
+        guard !hasAppliedDefaultTemplate else { return }
+        hasAppliedDefaultTemplate = true
+        if let defaultTemplate = TemplateStore.shared.defaultTemplate {
+            config = defaultTemplate.config
+        }
     }
 
     var currentPhoto: PhotoItem? {
@@ -93,24 +115,55 @@ final class WatermarkViewModel: WatermarkConfigurable {
     var hasMultiplePhotos: Bool { photos.count > 1 }
 
     var previewIdentifier: String {
-        // Include the photo's identity (not just currentIndex) so importing the
-        // first photo into index 0 changes the identifier and re-triggers the
-        // preview .task. Without this, a fresh import at index 0 with the default
-        // config produces the same string as the empty initial state, so the
-        // .task never re-runs and the preview spins forever.
+        // The preview's `.task(id:)` re-runs only when this string changes, so
+        // it MUST capture EVERY config field that affects the rendered pixels.
+        // Previously it omitted font, color, opacity, font size, and all
+        // white-frame parameters — so changing a font/color/border-size did not
+        // refresh the preview, and toggling the frame off/on was the only way to
+        // force a redraw. Include the photo's identity (not just currentIndex)
+        // so a fresh import at index 0 also re-triggers the preview.
         var parts: [String] = ["\(currentIndex)", currentPhoto?.id.uuidString ?? "none"]
+        parts.append("pad:\(String(format: "%.1f", config.padding))")
         for layer in config.watermarks {
             switch layer {
-            case .text(let input, let pos, let scl, _, _):
-                parts.append("t:\(input.text)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
-            case .image(let input, let pos, let scl, _, _):
-                parts.append("im:\(input.pngData.hashValue)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
-            case .signature(let input, let pos, let scl, _, _):
-                parts.append("sig:\(input.strokeData.hashValue)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
+            case .text(let input, let pos, let scl, let op, let vis):
+                parts.append(
+                    "t:\(input.text)|fn:\(input.fontName ?? "sys")|fs:\(String(format: "%.2f", input.fontSize))"
+                    + "|c:\(Self.colorKey(input.color))|to:\(String(format: "%.3f", input.opacity))"
+                    + "|pos:\(pos.rawValue)|s:\(String(format: "%.4f", scl))"
+                    + "|lo:\(String(format: "%.3f", op))|v:\(vis ? 1 : 0)"
+                )
+            case .image(let input, let pos, let scl, let op, let vis):
+                parts.append(
+                    "im:\(input.pngData.count)x\(input.pngData.hashValue)|io:\(String(format: "%.3f", input.opacity))"
+                    + "|pos:\(pos.rawValue)|s:\(String(format: "%.4f", scl))"
+                    + "|lo:\(String(format: "%.3f", op))|v:\(vis ? 1 : 0)"
+                )
+            case .signature(let input, let pos, let scl, let op, let vis):
+                parts.append(
+                    "sig:\(input.strokeData.count)x\(input.strokeData.hashValue)|sc:\(Self.colorKey(input.inkColor))"
+                    + "|sw:\(String(format: "%.2f", input.strokeWidth))"
+                    + "|pos:\(pos.rawValue)|s:\(String(format: "%.4f", scl))"
+                    + "|lo:\(String(format: "%.3f", op))|v:\(vis ? 1 : 0)"
+                )
             }
         }
-        parts.append("wf:\(config.whiteFrame?.isEnabled == true ? "1" : "0")")
-        return parts.joined(separator: "-")
+        if let wf = config.whiteFrame {
+            parts.append(
+                "wf:\(wf.isEnabled ? 1 : 0)|fw:\(String(format: "%.4f", wf.frameWidthRatio))"
+                + "|mt:\(wf.metadataTextEnabled ? 1 : 0)|at:\(wf.customAttributionText ?? "auto")"
+                + "|tc:\(Self.colorKey(wf.textColor))|tfs:\(String(format: "%.4f", wf.textFontSizeRatio))"
+            )
+        } else {
+            parts.append("wf:none")
+        }
+        return parts.joined(separator: "~")
+    }
+
+    /// Compact, stable string key for a CGColor's components, used to make
+    /// `previewIdentifier` change when any element/frame color changes.
+    private static func colorKey(_ color: CGColor) -> String {
+        (color.components ?? []).map { String(format: "%.3f", $0) }.joined(separator: ",")
     }
 
     /// Detects Live Photo pairs from a collection of PhotosPickerItems by
@@ -164,6 +217,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
     func handleSelection(_ items: [PhotosPickerItem]) {
         Task {
             var loaded: [PhotoItem] = []
+            var failedCount = 0
 
             // D-03: Detect Live Photo pairs before processing
             let livePhotoPairs = detectLivePhotoPairs(items)
@@ -179,6 +233,11 @@ final class WatermarkViewModel: WatermarkConfigurable {
             for pair in livePhotoPairs {
                 if let stillData = try? await pair.still.loadTransferable(type: Data.self),
                    let videoData = try? await pair.video.loadTransferable(type: Data.self) {
+                    // Reject placeholder/corrupt still data before accepting the pair.
+                    guard isDecodableImage(stillData) else {
+                        failedCount += 1
+                        continue
+                    }
                     let thumb = createThumbnail(from: stillData, maxPixelSize: 200)
                     let stillURL = await copyToTemp(data: stillData)
                     let videoURL = await copyToTemp(data: videoData)
@@ -204,32 +263,52 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 // Skip items that were processed as part of a Live Photo pair
                 if pairedItemIDs.contains(item.itemIdentifier) { continue }
 
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    let thumb = createThumbnail(from: data, maxPixelSize: 200)
-                    let sourceURL = await copyToTemp(data: data)
-                    let mediaType = WatermarkEngine.mediaType(for: sourceURL)
-                    loaded.append(PhotoItem(
-                        id: UUID(),
-                        thumbnail: thumb,
-                        sourceURL: sourceURL,
-                        mediaType: mediaType
-                    ))
-                    // D-01: Detect HDR source for warning dialog
-                    if !sourceHasHDR {
-                        sourceHasHDR = detectHDRSource(from: data)
-                    }
-                    if sourceFormatLabel == nil {
-                        sourceFormatLabel = detectSourceFormatLabel(from: data)
-                    }
+                guard let data = try? await item.loadTransferable(type: Data.self) else {
+                    failedCount += 1
+                    continue
+                }
+
+                // Validate that image-typed items actually decode to a real image
+                // before accepting them. Videos legitimately aren't images, so they
+                // skip this check and are validated downstream by the video pipeline.
+                if !isVideoItem(item), !isDecodableImage(data) {
+                    failedCount += 1
+                    continue
+                }
+
+                let thumb = createThumbnail(from: data, maxPixelSize: 200)
+                let sourceURL = await copyToTemp(data: data)
+                let mediaType = WatermarkEngine.mediaType(for: sourceURL)
+                loaded.append(PhotoItem(
+                    id: UUID(),
+                    thumbnail: thumb,
+                    sourceURL: sourceURL,
+                    mediaType: mediaType
+                ))
+                // D-01: Detect HDR source for warning dialog
+                if !sourceHasHDR {
+                    sourceHasHDR = detectHDRSource(from: data)
+                }
+                if sourceFormatLabel == nil {
+                    sourceFormatLabel = detectSourceFormatLabel(from: data)
                 }
             }
             photos = loaded
             currentIndex = 0
             Task { await loadSourceForComparison() }
             showPicker = false
-            // Phase 12: Auto-apply default template on import
-            if let defaultTemplate = TemplateStore.shared.defaultTemplate {
-                config = defaultTemplate.config
+            // Phase 12: Auto-apply default template once per session on first import
+            applyDefaultTemplateIfNeeded()
+
+            // Surface a clear, up-front message when items couldn't be read,
+            // instead of letting unreadable data fail later in the render pipeline.
+            if failedCount > 0 {
+                if loaded.isEmpty {
+                    errorMessage = "The selected photo couldn’t be read. If it’s stored in iCloud, make sure it’s fully downloaded, then try again.\n\n(On the Simulator, some built-in sample photos return placeholder data — test with a real image or on a device.)"
+                } else {
+                    errorMessage = "\(failedCount) item\(failedCount == 1 ? "" : "s") couldn’t be read and \(failedCount == 1 ? "was" : "were") skipped."
+                }
+                showError = true
             }
         }
     }
@@ -257,6 +336,28 @@ final class WatermarkViewModel: WatermarkConfigurable {
         case "public.tiff": return "TIFF"
         default: return nil
         }
+    }
+
+    /// Returns true if `data` decodes as a real, readable image. Guards against
+    /// placeholder/corrupt bytes — notably the Simulator's 2 KB `DEADBEEF`
+    /// sentinel returned by `loadTransferable` for some stock photos — being
+    /// accepted at import and only failing later in the render pipeline with a
+    /// confusing "image data is empty or corrupt" error.
+    private func isDecodableImage(_ data: Data) -> Bool {
+        guard !data.isEmpty,
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(source) > 0,
+              CGImageSourceGetType(source) != nil else {
+            return false
+        }
+        return true
+    }
+
+    /// Whether a picked item represents a movie/video rather than a still image.
+    /// Used to skip image-decode validation for video imports, which flow through
+    /// the same `loadTransferable(type: Data.self)` path.
+    private func isVideoItem(_ item: PhotosPickerItem) -> Bool {
+        item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
     }
 
     func goToNext() {
@@ -716,13 +817,31 @@ final class WatermarkViewModel: WatermarkConfigurable {
         batchResults = nil
         perItemOverrides.removeAll()
         renderingState = .idle
+        // Starting a fresh session: allow the default template to seed the next
+        // import again (it was applied once for the previous session).
+        hasAppliedDefaultTemplate = false
         showPicker = true
     }
 
     func addSignatureLayer(strokeData: Data, inkColor: CGColor, strokeWidth: CGFloat) {
         let input = SignatureInput(strokeData: strokeData, inkColor: inkColor, strokeWidth: strokeWidth)
-        config.watermarks.append(.signature(input, position: .bottomRight, scale: 0.15, opacity: 1.0, isVisible: true))
-        activeLayerIndex = config.watermarks.count - 1
+        // Editing an existing signature replaces it in place (preserving its
+        // position/scale/opacity/visibility) rather than stacking a duplicate
+        // layer — re-capturing previously left two signatures behind.
+        if let existing = config.watermarks.firstIndex(where: { if case .signature = $0 { return true }; return false }) {
+            let layer = config.watermarks[existing]
+            config.watermarks[existing] = .signature(
+                input,
+                position: layer.position,
+                scale: layer.scale,
+                opacity: layer.opacity,
+                isVisible: layer.isVisible
+            )
+            activeLayerIndex = existing
+        } else {
+            config.watermarks.append(.signature(input, position: .bottomRight, scale: 0.15, opacity: 1.0, isVisible: true))
+            activeLayerIndex = config.watermarks.count - 1
+        }
     }
 
     public var sourceHasHDR: Bool = false
@@ -770,10 +889,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
             if sourceFormatLabel == nil { sourceFormatLabel = detectSourceFormatLabel(from: data) }
         }
         Task { await loadSourceForComparison() }
-        // Phase 12: Auto-apply default template on import
-        if let defaultTemplate = TemplateStore.shared.defaultTemplate {
-            config = defaultTemplate.config
-        }
+        // Phase 12: Auto-apply default template once per session on first import
+        applyDefaultTemplateIfNeeded()
     }
 
     // MARK: - Quick Actions (IMPS-02)
@@ -855,10 +972,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
         if !sourceHasHDR { sourceHasHDR = detectHDRSource(from: imageData) }
         if sourceFormatLabel == nil { sourceFormatLabel = detectSourceFormatLabel(from: imageData) }
         Task { await loadSourceForComparison() }
-        // Phase 12: Auto-apply default template on import
-        if let defaultTemplate = TemplateStore.shared.defaultTemplate {
-            config = defaultTemplate.config
-        }
+        // Phase 12: Auto-apply default template once per session on first import
+        applyDefaultTemplateIfNeeded()
     }
 
     func loadFromClipboard() async {
@@ -891,10 +1006,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
         if !sourceHasHDR { sourceHasHDR = detectHDRSource(from: pngData) }
         if sourceFormatLabel == nil { sourceFormatLabel = detectSourceFormatLabel(from: pngData) }
         Task { await loadSourceForComparison() }
-        // Phase 12: Auto-apply default template on import
-        if let defaultTemplate = TemplateStore.shared.defaultTemplate {
-            config = defaultTemplate.config
-        }
+        // Phase 12: Auto-apply default template once per session on first import
+        applyDefaultTemplateIfNeeded()
     }
 
     // MARK: - App Intents (SYSI-01, SYSI-02)
@@ -922,10 +1035,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
                     currentIndex = 0
                     if !sourceHasHDR { sourceHasHDR = detectHDRSource(from: data) }
                     if sourceFormatLabel == nil { sourceFormatLabel = detectSourceFormatLabel(from: data) }
-                    // Phase 12: Auto-apply default template on import
-                    if let defaultTemplate = TemplateStore.shared.defaultTemplate {
-                        config = defaultTemplate.config
-                    }
+                    // Phase 12: Auto-apply default template once per session on first import
+                    applyDefaultTemplateIfNeeded()
                 }
             }
         }

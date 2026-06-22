@@ -19,12 +19,27 @@ struct ContentView: View {
     @State private var showResetOverridesConfirmation: Bool = false
     @State private var showBatchResultAlert: Bool = false
 
-    // Phase 17: Inspector bottom-sheet shell state
-    @State private var detent: SheetDetent = .peek
-    @State private var sheetDragOffset: CGFloat = 0
+    // Editor tool-dock state. Starts on Text so controls are visible on launch.
+    @State private var activeTool: EditorTool? = .text
 
-    // Peek detent height — pill bar intrinsic + drag indicator
-    private let peekDetentHeight: CGFloat = 60
+    /// Measured height of the active tool panel, used to lift the photo above it.
+    @State private var panelHeight: CGFloat = 0
+
+    /// Approximate vertical space the dock occupies — used to keep the batch
+    /// thumbnail strip clear of it.
+    private let dockClearance: CGFloat = 96
+
+    /// Space the dock + spacings + bottom safe area occupy below the panel.
+    /// Added to the measured panel height to compute how far to lift the photo.
+    private let dockReserve: CGFloat = 124
+
+    /// True when a tool panel is on screen (and not replaced by a render banner).
+    private var isPanelVisible: Bool { activeTool != nil && !isBusy }
+
+    /// How far to inset the photo's bottom so it sits fully above the tool panel.
+    private var imageBottomInset: CGFloat {
+        isPanelVisible ? panelHeight + dockReserve : 0
+    }
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -35,6 +50,7 @@ struct ContentView: View {
             GeometryReader { geometry in
                 mainLayout(geometry)
                     .toolbar { toolbarContent }
+                    .toolbarBackground(.hidden, for: .navigationBar)
                     .photosPicker(
                         isPresented: Binding(
                             get: { viewModel.showPicker },
@@ -75,38 +91,29 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Main Layout (Phase 17: ZStack inspector shell)
+    // MARK: - Main Layout (editor canvas + tool dock)
 
     private func mainLayout(_ geometry: GeometryProxy) -> some View {
-        // D-12: Expanded sheet height scales to 70% at large Dynamic Type
-        let expandedHeight: CGFloat = dynamicTypeSize >= .xxLarge
-            ? geometry.size.height * 0.70   // 70% at large type
-            : geometry.size.height * 0.55   // standard 55%
-
-        // D-09: Empty state when no photo loaded AND not rendering
-        // Prevents flashing empty state during batch processing when photo data reloads
+        // Empty state when no photo loaded AND not rendering — prevents flashing
+        // the empty state during batch processing while photo data reloads.
         return Group {
             if viewModel.currentPhoto == nil && viewModel.renderingState != .rendering {
-                // Empty state: no sheet, no share bar — just the EmptyStateView
                 EmptyStateView(onChoosePhoto: { viewModel.showPicker = true })
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(canvasBackground.ignoresSafeArea())
             } else {
-                // Normal inspector shell (existing ZStack unchanged)
                 ZStack(alignment: .bottom) {
-                    // z=0: Full-bleed preview (LYT-01)
+                    // z=0: Full-bleed preview on a neutral editing canvas.
                     previewArea
                         .ignoresSafeArea()
 
-                    // z=1: Batch overlays (D-17)
+                    // z=1: Batch overlays (thumbnail strip + batch progress).
                     batchOverlays
                         .zIndex(1)
 
-                    // z=2: Glass bottom sheet (LYT-02)
-                    inspectorSheet(expandedHeight: expandedHeight)
+                    // z=2: Tool panel + persistent dock + render progress.
+                    bottomControls(geometry)
                         .zIndex(2)
-
-                    // z=3: Pinned Share action bar (LYT-03)
-                    pinnedShareBar
-                        .zIndex(3)
                 }
             }
         }
@@ -125,26 +132,47 @@ struct ContentView: View {
         }
     }
 
+    /// Neutral dark canvas behind the photo so letterboxing reads as an
+    /// intentional editing surface rather than empty white space.
+    private var canvasBackground: some View {
+        Color.black
+    }
+
+    /// True while a render/export/batch operation is in progress.
+    private var isBusy: Bool {
+        switch viewModel.renderingState {
+        case .idle, .done, .error: return false
+        default: return true
+        }
+    }
+
     // MARK: - Toolbar
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarTrailing) {
-            Button {
-                showFileImporter = true
-            } label: {
-                Image(systemName: "folder.badge.plus")
-            }
-        }
         if viewModel.hasMultiplePhotos {
-            ToolbarItem(placement: .navigationBarLeading) {
+            ToolbarItem(placement: .topBarLeading) {
                 Button("Cancel") {
                     viewModel.requestCancel()
                 }
             }
         }
-        if viewModel.hasBatchOverrides {
-            ToolbarItem(placement: .navigationBarTrailing) {
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            Button {
+                viewModel.showPicker = true
+            } label: {
+                Image(systemName: "photo.badge.plus")
+            }
+            .accessibilityLabel("Add photos")
+
+            Button {
+                showFileImporter = true
+            } label: {
+                Image(systemName: "folder.badge.plus")
+            }
+            .accessibilityLabel("Import from Files")
+
+            if viewModel.hasBatchOverrides {
                 Button {
                     showResetOverridesConfirmation = true
                 } label: {
@@ -152,33 +180,29 @@ struct ContentView: View {
                 }
                 .accessibilityLabel("Reset all overrides")
             }
+
+            ExportToolbarButton(viewModel: viewModel)
         }
     }
 
     // MARK: - Preview Area (z=0)
 
     private var previewArea: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
+            canvasBackground
+            // Lift the photo above the tool panel so it stays fully visible,
+            // animating smoothly as panels open/close or swap.
             PreviewView(viewModel: viewModel)
-
-            // Plus button (top-right, existing)
-            if viewModel.currentPhoto != nil {
-                Button {
-                    viewModel.showPicker = true
-                } label: {
-                    Image(systemName: "plus.rectangle.on.rectangle")
-                        .font(.system(size: 22, weight: .regular))
-                }
-                .frame(width: 44, height: 44)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .padding(12)
-            }
+                .padding(.bottom, imageBottomInset)
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.86),
+                    value: imageBottomInset
+                )
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.renderingState)
     }
 
-    // MARK: - Batch Overlays (z=1, D-17)
+    // MARK: - Batch Overlays (z=1)
 
     @ViewBuilder
     private var batchOverlays: some View {
@@ -194,7 +218,7 @@ struct ContentView: View {
                     viewModel.photos = reordered
                 }
             )
-            .padding(.bottom, peekDetentHeight + 8)
+            .padding(.bottom, dockClearance)
         }
 
         if case .batchProcessing(let current, let total, let eta) = viewModel.renderingState {
@@ -210,37 +234,39 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Inspector Sheet (z=2, LYT-02)
+    // MARK: - Bottom Controls (z=2)
 
-    private func inspectorSheet(expandedHeight: CGFloat) -> some View {
-        InspectorSheetView(
-            detent: $detent,
-            peekHeight: peekDetentHeight,
-            expandedHeight: expandedHeight,
-            viewModel: viewModel
-        )
-    }
+    private func bottomControls(_ geometry: GeometryProxy) -> some View {
+        // Panel grows taller at large Dynamic Type so controls stay reachable.
+        let panelMaxHeight: CGFloat = dynamicTypeSize >= .xxLarge
+            ? geometry.size.height * 0.62
+            : geometry.size.height * 0.50
 
-    // MARK: - Pinned Share Bar (z=3, LYT-03)
+        return VStack(spacing: 12) {
+            RenderProgressBanner(viewModel: viewModel)
 
-    private var pinnedShareBar: some View {
-        VStack {
-            Spacer()
-            ShareActionButton(viewModel: viewModel)
-                .padding(.horizontal, 40)
-                .padding(.bottom, peekDetentHeight + 16)
-        }
-        .background(alignment: .bottom) {
-            Capsule()
-                .fill(.clear)
-                .markepiGlass(
-                    shape: Capsule(),
-                    isEnabled: !reduceTransparency
+            if let tool = activeTool, !isBusy {
+                ToolPanelView(
+                    tool: tool,
+                    viewModel: viewModel,
+                    onClose: {
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82)) {
+                            activeTool = nil
+                        }
+                    }
                 )
-                .frame(height: 52)
-                .padding(.horizontal, 24)
-                .padding(.bottom, peekDetentHeight + 8)
+                .frame(maxHeight: panelMaxHeight)
+                .padding(.horizontal, 12)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { panelHeight = $0 }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            EditorToolDock(activeTool: $activeTool)
+                .padding(.horizontal, 16)
         }
+        .padding(.bottom, 8)
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: activeTool)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isBusy)
     }
 }
 

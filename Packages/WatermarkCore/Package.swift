@@ -17,6 +17,9 @@ let package = Package(
         .target(
             name: "WatermarkCore",
             path: "Sources/WatermarkCore",
+            resources: [
+                .process("Resources/Fonts")
+            ],
             swiftSettings: [
                 .swiftLanguageMode(.v6)
             ]
