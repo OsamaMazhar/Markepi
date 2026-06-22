@@ -36,8 +36,8 @@ public struct MarkepiGlassModifier<S: Shape>: ViewModifier {
     public func body(content: Content) -> some View {
         content
             .modify { view in
-                // D-02: iOS 26 Liquid Glass with material fallback on iOS 18
-                if #available(iOS 26, *), isEnabled {
+                // D-02: iOS/macOS 26 Liquid Glass with material fallback on earlier OS
+                if #available(iOS 26, macOS 26, *), isEnabled {
                     // D-03: system-adaptive tint (cool light, warm dark) —
                     // the .regular variant handles this automatically (no custom tint)
                     view.glassEffect(.regular, in: shape)
