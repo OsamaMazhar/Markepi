@@ -14,18 +14,10 @@ import AppKit
 public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observable>: View {
     @Bindable var viewModel: ViewModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @FocusState private var isTextFocused: Bool
 
     public init(viewModel: ViewModel) {
         self.viewModel = viewModel
-    }
-
-    /// Returns the appropriate semantic placeholder text color for the current platform.
-    private var placeholderColor: Color {
-        #if canImport(UIKit)
-        Color(UIColor.placeholderText)
-        #else
-        Color(.placeholderTextColor)
-        #endif
     }
 
     public var body: some View {
@@ -36,23 +28,21 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
                 .padding(.bottom, 8)
 
             VStack(spacing: 0) {
-                ZStack(alignment: .topLeading) {
-                    if currentText.isEmpty {
-                        Text("Enter your watermark text")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
-                    TextEditor(text: textBinding)
-                        .font(.body)
-                        .scrollContentBackground(.hidden)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .frame(minHeight: 80, maxHeight: 120)
-                }
+                // A multi-line TextField is used instead of TextEditor: TextEditor
+                // has its own internal scroll view, which conflicts with the
+                // panel's surrounding ScrollView and intermittently swallows taps
+                // and keystrokes. TextField(axis: .vertical) grows in place and
+                // focuses reliably inside a ScrollView.
+                TextField("Enter your watermark text", text: textBinding, axis: .vertical)
+                    .font(.body)
+                    .lineLimit(2...5)
+                    .focused($isTextFocused)
+                    .submitLabel(.done)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(minHeight: 80, alignment: .topLeading)
+                    .contentShape(Rectangle())
+                    .onTapGesture { isTextFocused = true }
 
                 Divider()
                     .padding(.leading, 52)
