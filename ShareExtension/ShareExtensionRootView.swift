@@ -7,8 +7,12 @@ import WatermarkCore
 /// (bottom 40%). Does NOT use NavigationStack — the extension has no
 /// navigation bar. Mirrors the main app's `ContentView` layout but adapted
 /// for the extension context.
-struct ShareExtensionRootView: View {
-    @State var viewModel: ShareExtensionViewModel
+///
+/// Generic over `ViewModel: ShareExtensionRendering` to support both the
+/// production `ShareExtensionViewModel` and test-only `SnapshotTestViewModel`
+/// for XCTest snapshot tests (Phase 18, XTG-01).
+struct ShareExtensionRootView<ViewModel: ShareExtensionRendering>: View {
+    @State var viewModel: ViewModel
 
     var body: some View {
         GeometryReader { geometry in

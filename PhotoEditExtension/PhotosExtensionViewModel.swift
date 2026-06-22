@@ -20,7 +20,7 @@ import WatermarkCore
 /// `PhotosPickerItem` or `NSItemProvider`, has a "Done" commit flow instead
 /// of a share sheet, and handles `PHAdjustmentData` for non-destructive editing.
 @Observable @MainActor
-final class PhotosExtensionViewModel: WatermarkConfigurable {
+final class PhotosExtensionViewModel: PhotosExtensionRendering {
 
     // MARK: - Configuration
 

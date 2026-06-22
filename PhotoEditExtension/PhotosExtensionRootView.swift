@@ -7,8 +7,12 @@ import WatermarkCore
 /// (bottom 40%). Mirrors the `ShareExtensionRootView` layout but adapted
 /// for the Photos extension context: "Done" button instead of share sheet,
 /// single-item processing, and no multi-item progress bar.
-struct PhotosExtensionRootView: View {
-    @State var viewModel: PhotosExtensionViewModel
+///
+/// Generic over `ViewModel: PhotosExtensionRendering` to support both the
+/// production `PhotosExtensionViewModel` and test-only `SnapshotTestViewModel`
+/// for XCTest snapshot tests (Phase 18, XTG-02).
+struct PhotosExtensionRootView<ViewModel: PhotosExtensionRendering>: View {
+    @State var viewModel: ViewModel
 
     var body: some View {
         GeometryReader { geometry in

@@ -16,7 +16,7 @@ import WatermarkCore
 /// `WatermarkViewModel` but uses NSItemProvider instead of PhotosPickerItem
 /// as its input source.
 @Observable @MainActor
-final class ShareExtensionViewModel: WatermarkConfigurable {
+final class ShareExtensionViewModel: ShareExtensionRendering {
 
     // MARK: - Configuration
 
