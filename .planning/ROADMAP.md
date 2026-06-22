@@ -96,7 +96,13 @@ Plans:
   3. VoiceOver labels and hints are preserved or improved relative to the pre-redesign UI, and Reduce Motion / Reduce Transparency settings are respected
   4. The empty state (no photo loaded) is redesigned to match the new visual system
 
-**Plans**: TBD
+**Plans**: 3 plans in 1 wave
+
+Plans:
+- [ ] 18-01-PLAN.md — Snapshot Test Infrastructure & Extension Verification (XTG-01, XTG-02)
+- [ ] 18-02-PLAN.md — Accessibility Polish: VoiceOver Labels & Reduce Motion Gating (UXQ-01, UXQ-02, UXQ-03)
+- [ ] 18-03-PLAN.md — Empty State Redesign & ContentView Integration (UXQ-03, UXQ-04)
+
 **UI hint**: yes
 
 ## Progress
@@ -106,7 +112,7 @@ Plans:
 | 15. Visual Design System & Shared Primitives | 0/3 | Not started | - |
 | 16. Redesigned Controls | 2/2 | Complete   | 2026-06-21 |
 | 17. Inspector Bottom-Sheet Shell | 0/3 | Not started | - |
-| 18. Cross-Target Parity & Accessibility Polish | 0/TBD | Not started | - |
+| 18. Cross-Target Parity & Accessibility Polish | 0/3 | Not started | - |
 
 ---
 
