@@ -1,5 +1,6 @@
 import UIKit
 import SwiftUI
+import WatermarkCore
 
 /// UIKit entry point for the share extension.
 ///

@@ -1,12 +1,19 @@
 import SwiftUI
 import UIKit
 
-struct ShareSheetView: UIViewControllerRepresentable {
+/// UIKit bridge for presenting `UIActivityViewController` from SwiftUI.
+///
+/// Used by `ShareExtensionRootView` in WatermarkCore for the share sheet
+/// presentation after watermarking completes.
+///
+/// Excludes `.saveToCameraRoll` per project constraint — watermarked output
+/// is shared without saving to the camera roll.
+public struct ShareSheetView: UIViewControllerRepresentable {
     let activityItems: [Any]
     let excludedActivityTypes: [UIActivity.ActivityType]?
     let onDismiss: () -> Void
 
-    init(
+    public init(
         activityItems: [Any],
         excludedActivityTypes: [UIActivity.ActivityType]? = nil,
         onDismiss: @escaping () -> Void
@@ -16,7 +23,7 @@ struct ShareSheetView: UIViewControllerRepresentable {
         self.onDismiss = onDismiss
     }
 
-    func makeUIViewController(context: Context) -> UIActivityViewController {
+    public func makeUIViewController(context: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(
             activityItems: activityItems,
             applicationActivities: nil
@@ -29,5 +36,5 @@ struct ShareSheetView: UIViewControllerRepresentable {
         return controller
     }
 
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+    public func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

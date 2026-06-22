@@ -15,7 +15,6 @@
 		006 /* PositionGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106; };
 		007 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107; };
 		008 /* ScaleStepperView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 108; };
-		009 /* ShareSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109; };
 		00A /* TextWatermarkInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10A; };
 		00B /* ThumbnailStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10B; };
 		00C /* WatermarkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10C; };
@@ -27,11 +26,8 @@
 		00E /* WatermarkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 30E; };
 		013 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 600; };
 		014 /* ShareExtensionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601; };
-		015 /* ShareExtensionRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 602; };
-		016 /* ShareSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 603; };
 		017 /* PhotoEditingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 610; };
 		018 /* PhotosExtensionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 611; };
-		019 /* PhotosExtensionRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 612; };
 		01A /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 620; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		01B /* PhotoEditExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 621; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		723 /* TemplateListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F; };
@@ -53,7 +49,6 @@
 		106 /* PositionGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PositionGridView.swift; sourceTree = "<group>"; };
 		107 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
 		108 /* ScaleStepperView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleStepperView.swift; sourceTree = "<group>"; };
-		109 /* ShareSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSheetView.swift; sourceTree = "<group>"; };
 		10A /* TextWatermarkInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextWatermarkInputView.swift; sourceTree = "<group>"; };
 		10B /* ThumbnailStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailStripView.swift; sourceTree = "<group>"; };
 		10C /* WatermarkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkApp.swift; sourceTree = "<group>"; };
@@ -66,13 +61,10 @@
 		20E /* WatermarkCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = WatermarkCore; path = Packages/WatermarkCore; sourceTree = SOURCE_ROOT; };
 		600 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		601 /* ShareExtensionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtensionViewModel.swift; sourceTree = "<group>"; };
-		602 /* ShareExtensionRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtensionRootView.swift; sourceTree = "<group>"; };
-		603 /* ShareSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSheetView.swift; sourceTree = "<group>"; };
 		604 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		605 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
 		610 /* PhotoEditingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoEditingViewController.swift; sourceTree = "<group>"; };
 		611 /* PhotosExtensionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotosExtensionViewModel.swift; sourceTree = "<group>"; };
-		612 /* PhotosExtensionRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotosExtensionRootView.swift; sourceTree = "<group>"; };
 		613 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		614 /* PhotoEditExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PhotoEditExtension.entitlements; sourceTree = "<group>"; };
 		620 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -157,8 +149,6 @@
 			children = (
 				600 /* ShareViewController.swift */,
 				601 /* ShareExtensionViewModel.swift */,
-				602 /* ShareExtensionRootView.swift */,
-				603 /* ShareSheetView.swift */,
 				604 /* Info.plist */,
 				605 /* ShareExtension.entitlements */,
 			);
@@ -170,7 +160,6 @@
 			children = (
 				610 /* PhotoEditingViewController.swift */,
 				611 /* PhotosExtensionViewModel.swift */,
-				612 /* PhotosExtensionRootView.swift */,
 				613 /* Info.plist */,
 				614 /* PhotoEditExtension.entitlements */,
 			);
@@ -234,7 +223,6 @@
 		333 /* Share */ = {
 			isa = PBXGroup;
 			children = (
-				109 /* ShareSheetView.swift */,
 			);
 			path = Share;
 			sourceTree = "<group>";
@@ -446,7 +434,6 @@
 				004 /* ErrorAlertModifier.swift in Sources */,
 				005 /* PhotoItem.swift in Sources */,
 				007 /* PreviewView.swift in Sources */,
-				009 /* ShareSheetView.swift in Sources */,
 				00B /* ThumbnailStripView.swift in Sources */,
 				00C /* WatermarkApp.swift in Sources */,
 				00D /* WatermarkViewModel.swift in Sources */,
@@ -460,8 +447,6 @@
 			files = (
 				013 /* ShareViewController.swift in Sources */,
 				014 /* ShareExtensionViewModel.swift in Sources */,
-				015 /* ShareExtensionRootView.swift in Sources */,
-				016 /* ShareSheetView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -471,7 +456,6 @@
 			files = (
 				017 /* PhotoEditingViewController.swift in Sources */,
 				018 /* PhotosExtensionViewModel.swift in Sources */,
-				019 /* PhotosExtensionRootView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

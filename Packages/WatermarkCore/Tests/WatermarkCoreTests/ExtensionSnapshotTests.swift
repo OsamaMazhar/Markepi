@@ -141,15 +141,11 @@ struct SnapshotComparatorTests {
 
     @Test("compare returns false for views with clearly different content")
     func differentContentReturnsFalse() throws {
-        // Use views that render markedly different content at large size
-        let data1 = try SnapshotRenderer.render(
-            Text("Hello").font(.system(size: 48)).foregroundStyle(.red),
-            size: CGSize(width: 200, height: 100), scale: 2.0)
-        let data2 = try SnapshotRenderer.render(
-            Text("World").font(.system(size: 48)).foregroundStyle(.blue),
-            size: CGSize(width: 200, height: 100), scale: 2.0)
-        let result = SnapshotRenderer.compare(actual: data1, reference: data2, pixelTolerance: 0.30)
-        #expect(result == false, "Large text with different words/colors should differ in >30% of pixels")
+        // Solid red vs solid blue fills at same size — nearly every pixel differs
+        let data1 = try SnapshotRenderer.render(Color.red, size: CGSize(width: 100, height: 100), scale: 1.0)
+        let data2 = try SnapshotRenderer.render(Color.blue, size: CGSize(width: 100, height: 100), scale: 1.0)
+        let result = SnapshotRenderer.compare(actual: data1, reference: data2, pixelTolerance: 0.02)
+        #expect(result == false, "Solid red vs solid blue should differ in >2% of pixels")
     }
 
     @Test("compare applies tolerance — same view renders pass at high tolerance")
@@ -159,6 +155,111 @@ struct SnapshotComparatorTests {
         // At 100% tolerance, any pair of same-size images passes
         let result = SnapshotRenderer.compare(actual: data1, reference: data2, pixelTolerance: 1.0)
         #expect(result == true, "100% tolerance must accept any same-size pair")
+    }
+}
+
+// MARK: - Extension Root View Snapshot Tests
+
+@MainActor
+@Suite("ExtensionSnapshots")
+struct ExtensionSnapshotTests {
+
+    /// Set to `true` to (re)generate reference images in __Snapshots__/.
+    /// Set to `false` (committed default) to validate against existing references.
+    private static let recordMode: Bool = false
+
+    /// Standard snapshot size for iPhone 16 Pro Max (430×932 @3x).
+    private static let snapshotSize = CGSize(width: 430, height: 932)
+    private static let snapshotScale: CGFloat = 3.0
+
+    /// Resolves the absolute filesystem path to a snapshot reference PNG.
+    private static func referencePath(_ name: String) -> URL {
+        // #filePath gives the path to THIS source file; derive __Snapshots__/ dir
+        let testFileDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        return testFileDir.appendingPathComponent("__Snapshots__/\(name).png")
+    }
+
+    /// Renders a view, compares against the committed reference (unless in record mode).
+    private static func assertSnapshot(
+        name: String,
+        view: some View,
+        inNavigationController: Bool = false
+    ) throws {
+        let actual = try SnapshotRenderer.render(
+            view,
+            size: snapshotSize,
+            scale: snapshotScale,
+            inNavigationController: inNavigationController
+        )
+
+        let refURL = referencePath(name)
+
+        if recordMode {
+            let dir = refURL.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try actual.write(to: refURL)
+            return
+        }
+
+        let reference = try Data(contentsOf: refURL)
+        let result = SnapshotRenderer.compare(actual: actual, reference: reference, pixelTolerance: 0.02)
+        #expect(result == true, "Snapshot '\(name)' should match reference within 2% tolerance")
+    }
+
+    // MARK: - Share Extension Snapshots
+
+    @Test("Share extension idle state snapshot")
+    func shareExtensionIdle() throws {
+        let vm = SnapshotTestViewModel()
+        vm.renderingState = .idle
+        vm.config.watermarks = []  // Empty — simulates no media loaded
+        try Self.assertSnapshot(name: "share-ext-idle", view: ShareExtensionRootView(viewModel: vm))
+    }
+
+    @Test("Share extension preview rendered snapshot")
+    func shareExtensionPreview() throws {
+        let vm = SnapshotTestViewModel()
+        vm.renderingState = .done
+        vm.previewImage = UIImage(systemName: "photo.fill")
+        try Self.assertSnapshot(name: "share-ext-preview", view: ShareExtensionRootView(viewModel: vm))
+    }
+
+    @Test("Share extension multi-item progress snapshot")
+    func shareExtensionMultiItem() throws {
+        let vm = SnapshotTestViewModel()
+        vm.renderingState = .done
+        vm.previewImage = UIImage(systemName: "photo.fill")
+        vm.isMultiItem = true
+        vm.currentItemIndex = 2
+        vm.totalItemCount = 5
+        vm.multiItemProgress = "Item 3 of 5"
+        try Self.assertSnapshot(name: "share-ext-multi-item", view: ShareExtensionRootView(viewModel: vm))
+    }
+
+    // MARK: - Photos Extension Snapshots
+
+    @Test("Photos extension idle state snapshot")
+    func photosExtensionIdle() throws {
+        let vm = SnapshotTestViewModel()
+        vm.renderingState = .idle
+        vm.config.watermarks = []  // Empty — simulates no media loaded
+        try Self.assertSnapshot(
+            name: "photos-ext-idle",
+            view: PhotosExtensionRootView(viewModel: vm),
+            inNavigationController: true
+        )
+    }
+
+    @Test("Photos extension preview rendered snapshot")
+    func photosExtensionPreview() throws {
+        let vm = SnapshotTestViewModel()
+        vm.renderingState = .done
+        vm.previewImage = UIImage(systemName: "photo.fill")
+        try Self.assertSnapshot(
+            name: "photos-ext-preview",
+            view: PhotosExtensionRootView(viewModel: vm),
+            inNavigationController: true
+        )
     }
 }
 #endif
