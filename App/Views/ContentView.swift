@@ -27,6 +27,8 @@ struct ContentView: View {
     private let peekDetentHeight: CGFloat = 60
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack {
@@ -76,24 +78,37 @@ struct ContentView: View {
     // MARK: - Main Layout (Phase 17: ZStack inspector shell)
 
     private func mainLayout(_ geometry: GeometryProxy) -> some View {
-        let expandedHeight = geometry.size.height * 0.55
+        // D-12: Expanded sheet height scales to 70% at large Dynamic Type
+        let expandedHeight: CGFloat = dynamicTypeSize >= .xxLarge
+            ? geometry.size.height * 0.70   // 70% at large type
+            : geometry.size.height * 0.55   // standard 55%
 
-        return ZStack(alignment: .bottom) {
-            // z=0: Full-bleed preview (LYT-01)
-            previewArea
-                .ignoresSafeArea()
+        // D-09: Empty state when no photo loaded AND not rendering
+        // Prevents flashing empty state during batch processing when photo data reloads
+        return Group {
+            if viewModel.currentPhoto == nil && viewModel.renderingState != .rendering {
+                // Empty state: no sheet, no share bar — just the EmptyStateView
+                EmptyStateView(onChoosePhoto: { viewModel.showPicker = true })
+            } else {
+                // Normal inspector shell (existing ZStack unchanged)
+                ZStack(alignment: .bottom) {
+                    // z=0: Full-bleed preview (LYT-01)
+                    previewArea
+                        .ignoresSafeArea()
 
-            // z=1: Batch overlays (D-17)
-            batchOverlays
-                .zIndex(1)
+                    // z=1: Batch overlays (D-17)
+                    batchOverlays
+                        .zIndex(1)
 
-            // z=2: Glass bottom sheet (LYT-02)
-            inspectorSheet(expandedHeight: expandedHeight)
-                .zIndex(2)
+                    // z=2: Glass bottom sheet (LYT-02)
+                    inspectorSheet(expandedHeight: expandedHeight)
+                        .zIndex(2)
 
-            // z=3: Pinned Share action bar (LYT-03)
-            pinnedShareBar
-                .zIndex(3)
+                    // z=3: Pinned Share action bar (LYT-03)
+                    pinnedShareBar
+                        .zIndex(3)
+                }
+            }
         }
         .task(id: viewModel.previewIdentifier) {
             guard viewModel.currentPhoto != nil else { return }
@@ -160,7 +175,7 @@ struct ContentView: View {
                 .padding(12)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: viewModel.renderingState)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.renderingState)
     }
 
     // MARK: - Batch Overlays (z=1, D-17)
@@ -191,7 +206,7 @@ struct ContentView: View {
                     showBatchCancelConfirmation = true
                 }
             )
-            .transition(.opacity)
+            .transition(reduceMotion ? .identity : .opacity)
         }
     }
 

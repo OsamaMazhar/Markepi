@@ -87,7 +87,8 @@ struct PreviewView: View {
                     ProgressView()
                 }
             } else {
-                pickerButton
+                // Empty state is now handled by EmptyStateView at ContentView level
+                Color.clear
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -123,21 +124,5 @@ struct PreviewView: View {
 
     private var combinedGesture: some Gesture {
         comparisonGesture.simultaneously(with: magnifyGesture)
-    }
-
-    private var pickerButton: some View {
-        Button {
-            viewModel.showPicker = true
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 24, weight: .regular))
-                Text("Add Photos")
-                    .font(.body.weight(.semibold))
-            }
-            .foregroundStyle(.white)
-            .frame(width: 200, height: 56)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28))
-        }
     }
 }
