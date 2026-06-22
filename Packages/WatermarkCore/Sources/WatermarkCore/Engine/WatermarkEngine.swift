@@ -108,8 +108,10 @@ public actor WatermarkEngine {
             }
             return CIContextProvider.workingColorSpace
         }()
+        let srcSample = samplePixel(loaded.ciImage)
+        let compSample = samplePixel(composited)
         engineLog.debug(
-            "render: uti=\(loaded.sourceUTI, privacy: .public) size=\(Int(composited.extent.width))x\(Int(composited.extent.height)) srcCSModel=\(loaded.colorSpace?.model.rawValue ?? -99) inCIImageCSModel=\(composited.colorSpace?.model.rawValue ?? -99) outCSModel=\(outputColorSpace.model.rawValue) whiteFrame=\(config.whiteFrame?.isEnabled == true)"
+            "render: uti=\(loaded.sourceUTI, privacy: .public) size=\(Int(composited.extent.width))x\(Int(composited.extent.height)) srcCSModel=\(loaded.colorSpace?.model.rawValue ?? -99) inCIImageCSModel=\(composited.colorSpace?.model.rawValue ?? -99) outCSModel=\(outputColorSpace.model.rawValue) whiteFrame=\(config.whiteFrame?.isEnabled == true) srcRGB=\(srcSample) compRGB=\(compSample)"
         )
         guard let cgImage = context.createCGImage(
             composited,
@@ -208,6 +210,25 @@ public actor WatermarkEngine {
             outputUTI: sourceUTI,
             livePhotoVideoURL: pair.watermarkedVideoURL
         )
+    }
+
+    /// Renders the center pixel of a CIImage to RGBA8 for diagnostics. Returns
+    /// "r,g,b" so we can tell whether color is intact (r≠g≠b) or crushed to grey
+    /// (r≈g≈b) at a given pipeline stage.
+    private func samplePixel(_ image: CIImage) -> String {
+        let e = image.extent
+        guard e.width.isFinite, e.height.isFinite, e.width >= 1, e.height >= 1 else { return "n/a" }
+        let rect = CGRect(x: e.midX, y: e.midY, width: 1, height: 1)
+        var bytes = [UInt8](repeating: 0, count: 4)
+        context.render(
+            image,
+            toBitmap: &bytes,
+            rowBytes: 4,
+            bounds: rect,
+            format: .RGBA8,
+            colorSpace: CIContextProvider.workingColorSpace
+        )
+        return "\(bytes[0]),\(bytes[1]),\(bytes[2])"
     }
 
     /// Builds the Core Image filter graph for watermark compositing.

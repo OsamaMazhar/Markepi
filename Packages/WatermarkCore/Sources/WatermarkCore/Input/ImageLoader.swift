@@ -118,24 +118,31 @@ public struct ImageLoader {
             }
         }
 
-        // Create CIImage with HDR options (Pitfall 1 prevention).
-        // Primary: HDR-enabled load. Fallback: plain load (for SDR images or macOS testing).
-        let options: [CIImageOption: Any] = [
-            .expandToHDR: true,
-            .auxiliaryHDRGainMap: true,
-            .applyOrientationProperty: true,
-        ]
+        // Create CIImage. Only opt into HDR expansion when the source actually
+        // carries an HDR gain map. `.expandToHDR` on plain SDR images (notably
+        // small, untagged JPEGs) can tone-map them into an extended range that
+        // renders desaturated/grey once composited and written back to SDR — the
+        // "photo turns grey" bug. SDR images load with orientation only, which
+        // preserves their color exactly.
+        let hasGainMap = gainMapAuxData != nil
+        let options: [CIImageOption: Any] = hasGainMap
+            ? [.expandToHDR: true, .auxiliaryHDRGainMap: true, .applyOrientationProperty: true]
+            : [.applyOrientationProperty: true]
         var ciImage = CIImage(contentsOf: url, options: options)
         if ciImage == nil {
-            // Fallback for SDR images or platforms where HDR options are not
-            // supported. Orientation MUST still be applied here — otherwise a
-            // rotated source loads with swapped dimensions and the watermark is
-            // positioned in the wrong place (EXIF orientation 5–8).
+            // Fallback for platforms where the options are not supported.
+            // Orientation MUST still be applied here — otherwise a rotated source
+            // loads with swapped dimensions and the watermark is positioned in
+            // the wrong place (EXIF orientation 5–8).
             ciImage = CIImage(contentsOf: url, options: [.applyOrientationProperty: true])
         }
         guard let ciImage = ciImage else {
             throw PipelineError.failedToCreateCIImage
         }
+        os_log(.debug, "[WatermarkCore] loaded image: hasGainMap=%{public}@ ciColorSpaceModel=%{public}d profileName=%{public}@",
+               hasGainMap ? "yes" : "no",
+               ciImage.colorSpace?.model.rawValue ?? -99,
+               (props[kCGImagePropertyProfileName] as? String) ?? "nil")
 
         return LoadedImage(
             ciImage: ciImage,
