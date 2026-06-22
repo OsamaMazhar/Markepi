@@ -26,7 +26,7 @@ class PhotoEditingViewController: UIViewController, PHContentEditingController {
     private let viewModel = PhotosExtensionViewModel()
 
     /// Hosting controller for the SwiftUI watermarking UI.
-    private var hostingController: UIHostingController<PhotosExtensionRootView>?
+    private var hostingController: UIHostingController<PhotosExtensionRootView<PhotosExtensionViewModel>>?
 
     // MARK: - PHContentEditingController
 

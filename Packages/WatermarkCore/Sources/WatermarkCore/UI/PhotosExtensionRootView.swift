@@ -1,5 +1,4 @@
 import SwiftUI
-import WatermarkCore
 
 /// Root SwiftUI view for the Photo Editing extension's watermarking UI.
 ///
@@ -11,10 +10,14 @@ import WatermarkCore
 /// Generic over `ViewModel: PhotosExtensionRendering` to support both the
 /// production `PhotosExtensionViewModel` and test-only `SnapshotTestViewModel`
 /// for XCTest snapshot tests (Phase 18, XTG-02).
-struct PhotosExtensionRootView<ViewModel: PhotosExtensionRendering>: View {
+public struct PhotosExtensionRootView<ViewModel: PhotosExtensionRendering & Observable>: View {
     @State var viewModel: ViewModel
 
-    var body: some View {
+    public init(viewModel: ViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 previewArea

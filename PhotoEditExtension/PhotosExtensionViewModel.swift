@@ -462,6 +462,7 @@ final class PhotosExtensionViewModel: PhotosExtensionRendering {
     /// Identifier that changes when config or source changes — drives
     /// `.task(id:)` preview regeneration in the root view.
     var previewIdentifier: String {
+        get {
         var parts: [String] = ["\(sourceURL?.lastPathComponent ?? "nil")"]
         for layer in config.watermarks {
             switch layer {
@@ -475,6 +476,8 @@ final class PhotosExtensionViewModel: PhotosExtensionRendering {
         }
         parts.append("wf:\(config.whiteFrame?.isEnabled == true ? "1" : "0")")
         return parts.joined(separator: "-")
+        }
+        set { /* no-op: computed from sourceURL + config */ }
     }
 
     /// Triggers full-resolution rendering and commit to Photos.

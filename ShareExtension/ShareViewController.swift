@@ -17,7 +17,7 @@ class ShareViewController: UIViewController {
     // MARK: - Properties
 
     private let viewModel = ShareExtensionViewModel()
-    private var hostingController: UIHostingController<ShareExtensionRootView>?
+    private var hostingController: UIHostingController<ShareExtensionRootView<ShareExtensionViewModel>>?
 
     // MARK: - Lifecycle
 

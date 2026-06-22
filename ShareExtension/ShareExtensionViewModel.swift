@@ -128,14 +128,15 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
     var failedItemIndices: [Int] = []
 
     /// Total number of items to process.
-    var totalItemCount: Int { sharedItems.count }
+    var totalItemCount: Int { get { sharedItems.count } set { /* computed from sharedItems */ } }
 
     /// Whether this is a multi-item share (>1 item).
-    var isMultiItem: Bool { sharedItems.count > 1 }
+    var isMultiItem: Bool { get { sharedItems.count > 1 } set { /* computed from sharedItems */ } }
 
     /// Human-readable progress label for multi-item UI.
     var multiItemProgress: String {
-        "Item \(currentItemIndex + 1) of \(totalItemCount)"
+        get { "Item \(currentItemIndex + 1) of \(totalItemCount)" }
+        set { /* computed from currentItemIndex + totalItemCount */ }
     }
 
     // MARK: - Private
@@ -687,6 +688,7 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
     /// Identifier that changes when config or source changes — drives
     /// `.task(id:)` preview regeneration in the root view.
     var previewIdentifier: String {
+        get {
         var parts: [String] = ["\(sourceURL?.lastPathComponent ?? "nil")"]
         for layer in config.watermarks {
             switch layer {
@@ -700,6 +702,8 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
         }
         parts.append("wf:\(config.whiteFrame?.isEnabled == true ? "1" : "0")")
         return parts.joined(separator: "-")
+        }
+        set { /* no-op: computed from sourceURL + config */ }
     }
 
     // MARK: - Private Helpers

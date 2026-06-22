@@ -1,5 +1,4 @@
 import SwiftUI
-import WatermarkCore
 
 /// Root SwiftUI view for the share extension's watermarking UI.
 ///
@@ -11,10 +10,14 @@ import WatermarkCore
 /// Generic over `ViewModel: ShareExtensionRendering` to support both the
 /// production `ShareExtensionViewModel` and test-only `SnapshotTestViewModel`
 /// for XCTest snapshot tests (Phase 18, XTG-01).
-struct ShareExtensionRootView<ViewModel: ShareExtensionRendering>: View {
+public struct ShareExtensionRootView<ViewModel: ShareExtensionRendering & Observable>: View {
     @State var viewModel: ViewModel
 
-    var body: some View {
+    public init(viewModel: ViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 previewArea
@@ -218,12 +221,4 @@ struct ShareExtensionRootView<ViewModel: ShareExtensionRendering>: View {
         .background(Color.orange.opacity(0.15))
     }
 
-}
-
-// MARK: - Array Safe Subscript
-
-extension Array {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
-    }
 }
