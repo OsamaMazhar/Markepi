@@ -184,7 +184,7 @@ struct SignatureRendererTests {
         // Output should be non-nil
         #expect(result != nil, "Engine should produce output for signature config")
         if let result = result {
-            #expect(result.url.path.isEmpty == false, "Output URL should be valid")
+            #expect(result.url?.path.isEmpty == false, "Output URL should be valid")
         }
         #else
         // macOS skip

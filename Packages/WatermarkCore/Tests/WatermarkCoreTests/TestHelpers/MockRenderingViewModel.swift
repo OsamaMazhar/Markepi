@@ -17,6 +17,8 @@ final class MockRenderingViewModel: WatermarkConfigurable {
     var showSaveTemplateAlert: Bool = false
     var showTemplateList: Bool = false
     var hasMultiplePhotos: Bool = false
+    var sourceHasHDR: Bool = false
+    var sourceFormatLabel: String? = nil
 
     // Spy callbacks for verifying protocol method invocations
     var renderAndPrepareShareCallCount = 0
