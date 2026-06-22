@@ -10,33 +10,36 @@ Add a watermark and share it instantly — without ever cluttering the camera ro
 
 ## Current State
 
-**Shipped:** v2.0 (2026-06-19) — 3 phases, 10 plans, 15 requirements all satisfied.
+**Shipped:** v2.1 (2026-06-22) — 4 phases, 11 plans, 6 requirements all satisfied.
 
-**v2.0 delivered:**
+**v2.1 delivered:**
+- Visual Design System — Liquid Glass chrome, MarkepiTypography, MarkepiButtonStyle, MarkepiScrollEdgeProtection, MarkepiPillBar shared across all 3 targets
+- Redesigned ControlsView — Pill-bar-driven 3-section layout with Menu-based pickers, all 6 sub-views restyled on Markepi design
+- Inspector Bottom-Sheet Shell — Full-bleed preview hero with drag-to-resize glass detent sheet and pinned Share action bar
+- Cross-Target Parity — 5 automated snapshot tests verify ControlsView in both extensions; VoiceOver labels + Reduce Motion gating + Dynamic Type sheet scaling + shared EmptyStateView
+
+**v2.1 stats:** 4 phases, 11 plans, 6/6 requirements satisfied. Built on v2.0 foundation (37 files changed, +2,701/-528 lines).
+
+<details>
+<summary>✅ v2.0 Batch, Templates & Process (Phases 12-14) — SHIPPED 2026-06-19</summary>
+
 - Template Management — save, load, manage, and auto-apply watermark templates across all 3 targets (6 requirements)
 - Batch Processing — multi-item watermarking with shared config, per-item adjustments, progress tracking, error resilience (7 requirements)
 - Process Hardening — VERIFICATION.md per-plan population gate + worktree safety pre-check/fallback (2 requirements)
 
-**v2.0 stats:** 3 phases, 10 plans, 15/15 requirements satisfied. Built on v1.0 + v1.1 foundation (13,820+ lines Swift, 82+ files, 233+ tests).
+3 phases, 10 plans, 15/15 requirements satisfied.
+</details>
 
-## Current Milestone: v2.1 UI Redesign
+<details>
+<summary>✅ v1.0 MVP + v1.1 Tech Debt Hardening (Phases 1-11) — SHIPPED 2026-06-18</summary>
 
-**Goal:** Rebuild the watermark editor's presentation layer into a polished, professional iOS 26 experience — without touching the rendering engine, ViewModels, or data model.
+13,820+ lines Swift across 82+ files. 233+ automated tests. 26 plans across 11 phases. Core engine, all 3 entry points, video processing, ProRAW, multi-layer compositing, export controls, signature capture, Siri/Shortcuts integration.
 
-**Target features:**
-- Inspector bottom-sheet layout — photo as full-bleed hero; controls in a resizable detent sheet with a pinned Share action bar
-- Grouped, sectioned controls (inset cards) replacing the flat stack of heavy section titles; clear typographic hierarchy
-- Liquid Glass navigation/control layer — floating glass chrome, scroll-edge effects, adaptive tint on the primary action only
-- Visual 9-position picker replacing the cryptic TL/TC/TR text grid
-- Native components throughout — Menus, segmented controls, refined steppers/sliders; one consistent button language
-- Adaptive light/dark appearance
-- Redesign flows to all 3 targets (App, ShareExtension, PhotoEditExtension) via the shared `ControlsView`
+</details>
 
-**Key context / constraints:**
-- Pure presentation-layer change. `WatermarkConfigurable` protocol, ViewModels, and `WatermarkEngine` are unchanged.
-- Risk concentrated in the shared `ControlsView` (consumed by all 3 targets) — redesign must not break extension reuse.
-- Targets iOS 26+ Liquid Glass APIs with graceful behavior on the existing iOS 18 deployment floor where required.
-- Continues phase numbering at Phase 15.
+## Current Focus
+
+Planning next milestone. See `.planning/ROADMAP.md`.
 
 ## Requirements
 
@@ -86,10 +89,16 @@ Add a watermark and share it instantly — without ever cluttering the camera ro
 - ✓ BATC-01 through BATC-07 — Batch processing with per-item adjustments, progress, error resilience — v2.0
 - ✓ PHRO-01 — Per-phase VERIFICATION.md populated during execution — v2.0
 - ✓ PHRO-02 — Worktree safety pre-check + timestamp fallback — v2.0
+- ✓ XTG-01 — Share Extension renders ControlsView correctly — v2.1
+- ✓ XTG-02 — Photos Edit Extension renders ControlsView correctly — v2.1
+- ✓ UXQ-01 — Dynamic Type scales controls up to 200% — v2.1
+- ✓ UXQ-02 — VoiceOver labels preserved or improved — v2.1
+- ✓ UXQ-03 — Reduce Motion / Reduce Transparency respected — v2.1
+- ✓ UXQ-04 — Empty state redesigned to match visual system — v2.1
 
 ### All Requirements Satisfied
 
-All 15 v2.0 requirements shipped. See `.planning/milestones/v2.0-REQUIREMENTS.md`.
+All 38 requirements across v1.0/v1.1/v2.0/v2.1 shipped. See milestones archive.
 
 ### Out of Scope
 
@@ -103,7 +112,9 @@ All 15 v2.0 requirements shipped. See `.planning/milestones/v2.0-REQUIREMENTS.md
 
 ## Context
 
-Shipped v1.0 MVP + v1.1 tech-debt hardening. 13,820 lines of Swift across 82+ files. Tech stack: Swift 6 / SwiftUI (iOS 18), AVFoundation, Core Image, ImageIO, PencilKit, Photos, AppIntents. Architecture: WatermarkCore Swift Package (shared engine) consumed by 3 targets (Main App, ShareExtension, PhotoEditExtension) via App Group container. 182+ commits across v1.0 (137) + v1.1 (45). 26 plans across 11 phases. 233 automated tests.
+Shipped v1.0 MVP + v1.1 tech-debt hardening + v2.0 batch/templates + v2.1 UI redesign. 16,500+ lines of Swift across 110+ files. Tech stack: Swift 6 / SwiftUI (iOS 18), AVFoundation, Core Image, ImageIO, PencilKit, Photos, AppIntents. Architecture: WatermarkCore Swift Package (shared engine) consumed by 3 targets (Main App, ShareExtension, PhotoEditExtension) via App Group container. 228+ commits. 37 plans across 15 phases.
+
+v2.1 rebuilt the presentation layer: Liquid Glass design system with semantic typography, pill-bar-driven ControlsView, inspector bottom-sheet shell, cross-target snapshot verification, and accessibility polish (VoiceOver, Reduce Motion, Dynamic Type). Zero changes to WatermarkEngine, ViewModels, or data model — pure presentation-layer rework.
 
 v1.1 hardened the dev process: REQUIREMENTS.md traceability now automated with `scripts/sync-requirements.sh` recurrence guard; wave-level `scripts/build-gate.sh` xcodebuild gate replaces untrustworthy self-checks; ViewModel layer-management duplication collapsed from ~186 lines to ~20 via WatermarkConfigurable protocol defaults; Photos extension HDR→JPEG warning now functional via proper sourceHasHDR/sourceFormatLabel population from PHContentEditingInput.
 
@@ -136,6 +147,12 @@ v1.1 hardened the dev process: REQUIREMENTS.md traceability now automated with `
 | Wave-level xcodebuild build gate | Replaces untrustworthy file-existence self-checks; catches build errors at source | ✓ Good — BUILD-01 verified, 3-target gate passes |
 | REQUIREMENTS.md recurrence guard | Keeps checkboxes in sync per plan; exits non-zero on drift | ✓ Good — TRACE-01/02 verified, idempotent |
 | Consolidated AppDelegate + SceneDelegate into WatermarkApp.swift | Avoided pbxproj complexity for new target files | ⚠️ Revisit — works but deviates from conventional separation |
+| Markepi design system as WatermarkCore/DesignSystem/ subpackage | Shared visual primitives consumed by all 3 targets; zero duplication | ✓ Good — all 3 targets render consistently |
+| InspectorSheetView as ZStack-compatible custom sheet | `.inspector` API unavailable at iOS 18 minimum; custom DragGesture-based approach avoids it | ✓ Good — works across all iOS 18+ devices |
+| ControlsView reorganized via MarkepiPillBar sections | 3-section layout (Watermark/Style/Output) replaces flat stack; sub-views unchanged | ✓ Good — cleaner UX, zero ViewModel changes |
+| Snapshot tests for extension root views via UIHostingController | Proves ControlsView renders in extensions without manual QA; committed reference images | ✓ Good — XTG-01/XTG-02 verified |
+| Extension root views moved to WatermarkCore package | Enables @testable import from package tests; generic over rendering protocols | ✓ Good — testability without production code duplication |
+| Reduce Motion gating via accessibilityReduceMotion environment | All animations (pill bar, preview, batch overlay) respect system setting | ✓ Good — UXQ-03 verified |
 
 ## Evolution
 
@@ -155,4 +172,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-21 after v2.1 UI Redesign milestone start*
+*Last updated: 2026-06-22 after v2.1 UI Redesign milestone*

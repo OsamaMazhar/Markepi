@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: UI Redesign
-status: executing
+status: Awaiting next milestone
 stopped_at: Phase 18 context gathered
-last_updated: "2026-06-22T10:28:58.102Z"
-last_activity: 2026-06-22 -- Phase 18 execution started
+last_updated: "2026-06-22T12:23:06.616Z"
+last_activity: 2026-06-22 — Milestone v2.1 completed and archived
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 11
-  completed_plans: 8
-  percent: 73
+  completed_plans: 11
+  percent: 100
 ---
 
 # Project State
@@ -25,13 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 
 ## Current Position
 
-Phase: 18 (cross-target-parity-accessibility-polish) — EXECUTING
-Plan: 1 of 3
-Plans: 3 of 3
-Status: Executing Phase 18
-Last activity: 2026-06-22 -- Phase 18 execution started
-
-Progress: [███░░░░░░░] 1/4 phases
+Phase: Milestone v2.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-22 — Milestone v2.1 completed and archived
 
 ### v2.1 Phase Map
 
@@ -94,3 +91,7 @@ None yet.
 Last session: 2026-06-22T09:37:52.221Z
 Stopped at: Phase 18 context gathered
 Resume file: .planning/phases/18-cross-target-parity-accessibility-polish/18-CONTEXT.md
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

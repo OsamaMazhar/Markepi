@@ -1,5 +1,25 @@
 # Milestones
 
+## v2.1 UI Redesign (Shipped: 2026-06-22)
+
+**Phases completed:** 4 phases, 11 plans, 25 tasks
+
+**Key accomplishments:**
+
+- Foundation design system layer: Liquid Glass modifier with iOS 18 material fallback, semantic typography system with uncapped Dynamic Type, and conditional-modifier utility extension — all public in WatermarkCore/DesignSystem/
+- Three SwiftUI primitives consuming the glass/typography foundation — capsule button style with three semantic roles, 3-section pill bar with matched-geometry sliding indicator, and scroll-edge protection via glass-backed header
+- PreviewCatalog.swift rendering all 6 design system primitives side-by-side in Xcode Previews, with build-gate confirming cross-target compilation across App, ShareExtension, and PhotoEditExtension
+- Rewritten ControlsView with pill-bar-driven 3-section layout, Menu-based position & export format pickers, and MarkepiButtonStyle capsules on all buttons
+- All 6 sub-view files (TextWatermarkInputView, ScaleStepperView, WhiteFrameToggleView, LogoPickerView, SignatureCaptureView, LayerListView) restyled onto the Phase 15 Markepi design system — inset grouped row pattern, semantic typography, and capsule button styles — with zero behavior changes to ViewModel bindings or data flow.
+- Standalone ShareActionButton extracted from ControlsView into WatermarkCore/DesignSystem/, preserving all 6 rendering states and protocol surface, with ControlsView wired as drop-in replacement.
+- Custom ZStack-compatible bottom sheet container with drag-to-resize detent snapping, Liquid Glass surface, and native nested scroll via indicator-only DragGesture
+- ContentView restructured from 60/40 VStack split into ZStack inspector shell with full-bleed preview, glass bottom sheet, batch overlays, and pinned Share action bar. PreviewView updated to true edge-to-edge via `.ignoresSafeArea()`.
+- 5 automated snapshot tests verify both extension root views render correctly with the redesigned ControlsView at 430×932, with committed reference images and 2% pixel tolerance comparison.
+- VoiceOver labels on pill bar segments with .isSelected trait, ControlSection container group labels, and Reduce Motion gating on pill bar matched-geometry animation
+- Shared EmptyStateView component integrated across all 3 targets with Dynamic Type sheet scaling and Reduce Motion gating on preview/batch animations, replacing old pill-button and extension idle states.
+
+---
+
 ## v1.1 Tech Debt Hardening (Shipped: 2026-06-19)
 
 **Phases completed:** 4 phases, 6 plans, 15 tasks
