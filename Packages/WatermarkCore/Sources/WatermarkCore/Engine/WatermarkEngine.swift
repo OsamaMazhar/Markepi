@@ -98,18 +98,18 @@ public actor WatermarkEngine {
         )
 
         // 4. Render via shared CIContext → CGImage.
-        // Guard against a monochrome source profile crushing color to grey:
-        // if the source color space is missing or monochrome, render into an
-        // RGB (displayP3) space instead. (A genuinely grayscale source still
-        // renders grey because its pixels are grey, not its profile.)
-        let outputColorSpace: CGColorSpace? = {
-            if let cs = loaded.colorSpace, cs.model != .monochrome {
+        // Only honor the source color space when it is RGB; for missing,
+        // unknown, or monochrome profiles render into the guaranteed-valid RGB
+        // working space (CGColorSpace(name: .displayP3) can fail on Simulator,
+        // which left the output space nil and desaturated untagged images).
+        let outputColorSpace: CGColorSpace = {
+            if let cs = loaded.colorSpace, cs.model == .rgb {
                 return cs
             }
-            return CGColorSpace(name: CGColorSpace.displayP3)
+            return CIContextProvider.workingColorSpace
         }()
         engineLog.debug(
-            "render: uti=\(loaded.sourceUTI, privacy: .public) size=\(Int(composited.extent.width))x\(Int(composited.extent.height)) srcCSModel=\(loaded.colorSpace?.model.rawValue ?? -1) outCSModel=\(outputColorSpace?.model.rawValue ?? -1) whiteFrame=\(config.whiteFrame?.isEnabled == true)"
+            "render: uti=\(loaded.sourceUTI, privacy: .public) size=\(Int(composited.extent.width))x\(Int(composited.extent.height)) srcCSModel=\(loaded.colorSpace?.model.rawValue ?? -99) inCIImageCSModel=\(composited.colorSpace?.model.rawValue ?? -99) outCSModel=\(outputColorSpace.model.rawValue) whiteFrame=\(config.whiteFrame?.isEnabled == true)"
         )
         guard let cgImage = context.createCGImage(
             composited,
