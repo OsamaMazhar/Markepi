@@ -2,7 +2,10 @@ import AVFoundation
 import CoreImage
 import Foundation
 import ImageIO
+import os.log
 import UniformTypeIdentifiers
+
+private let engineLog = Logger(subsystem: "com.watermark.core", category: "Engine")
 
 /// Actor-isolated photo watermarking engine (Pattern 3).
 ///
@@ -94,12 +97,25 @@ public actor WatermarkEngine {
             metadata: graphMetadata
         )
 
-        // 4. Render via shared CIContext → CGImage
+        // 4. Render via shared CIContext → CGImage.
+        // Guard against a monochrome source profile crushing color to grey:
+        // if the source color space is missing or monochrome, render into an
+        // RGB (displayP3) space instead. (A genuinely grayscale source still
+        // renders grey because its pixels are grey, not its profile.)
+        let outputColorSpace: CGColorSpace? = {
+            if let cs = loaded.colorSpace, cs.model != .monochrome {
+                return cs
+            }
+            return CGColorSpace(name: CGColorSpace.displayP3)
+        }()
+        engineLog.debug(
+            "render: uti=\(loaded.sourceUTI, privacy: .public) size=\(Int(composited.extent.width))x\(Int(composited.extent.height)) srcCSModel=\(loaded.colorSpace?.model.rawValue ?? -1) outCSModel=\(outputColorSpace?.model.rawValue ?? -1) whiteFrame=\(config.whiteFrame?.isEnabled == true)"
+        )
         guard let cgImage = context.createCGImage(
             composited,
             from: composited.extent,
             format: .RGBAh,
-            colorSpace: loaded.colorSpace
+            colorSpace: outputColorSpace
         ) else {
             throw PipelineError.renderFailed
         }

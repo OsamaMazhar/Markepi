@@ -1,11 +1,14 @@
 import CoreImage
 import Foundation
+import os.log
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
 import AppKit
 import CoreText
 #endif
+
+private let frameLog = Logger(subsystem: "com.watermark.core", category: "WhiteFrame")
 
 /// Renders a white frame border with device metadata text as a CIImage
 /// via UIGraphicsImageRenderer (iOS) / Core Graphics (macOS testing) →
@@ -108,11 +111,43 @@ public struct WhiteFrameRenderer {
             )
         }
 
-        guard let ciImage = CIImage(image: uiImage) else {
+        // The frame's content is achromatic (white border + gray caption), so
+        // UIGraphicsImageRenderer often encodes it in a MONOCHROME color space.
+        // Compositing a gray CIImage over the color photo via sourceOver makes
+        // the whole result inherit that gray space — desaturating the photo.
+        // Redraw into an explicit sRGB RGBA bitmap so the frame is always RGB.
+        let sourceModel = uiImage.cgImage?.colorSpace?.model.rawValue ?? -1
+        guard let ciImage = ciImageInRGB(from: uiImage) else {
             throw PipelineError.frameRenderFailed
         }
+        frameLog.debug("frame rendered: srcColorSpaceModel=\(sourceModel) (2=RGB,1=mono) coerced→sRGB")
 
         return ciImage
+    }
+
+    /// Redraws a UIImage into an sRGB RGBA bitmap and returns it as a CIImage,
+    /// guaranteeing an RGB color space (preserving alpha) so frame compositing
+    /// never desaturates the underlying photo.
+    private static func ciImageInRGB(from uiImage: UIImage) -> CIImage? {
+        guard let cg = uiImage.cgImage else { return CIImage(image: uiImage) }
+        let width = cg.width
+        let height = cg.height
+        guard width > 0, height > 0,
+              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else {
+            return CIImage(image: uiImage)
+        }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let rgbCG = ctx.makeImage() else { return CIImage(image: uiImage) }
+        return CIImage(cgImage: rgbCG)
     }
     #endif
 
