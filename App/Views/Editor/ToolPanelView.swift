@@ -39,6 +39,22 @@ struct ToolPanelView: View {
                 .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
         }
         .shadow(color: .black.opacity(0.18), radius: 20, y: 8)
+        .task(id: tool) { syncActiveLayer() }
+    }
+
+    /// Points `activeLayerIndex` at the layer this tool edits, so the shared
+    /// position/scale controls act on the right layer when a tool is opened.
+    private func syncActiveLayer() {
+        let matches: (WatermarkLayer) -> Bool
+        switch tool {
+        case .text:      matches = { if case .text = $0 { return true }; return false }
+        case .signature: matches = { if case .signature = $0 { return true }; return false }
+        case .logo:      matches = { if case .image = $0 { return true }; return false }
+        default: return
+        }
+        if let idx = viewModel.config.watermarks.firstIndex(where: matches) {
+            viewModel.activeLayerIndex = idx
+        }
     }
 
     // MARK: - Header

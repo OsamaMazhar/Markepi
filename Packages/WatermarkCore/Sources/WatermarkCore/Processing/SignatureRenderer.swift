@@ -55,25 +55,23 @@ public struct SignatureRenderer {
         guard let cgImage = rasterImage.cgImage else {
             throw PipelineError.renderFailed
         }
-        let ciImage = CIImage(cgImage: cgImage)
+        let signature = CIImage(cgImage: cgImage)
 
-        // Apply ink color via color matrix — multiply RGB channels by
-        // inkColor components while preserving alpha from the drawing.
-        let components = input.inkColor.components ?? [0, 0, 0, 1]
-        let r = CGFloat(components.count > 0 ? components[0] : 0)
-        let g = CGFloat(components.count > 1 ? components[1] : 0)
-        let b = CGFloat(components.count > 2 ? components[2] : 0)
+        // Apply ink color by masking a SOLID ink-color image with the
+        // signature's alpha. The previous approach multiplied the rasterized
+        // RGB by the ink color, but PencilKit rasterizes strokes near-black, and
+        // black × anyColor == black — so the ink color had no visible effect
+        // (changing the color did nothing). Masking a solid color by the stroke
+        // alpha yields exactly the chosen color while preserving anti-aliased
+        // edges and per-point opacity.
+        let inkCIColor = CIColor(cgColor: input.inkColor)
+        let solidInk = CIImage(color: inkCIColor).cropped(to: signature.extent)
 
-        let colorMatrix = CIFilter.colorMatrix()
-        colorMatrix.inputImage = ciImage
-        // Multiply RGB channels by ink color, pass through alpha
-        colorMatrix.rVector = CIVector(x: r, y: 0, z: 0, w: 0)
-        colorMatrix.gVector = CIVector(x: 0, y: g, z: 0, w: 0)
-        colorMatrix.bVector = CIVector(x: 0, y: 0, z: b, w: 0)
-        colorMatrix.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
-        colorMatrix.biasVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        let masked = CIFilter.sourceInCompositing()
+        masked.inputImage = solidInk        // foreground: solid ink color
+        masked.backgroundImage = signature  // shape/alpha: the drawn signature
 
-        return colorMatrix.outputImage ?? ciImage
+        return masked.outputImage ?? signature
 
         #else
         // Non-iOS platforms: return an empty 1x1 CIImage

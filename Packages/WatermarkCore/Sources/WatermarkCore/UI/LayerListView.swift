@@ -128,23 +128,70 @@ public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View
             }
             .buttonStyle(.plain)
 
-            // Per-layer opacity for the active layer — a parametric control
-            // available on every layer type.
+            // Universal parametric controls for the active layer — position,
+            // size, and opacity — available on every layer type (text, logo,
+            // signature). This is where layers are placed in different spots.
             if isActive {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Position (9-preset grid)
                     HStack {
-                        Text("Opacity")
+                        Text("Position")
                             .markepiTypography(.controlLabel)
                         Spacer()
-                        Text("\(Int((opacityBinding(index).wrappedValue * 100).rounded()))%")
-                            .markepiTypography(.value)
-                            .monospacedDigit()
+                        Menu {
+                            ForEach(WatermarkPosition.allCases, id: \.rawValue) { position in
+                                Button {
+                                    viewModel.updateLayerPosition(at: index, position: position)
+                                } label: {
+                                    if layer.position == position {
+                                        Label(position.displayName, systemImage: "checkmark")
+                                    } else {
+                                        Text(position.displayName)
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(layer.position.displayName)
+                                    .markepiTypography(.value)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .accessibilityLabel("Layer position, currently \(layer.position.displayName)")
                     }
-                    Slider(value: opacityBinding(index), in: 0...1)
-                        .accessibilityLabel("Layer opacity")
+
+                    // Size
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Size")
+                                .markepiTypography(.controlLabel)
+                            Spacer()
+                            Text("\(Int((scaleBinding(index).wrappedValue * 100).rounded()))%")
+                                .markepiTypography(.value)
+                                .monospacedDigit()
+                        }
+                        Slider(value: scaleBinding(index), in: 0.02...0.90)
+                            .accessibilityLabel("Layer size")
+                    }
+
+                    // Opacity
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Opacity")
+                                .markepiTypography(.controlLabel)
+                            Spacer()
+                            Text("\(Int((opacityBinding(index).wrappedValue * 100).rounded()))%")
+                                .markepiTypography(.value)
+                                .monospacedDigit()
+                        }
+                        Slider(value: opacityBinding(index), in: 0...1)
+                            .accessibilityLabel("Layer opacity")
+                    }
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 12)
+                .padding(.vertical, 12)
                 .background(Color.accentColor.opacity(0.08))
             }
         }
@@ -157,6 +204,16 @@ public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View
                 return Double(viewModel.config.watermarks[index].opacity)
             },
             set: { viewModel.setLayerOpacity(at: index, opacity: CGFloat($0)) }
+        )
+    }
+
+    private func scaleBinding(_ index: Int) -> Binding<Double> {
+        Binding(
+            get: {
+                guard viewModel.config.watermarks.indices.contains(index) else { return 0.15 }
+                return Double(viewModel.config.watermarks[index].scale)
+            },
+            set: { viewModel.updateLayerScale(at: index, scale: CGFloat($0)) }
         )
     }
 
