@@ -28,7 +28,7 @@ public struct ScaleStepperView<ViewModel: WatermarkConfigurable & Observable>: V
                 "",
                 value: scaleBinding,
                 in: 0.01...0.90,
-                step: 0.05
+                step: 0.01
             )
             .labelsHidden()
             .frame(width: 100)
