@@ -19,6 +19,15 @@ struct ContentView: View {
     @State private var showResetOverridesConfirmation: Bool = false
     @State private var showBatchResultAlert: Bool = false
 
+    // Phase 17: Inspector bottom-sheet shell state
+    @State private var detent: SheetDetent = .peek
+    @State private var sheetDragOffset: CGFloat = 0
+
+    // Peek detent height — pill bar intrinsic + drag indicator
+    private let peekDetentHeight: CGFloat = 60
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
@@ -64,18 +73,27 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Main Layout
+    // MARK: - Main Layout (Phase 17: ZStack inspector shell)
 
     private func mainLayout(_ geometry: GeometryProxy) -> some View {
-        VStack(spacing: 0) {
+        let expandedHeight = geometry.size.height * 0.55
+
+        return ZStack(alignment: .bottom) {
+            // z=0: Full-bleed preview (LYT-01)
             previewArea
-                .frame(height: geometry.size.height * 0.60)
+                .ignoresSafeArea()
 
-            Color(.separator)
-                .frame(height: 1)
+            // z=1: Batch overlays (D-17)
+            batchOverlays
+                .zIndex(1)
 
-            controlsArea
-                .frame(height: geometry.size.height * 0.40)
+            // z=2: Glass bottom sheet (LYT-02)
+            inspectorSheet(expandedHeight: expandedHeight)
+                .zIndex(2)
+
+            // z=3: Pinned Share action bar (LYT-03)
+            pinnedShareBar
+                .zIndex(3)
         }
         .task(id: viewModel.previewIdentifier) {
             guard viewModel.currentPhoto != nil else { return }
@@ -122,38 +140,13 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Preview Area
+    // MARK: - Preview Area (z=0)
 
     private var previewArea: some View {
         ZStack(alignment: .bottom) {
             PreviewView(viewModel: viewModel)
 
-            if viewModel.hasMultiplePhotos {
-                ThumbnailStripView(
-                    photos: viewModel.photos,
-                    currentIndex: $viewModel.currentIndex,
-                    perItemOverrides: viewModel.perItemOverrides,
-                    onItemTapped: { index in
-                        selectedItemForOverride = IdentifiableIndex(value: index)
-                    },
-                    onReorder: { reordered in
-                        viewModel.photos = reordered
-                    }
-                )
-            }
-
-            if case .batchProcessing(let current, let total, let eta) = viewModel.renderingState {
-                BatchProgressOverlay(
-                    current: current,
-                    total: total,
-                    eta: eta,
-                    onCancel: {
-                        showBatchCancelConfirmation = true
-                    }
-                )
-                .transition(.opacity)
-            }
-
+            // Plus button (top-right, existing)
             if viewModel.currentPhoto != nil {
                 Button {
                     viewModel.showPicker = true
@@ -170,10 +163,69 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.2), value: viewModel.renderingState)
     }
 
-    // MARK: - Controls Area
+    // MARK: - Batch Overlays (z=1, D-17)
 
-    private var controlsArea: some View {
-        ControlsView(viewModel: viewModel)
+    @ViewBuilder
+    private var batchOverlays: some View {
+        if viewModel.hasMultiplePhotos {
+            ThumbnailStripView(
+                photos: viewModel.photos,
+                currentIndex: $viewModel.currentIndex,
+                perItemOverrides: viewModel.perItemOverrides,
+                onItemTapped: { index in
+                    selectedItemForOverride = IdentifiableIndex(value: index)
+                },
+                onReorder: { reordered in
+                    viewModel.photos = reordered
+                }
+            )
+            .padding(.bottom, peekDetentHeight + 8)
+        }
+
+        if case .batchProcessing(let current, let total, let eta) = viewModel.renderingState {
+            BatchProgressOverlay(
+                current: current,
+                total: total,
+                eta: eta,
+                onCancel: {
+                    showBatchCancelConfirmation = true
+                }
+            )
+            .transition(.opacity)
+        }
+    }
+
+    // MARK: - Inspector Sheet (z=2, LYT-02)
+
+    private func inspectorSheet(expandedHeight: CGFloat) -> some View {
+        InspectorSheetView(
+            detent: $detent,
+            peekHeight: peekDetentHeight,
+            expandedHeight: expandedHeight,
+            viewModel: viewModel
+        )
+    }
+
+    // MARK: - Pinned Share Bar (z=3, LYT-03)
+
+    private var pinnedShareBar: some View {
+        VStack {
+            Spacer()
+            ShareActionButton(viewModel: viewModel)
+                .padding(.horizontal, 40)
+                .padding(.bottom, peekDetentHeight + 16)
+        }
+        .background(alignment: .bottom) {
+            Capsule()
+                .fill(.clear)
+                .markepiGlass(
+                    shape: Capsule(),
+                    isEnabled: !reduceTransparency
+                )
+                .frame(height: 52)
+                .padding(.horizontal, 24)
+                .padding(.bottom, peekDetentHeight + 8)
+        }
     }
 }
 
