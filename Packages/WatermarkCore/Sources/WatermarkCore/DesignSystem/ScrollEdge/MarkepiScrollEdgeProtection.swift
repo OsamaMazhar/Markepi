@@ -65,7 +65,7 @@ public struct MarkepiScrollEdgeProtection<Header: View>: ViewModifier {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .modify { view in
-                    if #available(iOS 26, *), !reduceTransparency {
+                    if #available(iOS 26, macOS 26, *), !reduceTransparency {
                         view.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
                     } else {
                         // D-17: material itself provides the obscuring effect —
