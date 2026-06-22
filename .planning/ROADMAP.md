@@ -58,7 +58,11 @@ Plans:
   2. Controls live in a resizable bottom sheet with a peek detent and an expanded detent that the user can drag between
   3. The primary action (Share / Watermark All) stays reachable at all times via a pinned action bar regardless of sheet detent
   4. The entire shell renders correctly in both system light and dark appearance
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
+Plans:
+- [ ] 17-01-PLAN.md — ShareActionButton extraction from ControlsView into standalone DesignSystem component (LYT-03)
+- [ ] 17-02-PLAN.md — InspectorSheetView custom bottom sheet container with detents + drag gesture (LYT-02)
+- [ ] 17-03-PLAN.md — ContentView restructure to ZStack inspector shell + PreviewView full-bleed (LYT-01, LYT-04)
 **UI hint**: yes
 
 ### Phase 18: Cross-Target Parity & Accessibility Polish
@@ -79,7 +83,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 15. Visual Design System & Shared Primitives | 0/3 | Not started | - |
 | 16. Redesigned Controls | 2/2 | Complete   | 2026-06-21 |
-| 17. Inspector Bottom-Sheet Shell | 0/TBD | Not started | - |
+| 17. Inspector Bottom-Sheet Shell | 0/3 | Not started | - |
 | 18. Cross-Target Parity & Accessibility Polish | 0/TBD | Not started | - |
 
 ---
