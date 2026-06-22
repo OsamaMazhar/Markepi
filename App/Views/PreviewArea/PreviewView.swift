@@ -91,7 +91,7 @@ struct PreviewView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .edgesIgnoringSafeArea(.top)
+        .ignoresSafeArea()
     }
 
     private var magnifyGesture: some Gesture {
