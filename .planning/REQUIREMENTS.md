@@ -14,10 +14,10 @@ Requirements for the UI Redesign milestone. Each maps to exactly one roadmap pha
 
 ### Layout & Shell (LYT)
 
-- [ ] **LYT-01**: The photo/video preview fills the screen as a full-bleed hero behind the controls
+- [x] **LYT-01**: The photo/video preview fills the screen as a full-bleed hero behind the controls
 - [x] **LYT-02**: Controls live in a resizable bottom sheet with detents (a peek state and an expanded state)
 - [x] **LYT-03**: The primary action (Share / Watermark All) is always reachable via a pinned action bar
-- [ ] **LYT-04**: The UI renders correctly in both system light and dark appearance
+- [x] **LYT-04**: The UI renders correctly in both system light and dark appearance
 
 ### Visual System (VIS)
 
@@ -89,10 +89,10 @@ Which phases cover which requirements.
 | CTL-06 | Phase 16 | Complete |
 | CTL-07 | Phase 16 | Complete |
 | CTL-08 | Phase 16 | Complete |
-| LYT-01 | Phase 17 | Pending |
+| LYT-01 | Phase 17 | Complete |
 | LYT-02 | Phase 17 | Complete |
 | LYT-03 | Phase 17 | Complete |
-| LYT-04 | Phase 17 | Pending |
+| LYT-04 | Phase 17 | Complete |
 | XTG-01 | Phase 18 | Pending |
 | XTG-02 | Phase 18 | Pending |
 | UXQ-01 | Phase 18 | Pending |
