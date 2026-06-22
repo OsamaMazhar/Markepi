@@ -149,7 +149,7 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                 saveTemplateButton
             }
 
-            shareButton
+            ShareActionButton(viewModel: viewModel)
                 .padding(.horizontal, 16)
         }
         .padding(.top, 16)
@@ -232,129 +232,6 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-    }
-
-    // MARK: - Share Button State Machine
-
-    private var shareButton: some View {
-        Group {
-            switch viewModel.renderingState {
-            case .idle:
-                Button {
-                    Task { await viewModel.renderAndPrepareShare() }
-                } label: {
-                    Label(
-                        isBatchMode ? "Watermark All" : "Share",
-                        systemImage: isBatchMode ? "square.and.arrow.up.on.square.fill" : "square.and.arrow.up"
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.markepiPrimary())
-
-            case .rendering:
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.regular)
-                    Text("Rendering...")
-                        .markepiTypography(.controlLabel)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .markepiGlass(shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
-                              isEnabled: !reduceTransparency)
-                .disabled(true)
-                .transition(.opacity.combined(with: .scale))
-
-            case .renderingVideo(let progress, let eta):
-                VStack(spacing: 8) {
-                    HStack(spacing: 12) {
-                        ProgressView(value: progress, total: 1.0)
-                            .progressViewStyle(.linear)
-                            .tint(.blue)
-                        Text("\(Int(progress * 100))%")
-                            .font(.caption.weight(.medium))
-                            .monospacedDigit()
-                            .frame(width: 36, alignment: .trailing)
-                    }
-                    if let eta = eta {
-                        Text("~\(Int(eta))s remaining")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("--")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    Button {
-                        viewModel.cancelProcessing()
-                    } label: {
-                        Text("Cancel")
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 36)
-                    }
-                    .buttonStyle(.markepiSecondary())
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-
-            case .batchProcessing(let current, let total, let eta):
-                VStack(spacing: 8) {
-                    HStack(spacing: 12) {
-                        ProgressView(value: total > 0 ? Double(current) / Double(total) : 0, total: 1.0)
-                            .progressViewStyle(.linear)
-                            .tint(.blue)
-                        Text("\(current)/\(total)")
-                            .font(.caption.weight(.medium))
-                            .monospacedDigit()
-                            .frame(width: 56, alignment: .trailing)
-                    }
-                    if let eta = eta, eta > 0 {
-                        Text("ETA: \(Int(eta / 60)) min")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("--")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    Button {
-                        viewModel.cancelProcessing()
-                    } label: {
-                        Text("Stop Processing")
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 36)
-                    }
-                    .buttonStyle(.markepiSecondary())
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-
-            case .done:
-                Button {
-                    if !reduceMotion {
-                        withAnimation(.easeOut(duration: 0.3)) {}
-                    }
-                    viewModel.presentShareSheet()
-                } label: {
-                    Label(
-                        isBatchMode ? "Ready to Share All" : "Ready to Share",
-                        systemImage: "checkmark.circle.fill"
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.markepiPrimary())
-
-            case .error:
-                Button {
-                    Task { await viewModel.renderAndPrepareShare() }
-                } label: {
-                    Label("Retry", systemImage: "arrow.clockwise")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.markepiSecondary())
-            }
-        }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.renderingState)
     }
 
     // MARK: - Save-as-Template Button
