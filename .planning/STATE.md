@@ -4,8 +4,8 @@ milestone: v2.1
 milestone_name: UI Redesign
 status: Awaiting next milestone
 stopped_at: Phase 18 context gathered
-last_updated: "2026-06-22T12:23:06.616Z"
-last_activity: 2026-06-22 — Milestone v2.1 completed and archived
+last_updated: "2026-06-24T19:01:35Z"
+last_activity: 2026-06-24 — Completed quick task 260624-t4x: Save the Photo Edit Extension removal audit findings in a Markdown file
 progress:
   total_phases: 4
   completed_phases: 4
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 Phase: Milestone v2.1 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-06-22 — Milestone v2.1 completed and archived
+Last activity: 2026-06-24 — Completed quick task 260624-t4x: Save the Photo Edit Extension removal audit findings in a Markdown file
 
 ### v2.1 Phase Map
 
@@ -74,6 +74,12 @@ None yet.
 
 - **Phase 15**: Liquid Glass APIs are iOS 26+. The iOS 18 deployment floor requires graceful fallback (`if #available` paths) so chrome never renders broken/blank on older OS. Establish the fallback strategy in the design-system primitives before downstream phases depend on them.
 - **Phase 16/18**: The redesigned `ControlsView` lives in WatermarkCore and is consumed by all 3 targets. Any layout assumption that only holds in the main app's bottom-sheet shell can break the extension hosts (ShareExtensionRootView, PhotosExtensionRootView). Keep ControlsView shell-agnostic.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260624-t4x | Save the Photo Edit Extension removal audit findings in a Markdown file | 2026-06-24 | 4f0b038 | [260624-t4x-save-the-photo-edit-extension-removal-au](./quick/260624-t4x-save-the-photo-edit-extension-removal-au/) |
 
 ## Deferred Items
 
