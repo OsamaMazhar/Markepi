@@ -20,18 +20,32 @@ public protocol C2PAProvenanceClient: Sendable {
     /// Build + sign a Markepi manifest and attach it to `outputURL` in place.
     /// `source` becomes an ingredient so existing provenance is preserved (D-04).
     ///
+    /// After signing, the manifest is read back and validated so the receipt
+    /// can report whether the signature is intact, whether the cert is trusted,
+    /// and any other validation issues found by the C2PA verifier.
+    ///
     /// - Parameters:
     ///   - outputURL: The already-rendered output file to attach the manifest to.
     ///   - source: Original source file (added as an ingredient — D-04/AUTH-04).
     ///   - manifest: Everything Markepi asserts, honestly (D-06, AUTH-02).
     ///   - identity: Local device signing identity (never a verified legal identity).
-    /// - Returns: Signing status for the export receipt.
+    /// - Returns: Signing status for the export receipt, including post-sign verification.
     func signExport(
         outputURL: URL,
         source: URL,
         manifest: C2PAManifestRequest,
         identity: C2PASigningIdentity
     ) async throws -> C2PASigningResult
+
+    /// Read back and verify the C2PA manifest on an exported file.
+    ///
+    /// When called after signing, this re-reads the manifest and parses
+    /// `validation_status` entries to determine whether the signature is
+    /// intact and what validation issues exist.
+    ///
+    /// - Parameter url: The signed export file URL.
+    /// - Returns: Structured verification result, or nil if no manifest is found.
+    func verifyExport(at url: URL) async -> C2PAVerificationResult?
 }
 
 /// Everything Markepi asserts, honestly (D-06, AUTH-02). User declaration is
@@ -94,6 +108,10 @@ public struct C2PAManifestRequest: Sendable {
 /// `status` is the honest outcome: `.signed` only when a manifest was actually
 /// attached, `.notSigned` when signing is disabled (noop), `.notSupported`
 /// when the format/path cannot carry C2PA (e.g. some video containers).
+///
+/// After signing, `verification` is populated by reading the manifest back and
+/// parsing its `validation_status` entries so the receipt can report whether the
+/// signature is intact and what validation issues exist.
 public struct C2PASigningResult: Sendable, Codable, Equatable {
     public enum Status: String, Sendable, Codable {
         case signed
@@ -107,17 +125,46 @@ public struct C2PASigningResult: Sendable, Codable, Equatable {
     public let displayName: String
     /// Honest warnings (e.g. "C2PA signing is disabled in this build").
     public let warnings: [String]
+    /// Post-sign verification — read back from the manifest after signing.
+    /// nil when signing did not occur or read-back failed.
+    public var verification: C2PAVerificationResult?
 
     public init(
         status: Status,
         identityType: C2PASigningIdentity.IdentityType,
         displayName: String,
-        warnings: [String] = []
+        warnings: [String] = [],
+        verification: C2PAVerificationResult? = nil
     ) {
         self.status = status
         self.identityType = identityType
         self.displayName = displayName
         self.warnings = warnings
+        self.verification = verification
+    }
+}
+
+/// One validation status entry from the C2PA manifest, parsed from the
+/// `validation_status` array returned by `C2PA.readFile(at:)`.
+public struct C2PAVerificationItem: Sendable, Codable, Equatable, Identifiable {
+    public var id: String { code }
+    public let code: String
+    public let explanation: String
+}
+
+/// Overall verification result read back from a signed manifest.
+public struct C2PAVerificationResult: Sendable, Codable, Equatable {
+    public let signatureIsIntact: Bool
+    public let items: [C2PAVerificationItem]
+
+    public var allPassed: Bool {
+        items.isEmpty || items.allSatisfy { $0.code == "signingCredential.untrusted" }
+    }
+    public var hasWarnings: Bool { !items.isEmpty }
+
+    public init(signatureIsIntact: Bool, items: [C2PAVerificationItem]) {
+        self.signatureIsIntact = signatureIsIntact
+        self.items = items
     }
 }
 
@@ -148,6 +195,10 @@ public struct NoopC2PAProvenanceClient: C2PAProvenanceClient {
             displayName: identity.displayName,
             warnings: ["C2PA signing is disabled in this build."]
         )
+    }
+
+    public func verifyExport(at url: URL) async -> C2PAVerificationResult? {
+        nil
     }
 }
 
@@ -234,12 +285,25 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
             signer: signer
         )
 
+        // Read back the manifest and verify signature integrity.
+        let verification = await verifyExport(at: outputURL)
+
         return C2PASigningResult(
             status: .signed,
             identityType: identity.type,
             displayName: identity.displayName,
-            warnings: []
+            warnings: [],
+            verification: verification
         )
+    }
+
+    public func verifyExport(at url: URL) async -> C2PAVerificationResult? {
+        do {
+            let json = try C2PA.readFile(at: url)
+            return parseVerification(from: json)
+        } catch {
+            return nil
+        }
     }
 
     // MARK: - Private
@@ -306,6 +370,43 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
 
         let data = (try? JSONSerialization.data(withJSONObject: manifest, options: [])) ?? Data()
         return String(data: data, encoding: .utf8) ?? "{}"
+    }
+
+    private func parseVerification(from json: String) -> C2PAVerificationResult? {
+        guard let data = json.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+
+        let statusItems = root["validation_status"] as? [[String: Any]] ?? []
+        var items: [C2PAVerificationItem] = []
+
+        // Look for signature-related validation codes.
+        var signatureIsIntact = false
+        let sigCodes = [
+            "claimSignature.validated",
+            "claimSignature.insideValidity"
+        ]
+
+        for item in statusItems {
+            let code = item["code"] as? String ?? ""
+            let explanation = item["explanation"] as? String ?? ""
+            if !code.isEmpty {
+                items.append(C2PAVerificationItem(code: code, explanation: explanation))
+            }
+            if sigCodes.contains(code) { signatureIsIntact = true }
+        }
+
+        // Also check validation_results.activeManifest.success for sig validation.
+        if let results = root["validation_results"] as? [String: Any],
+           let active = results["activeManifest"] as? [String: Any],
+           let successes = active["success"] as? [[String: Any]] {
+            for s in successes {
+                let code = s["code"] as? String ?? ""
+                if sigCodes.contains(code) { signatureIsIntact = true }
+            }
+        }
+
+        return C2PAVerificationResult(signatureIsIntact: signatureIsIntact, items: items)
     }
 
     private func parseManifestSummary(_ json: String) -> SourceProvenanceAnalyzer.C2PASummary? {

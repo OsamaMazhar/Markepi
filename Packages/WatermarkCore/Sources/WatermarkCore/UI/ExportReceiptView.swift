@@ -25,6 +25,32 @@ public struct ExportReceiptView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             }
+
+            if let verification = receipt.signingResult?.verification, verification.hasWarnings {
+                Section("Verification") {
+                    HStack(spacing: 8) {
+                        Image(systemName: verification.signatureIsIntact
+                              ? "checkmark.seal.fill" : "exclamationmark.seal.fill")
+                            .foregroundStyle(verification.signatureIsIntact ? .green : .orange)
+                        Text(verification.signatureIsIntact
+                             ? "Signature is intact. Tamper detection is active."
+                             : "Signature could not be verified.")
+                    }
+                    ForEach(verification.items) { item in
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Image(systemName: item.code.contains("untrusted")
+                                  ? "info.circle" : "exclamationmark.triangle")
+                                .foregroundStyle(.secondary)
+                                .font(.footnote)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.code).font(.caption).monospaced().foregroundStyle(.secondary)
+                                Text(item.explanation).font(.footnote)
+                            }
+                        }
+                    }
+                }
+            }
+
             if !(receipt.signingResult?.warnings.isEmpty ?? true) {
                 Section("Notes") {
                     ForEach(receipt.signingResult?.warnings ?? [], id: \.self) { Text($0) }
