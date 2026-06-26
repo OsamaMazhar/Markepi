@@ -158,6 +158,8 @@ public struct EXIFTokenParser {
         case "public.png": return "PNG"
         case "public.tiff": return "TIFF"
         case "com.adobe.raw-image", "com.adobe.dng": return "DNG"
+        case "com.apple.quicktime-movie": return "MOV"
+        case "public.mpeg-4": return "MP4"
         default:
             // Best-effort: last path component of the UTI, uppercased.
             return uti.split(separator: ".").last.map { $0.uppercased() }

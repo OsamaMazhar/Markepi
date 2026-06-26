@@ -28,7 +28,16 @@ struct ExportToolbarButton: View {
 
         case .done:
             Button {
-                viewModel.presentShareSheet()
+                // Render is complete (button stays green). Re-open the export
+                // receipt so the user always confirms from there, rather than
+                // jumping straight into the share sheet. Only fall back to the
+                // share sheet when there's no receipt to show (e.g. formats that
+                // don't produce a provenance receipt).
+                if viewModel.lastExportReceipt != nil {
+                    viewModel.showExportReceipt = true
+                } else {
+                    viewModel.presentShareSheet()
+                }
             } label: {
                 Label(viewModel.hasMultiplePhotos ? "Share All" : "Share",
                       systemImage: "checkmark.circle.fill")
@@ -78,7 +87,11 @@ struct RenderProgressBanner: View {
                             .frame(width: 40, alignment: .trailing)
                     }
                     HStack {
-                        Text(eta.map { "About \(Int($0))s remaining" } ?? "Exporting video…")
+                        // Near 100% the export is finalizing/writing the file —
+                        // say so instead of a static "100%" that looks hung.
+                        Text(progress >= 0.99
+                             ? "Finalizing…"
+                             : (eta.map { "About \(Int($0))s remaining" } ?? "Exporting video…"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()

@@ -37,7 +37,7 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
                 VStack(alignment: .leading, spacing: 2) {
                     Text("White Frame")
                         .markepiTypography(.controlLabel)
-                    Text("Adds a white border with device name")
+                    Text("Adds a white border with an optional caption")
                         .markepiTypography(.metadata)
                 }
             }
@@ -53,6 +53,10 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
                 captionToggleRow
 
                 if viewModel.config.whiteFrame?.metadataTextEnabled == true {
+                    Divider().padding(.leading, 16)
+                    captionPrefixRow
+                    Divider().padding(.leading, 16)
+                    captionFieldsRow
                     Divider().padding(.leading, 16)
                     captionSizeRow
                     Divider().padding(.leading, 16)
@@ -87,12 +91,74 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
             VStack(alignment: .leading, spacing: 2) {
                 Text("Caption Text")
                     .markepiTypography(.controlLabel)
-                Text("Show the device name on the bottom border")
+                Text("Show a caption on the bottom border")
                     .markepiTypography(.metadata)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    /// Free-text prefix shown before the metadata fields (e.g. "Shot on").
+    private var captionPrefixRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Prefix")
+                .markepiTypography(.controlLabel)
+            TextField("e.g. Shot on", text: captionPrefixBinding)
+                .textFieldStyle(.roundedBorder)
+                .submitLabel(.done)
+                .accessibilityLabel("Caption prefix text")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    /// A two-column grid of checkboxes, one per metadata field, letting the user
+    /// pick exactly which details appear in the caption.
+    private var captionFieldsRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Include")
+                .markepiTypography(.controlLabel)
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), alignment: .leading),
+                    GridItem(.flexible(), alignment: .leading),
+                ],
+                alignment: .leading,
+                spacing: 10
+            ) {
+                ForEach(CaptionField.allCases) { field in
+                    captionFieldCheckbox(field)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func captionFieldCheckbox(_ field: CaptionField) -> some View {
+        let isOn = isFieldEnabled(field)
+        return Button {
+            toggleField(field)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: isOn ? "checkmark.square.fill" : "square")
+                    .font(.body)
+                    .foregroundStyle(isOn ? Color.accentColor : Color.secondary)
+                Text(field.displayName)
+                    .markepiTypography(.value)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(field.displayName)
+        .accessibilityValue(isOn ? "Included" : "Not included")
+        .accessibilityAddTraits(isOn ? [.isSelected, .isButton] : .isButton)
+        .accessibilityHint("Double tap to \(isOn ? "remove from" : "add to") the caption")
     }
 
     private var captionSizeRow: some View {
@@ -149,6 +215,31 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
             get: { viewModel.config.whiteFrame?.metadataTextEnabled ?? true },
             set: { newValue in mutateFrame { $0.metadataTextEnabled = newValue } }
         )
+    }
+
+    private var captionPrefixBinding: Binding<String> {
+        Binding(
+            get: { viewModel.config.whiteFrame?.captionPrefix ?? "" },
+            set: { newValue in mutateFrame { $0.captionPrefix = newValue } }
+        )
+    }
+
+    /// Whether a given metadata field is currently included in the caption.
+    private func isFieldEnabled(_ field: CaptionField) -> Bool {
+        viewModel.config.whiteFrame?.captionFields.contains(field) ?? false
+    }
+
+    /// Adds or removes a field, keeping the stored list in canonical
+    /// `CaptionField.allCases` order so the rendered caption order is stable.
+    private func toggleField(_ field: CaptionField) {
+        mutateFrame { frame in
+            if let idx = frame.captionFields.firstIndex(of: field) {
+                frame.captionFields.remove(at: idx)
+            } else {
+                frame.captionFields.append(field)
+                frame.captionFields = CaptionField.allCases.filter { frame.captionFields.contains($0) }
+            }
+        }
     }
 
     private var captionSizeBinding: Binding<CGFloat> {

@@ -28,8 +28,15 @@ final class WatermarkViewModel: WatermarkConfigurable {
     var config = WatermarkViewModel.makeDefaultConfig() {
         didSet {
             AppGroupConfigSync.save(config)
+            if config.includeC2PAManifest != oldValue.includeC2PAManifest {
+                resetBatchC2PASigningNotice()
+            }
             if config.sourceDeclaration != analyzedDeclaration {
                 analyzeCurrentSource()
+            }
+            if !config.provenanceEnabled && oldValue.provenanceEnabled {
+                config.includeC2PAManifest = false
+                lastExportReceipt = nil
             }
         }
     }
@@ -116,6 +123,13 @@ final class WatermarkViewModel: WatermarkConfigurable {
     /// Whether any per-item overrides exist.
     var hasBatchOverrides: Bool { !perItemOverrides.isEmpty }
 
+    /// Shows a preflight notice when C2PA signing is enabled for a batch that
+    /// includes videos. Signing is image-only in this build; videos still export.
+    var showBatchC2PASigningNotice: Bool = false
+
+    /// True after the user accepts the current batch's image-only C2PA behavior.
+    private var batchC2PASigningNoticeAcknowledged = false
+
     /// Reference to the in-flight batch processing Task for cancellation.
     private var batchProcessingTask: Task<Void, Never>?
 
@@ -165,6 +179,36 @@ final class WatermarkViewModel: WatermarkConfigurable {
 
     var hasMultiplePhotos: Bool { photos.count > 1 }
 
+    var batchSignableImageCount: Int {
+        photos.filter { $0.mediaType != .video }.count
+    }
+
+    var batchVideoCount: Int {
+        photos.filter { $0.mediaType == .video }.count
+    }
+
+    private var needsBatchC2PASigningNotice: Bool {
+        hasMultiplePhotos
+            && config.includeC2PAManifest
+            && batchVideoCount > 0
+            && !batchC2PASigningNoticeAcknowledged
+    }
+
+    private func resetBatchC2PASigningNotice() {
+        batchC2PASigningNoticeAcknowledged = false
+        showBatchC2PASigningNotice = false
+    }
+
+    func acknowledgeBatchC2PAImageOnlyNotice() {
+        batchC2PASigningNoticeAcknowledged = true
+        showBatchC2PASigningNotice = false
+    }
+
+    func continueBatchAfterC2PASigningNotice() async {
+        acknowledgeBatchC2PAImageOnlyNotice()
+        await processBatch()
+    }
+
     // MARK: - Provenance (Plan 19-03)
 
     /// Analyzer verdict for the currently-loaded source. Runtime-only — NOT persisted.
@@ -178,6 +222,27 @@ final class WatermarkViewModel: WatermarkConfigurable {
 
     var showExportReceipt = false
 
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    private func provenanceOptions(for config: WatermarkConfiguration) -> ProvenanceExportOptions {
+        ProvenanceExportOptions(
+            rights: config.rightsMetadata,
+            privacyProfile: config.metadataPrivacyProfile,
+            includeC2PA: config.includeC2PAManifest,
+            userDeclaration: config.sourceDeclaration,
+            appVersion: appVersion
+        )
+    }
+
+    /// Provenance options for an export, gated by the master switch. Returns nil
+    /// when provenance is disabled, so the engine produces no receipt and the
+    /// share sheet opens directly with no signing or metadata changes.
+    private func exportProvenance(for config: WatermarkConfiguration) -> ProvenanceExportOptions? {
+        config.provenanceEnabled ? provenanceOptions(for: config) : nil
+    }
+
     /// Runs whenever the current source changes (import funnels + index change)
     /// and when the user changes the source declaration.
     func analyzeCurrentSource() {
@@ -185,18 +250,29 @@ final class WatermarkViewModel: WatermarkConfigurable {
             sourceProvenanceReport = nil; return
         }
         let url = photo.sourceURL
+        let id = photo.id
+        let mediaType = photo.mediaType
         let declaration = config.sourceDeclaration
-        if photo.mediaType == .video {
-            sourceProvenanceReport = SourceProvenanceReport(
-                state: .unknown, evidence: [],
-                warnings: ["Video source provenance is not analyzed in this version."],
-                userDeclaration: declaration)
-        } else {
-            sourceProvenanceReport = SourceProvenanceAnalyzer()
-                .analyze(imageURL: url, userDeclaration: declaration)
-                ?? SourceProvenanceReport(state: .unknown, evidence: [], userDeclaration: declaration)
+        let client = provenanceOptions(for: config).c2paClient
+        Task { [weak self] in
+            guard let self else { return }
+            let report: SourceProvenanceReport
+            if mediaType == .video {
+                report = SourceProvenanceReport(
+                    state: .unknown, evidence: [],
+                    warnings: ["Video source provenance is not analyzed in this version."],
+                    userDeclaration: declaration)
+            } else {
+                let c2paSummary = await client.readSourceSummary(from: url)
+                report = SourceProvenanceAnalyzer()
+                    .analyze(imageURL: url, userDeclaration: declaration, c2paSummary: c2paSummary)
+                    ?? SourceProvenanceReport(state: .unknown, evidence: [], userDeclaration: declaration)
+            }
+            guard self.currentPhoto?.id == id,
+                  self.config.sourceDeclaration == declaration else { return }
+            self.sourceProvenanceReport = report
+            self.analyzedDeclaration = declaration
         }
-        analyzedDeclaration = declaration
     }
 
     /// True when the current item is a video (drives the frame scrubber UI).
@@ -435,6 +511,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
         guard !loaded.isEmpty else { return }
         if photos.isEmpty {
             photos = loaded
+            resetBatchC2PASigningNotice()
             currentIndex = 0
             Task { await loadSourceForComparison() }
             analyzeCurrentSource()
@@ -451,6 +528,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
     func confirmImportAppend() {
         guard !pendingImport.isEmpty else { return }
         photos.append(contentsOf: pendingImport)
+        resetBatchC2PASigningNotice()
         pendingImport = []
         // Surface the freshly added items by jumping to the first of them.
         currentIndex = max(0, photos.count - 1)
@@ -464,6 +542,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
         guard !pendingImport.isEmpty else { return }
         cleanupPhotoTempFiles(photos)
         photos = pendingImport
+        resetBatchC2PASigningNotice()
         pendingImport = []
         currentIndex = 0
         perItemOverrides.removeAll()
@@ -653,6 +732,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
         // Batch mode: when multiple photos are selected, trigger batch processing
         // and return — the single-item rendering path is skipped entirely.
         if hasMultiplePhotos {
+            if needsBatchC2PASigningNotice {
+                showBatchC2PASigningNotice = true
+                return
+            }
             await processBatch()
             return
         }
@@ -678,13 +761,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
         renderingState = .rendering
 
         do {
-            let prov = ProvenanceExportOptions(
-                rights: config.rightsMetadata,
-                privacyProfile: config.metadataPrivacyProfile,
-                includeC2PA: config.includeC2PAManifest,
-                userDeclaration: config.sourceDeclaration,
-                appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-            )
+            let prov = exportProvenance(for: config)
             let result = try await engine.process(sourceURL: sourceURL, config: config, provenance: prov)
             fullResResult = result
             renderingState = .done
@@ -721,6 +798,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
             backgroundTaskID = .invalid
         }
 
+        let exportConfig = config
+        let provenance = exportProvenance(for: exportConfig)
         let task = Task {
             defer {
                 UIApplication.shared.endBackgroundTask(backgroundTaskID)
@@ -730,7 +809,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
             do {
                 let result = try await engine.processVideo(
                     sourceURL: sourceURL,
-                    config: config,
+                    config: exportConfig,
                     onProgress: { [weak self] progress, eta in
                         Task { @MainActor in
                             self?.renderingState = .renderingVideo(
@@ -738,10 +817,12 @@ final class WatermarkViewModel: WatermarkConfigurable {
                                 estimatedTimeRemaining: eta
                             )
                         }
-                    }
+                    },
+                    provenance: provenance
                 )
                 await MainActor.run {
                     fullResResult = result
+                    lastExportReceipt = result.provenanceReceipt
                     renderingState = .done
                     // D-14: Schedule notification for background completion
                     scheduleCompletionNotification(success: true)
@@ -749,7 +830,11 @@ final class WatermarkViewModel: WatermarkConfigurable {
                     // foreground (matches the photo path). If backgrounded, the
                     // notification brings the user back and they can share.
                     if UIApplication.shared.applicationState == .active {
-                        presentShareSheet()
+                        if lastExportReceipt != nil {
+                            showExportReceipt = true
+                        } else {
+                            presentShareSheet()
+                        }
                     }
                 }
             } catch is CancellationError {
@@ -795,24 +880,32 @@ final class WatermarkViewModel: WatermarkConfigurable {
             let result = try await engine.processLivePhoto(
                 stillImageURL: stillURL,
                 videoURL: videoURL,
-                config: config
+                config: config,
+                provenance: exportProvenance(for: config)
             )
             fullResResult = result
+            lastExportReceipt = result.provenanceReceipt
             renderingState = .done
             if let url = result.url,
                let data = try? Data(contentsOf: url),
                let uiImage = UIImage(data: data) {
                 previewImage = uiImage
             }
-            presentShareSheet()
+            if lastExportReceipt != nil {
+                showExportReceipt = true
+            } else {
+                presentShareSheet()
+            }
         } catch {
             // Pitfall 2: Fall back to still-only watermarking with user alert
             do {
                 let stillResult = try await engine.process(
                     sourceURL: stillURL,
-                    config: config
+                    config: config,
+                    provenance: exportProvenance(for: config)
                 )
                 fullResResult = stillResult
+                lastExportReceipt = stillResult.provenanceReceipt
                 renderingState = .done
                 errorMessage = "Live Photo animation could not be preserved. The still image has been watermarked."
                 showError = true
@@ -821,7 +914,11 @@ final class WatermarkViewModel: WatermarkConfigurable {
                    let uiImage = UIImage(data: data) {
                     previewImage = uiImage
                 }
-                presentShareSheet()
+                if lastExportReceipt != nil {
+                    showExportReceipt = true
+                } else {
+                    presentShareSheet()
+                }
             } catch {
                 renderingState = .error(error)
                 errorMessage = error.localizedDescription
@@ -956,6 +1053,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
     /// On cancellation: cleans up partial temp files, returns to .idle.
     func processBatch() async {
         guard renderingState == .idle, photos.count > 1 else { return }
+        if needsBatchC2PASigningNotice {
+            showBatchC2PASigningNotice = true
+            return
+        }
 
         renderingState = .batchProcessing(current: 0, total: photos.count, eta: nil)
 
@@ -986,6 +1087,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
             let result = await self.batchProcessor.process(
                 items: items,
                 sharedConfig: self.config,
+                provenanceAppVersion: self.config.provenanceEnabled ? self.appVersion : nil,
                 onProgress: { @Sendable current, total, eta in
                     Task { @MainActor [weak self] in
                         self?.renderingState = .batchProcessing(current: current, total: total, eta: eta)
@@ -1091,8 +1193,11 @@ final class WatermarkViewModel: WatermarkConfigurable {
             try? TempFileManager.cleanup(url: url)
         }
         fullResResult = nil
+        lastExportReceipt = nil
+        showExportReceipt = false
         batchResults = nil
         perItemOverrides.removeAll()
+        resetBatchC2PASigningNotice()
         renderingState = .idle
     }
 
@@ -1109,8 +1214,11 @@ final class WatermarkViewModel: WatermarkConfigurable {
         currentIndex = 0
         originalSourceImage = nil
         fullResResult = nil
+        lastExportReceipt = nil
+        showExportReceipt = false
         batchResults = nil
         perItemOverrides.removeAll()
+        resetBatchC2PASigningNotice()
         renderingState = .idle
         // Starting a fresh session: allow the default template to seed the next
         // import again (it was applied once for the previous session).

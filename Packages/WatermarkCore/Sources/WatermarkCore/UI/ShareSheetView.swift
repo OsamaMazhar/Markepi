@@ -6,8 +6,9 @@ import UIKit
 /// Used by `ShareExtensionRootView` in WatermarkCore for the share sheet
 /// presentation after watermarking completes.
 ///
-/// Excludes `.saveToCameraRoll` per project constraint — watermarked output
-/// is shared without saving to the camera roll.
+/// Honors the caller's `excludedActivityTypes` (default: none), so the system
+/// "Save Image"/"Save Video" action (`.saveToCameraRoll`) is offered — this
+/// requires `NSPhotoLibraryAddUsageDescription` in the host app's Info.plist.
 public struct ShareSheetView: UIViewControllerRepresentable {
     let activityItems: [Any]
     let excludedActivityTypes: [UIActivity.ActivityType]?
@@ -28,7 +29,7 @@ public struct ShareSheetView: UIViewControllerRepresentable {
             activityItems: activityItems,
             applicationActivities: nil
         )
-        controller.excludedActivityTypes = [.saveToCameraRoll]
+        controller.excludedActivityTypes = excludedActivityTypes
         controller.modalPresentationStyle = .pageSheet
         controller.completionWithItemsHandler = { _, _, _, _ in
             onDismiss()

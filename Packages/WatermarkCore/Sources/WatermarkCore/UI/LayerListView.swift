@@ -13,18 +13,27 @@ public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View
     @Bindable var viewModel: ViewModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    public init(viewModel: ViewModel) {
+    /// Whether to render the built-in section header. Hidden when the host
+    /// already provides a single title (editor tool panel); shown when the view
+    /// stands alone as a labeled section (extensions' ControlsView).
+    private let showsSectionHeader: Bool
+
+    public init(viewModel: ViewModel, showsSectionHeader: Bool = true) {
         self.viewModel = viewModel
+        self.showsSectionHeader = showsSectionHeader
     }
 
     public var body: some View {
         if viewModel.config.watermarks.isEmpty { EmptyView() }
         else {
             VStack(spacing: 0) {
-                Text("Layers")
-                    .markepiTypography(.sectionHeader)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+                if showsSectionHeader {
+                    Text("Layers")
+                        .markepiTypography(.sectionHeader)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
 
                 VStack(spacing: 0) {
                     ForEach(Array(viewModel.config.watermarks.enumerated()), id: \.offset) { index, layer in

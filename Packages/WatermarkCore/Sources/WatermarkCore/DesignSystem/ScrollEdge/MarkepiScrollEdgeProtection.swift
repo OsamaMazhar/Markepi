@@ -61,20 +61,30 @@ public struct MarkepiScrollEdgeProtection<Header: View>: ViewModifier {
             .scrollClipDisabled() // D-16: content renders beneath header
 
             // Layer 2: Glass/material header bar
-            headerContent()
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .modify { view in
-                    if #available(iOS 26, macOS 26, *), !reduceTransparency {
-                        view.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
-                    } else {
-                        // D-17: material itself provides the obscuring effect —
-                        // no separate gradient or mask needed
-                        view.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-                    }
-                }
+            glassHeader
                 .padding(.top, 4) // safe-area clearance
         }
+    }
+
+    /// The header content with its glass/material backing. `glassEffect` is
+    /// gated behind the MARKEPI_LIQUID_GLASS compile flag (see
+    /// `MarkepiGlassModifier` for why): the iOS-26 opaque-type descriptor it
+    /// emits crashes on mismatched simulator runtimes, so by default we use the
+    /// material backing, which provides the same obscuring effect (D-17).
+    @ViewBuilder
+    private var glassHeader: some View {
+        let padded = headerContent()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        #if MARKEPI_LIQUID_GLASS
+        if #available(iOS 26, macOS 26, *), !reduceTransparency {
+            padded.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
+        } else {
+            padded.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        }
+        #else
+        padded.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        #endif
     }
 
     /// Approximate header height. The pill bar with `.padding(4)` outer +

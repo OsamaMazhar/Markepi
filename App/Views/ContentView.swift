@@ -436,6 +436,34 @@ private struct BatchAlertModifiers: ViewModifier {
                     }
                 }
             }
+            .alert("Content Credentials in Batch", isPresented: Binding(
+                get: { viewModel.showBatchC2PASigningNotice },
+                set: { viewModel.showBatchC2PASigningNotice = $0 }
+            )) {
+                Button(batchC2PAContinueButtonTitle) {
+                    Task { await viewModel.continueBatchAfterC2PASigningNotice() }
+                }
+                Button("Cancel", role: .cancel) {
+                    viewModel.showBatchC2PASigningNotice = false
+                }
+            } message: {
+                Text(batchC2PAMessage)
+            }
+    }
+
+    private var batchC2PAContinueButtonTitle: String {
+        batchC2PADisclosure.alertContinueButtonTitle
+    }
+
+    private var batchC2PAMessage: String {
+        batchC2PADisclosure.alertMessage
+    }
+
+    private var batchC2PADisclosure: BatchC2PASigningDisclosure {
+        BatchC2PASigningDisclosure(
+            signableImageCount: viewModel.batchSignableImageCount,
+            videoCount: viewModel.batchVideoCount
+        )
     }
 }
 
@@ -457,7 +485,10 @@ private struct SheetModifiers: ViewModifier {
                 set: { viewModel.showExportReceipt = $0 }
             )) {
                 if let receipt = viewModel.lastExportReceipt {
-                    ExportReceiptView(receipt: receipt)
+                    ExportReceiptView(receipt: receipt) {
+                        viewModel.showExportReceipt = false
+                        viewModel.presentShareSheet()
+                    }
                 }
             }
             .sheet(isPresented: Binding(

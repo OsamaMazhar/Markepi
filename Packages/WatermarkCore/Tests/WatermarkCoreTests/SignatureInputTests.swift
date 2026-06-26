@@ -4,7 +4,7 @@ import CoreImage
 
 /// Tests SignatureInput Codable round-trip, default values,
 /// WatermarkLayer .signature case encoding/decoding, backward
-/// compatibility with old configs, and strippingImageData behavior.
+/// compatibility with old configs.
 @Suite("SignatureInput")
 struct SignatureInputTests {
 
@@ -141,49 +141,6 @@ struct SignatureInputTests {
             // Expected — old config decoded as text layer
         } else {
             Issue.record("Expected .text layer, got something else")
-        }
-    }
-
-    // MARK: - strippingImageData Preserves Signature
-
-    @Test("strippingImageData() passes .signature layers through unchanged")
-    func testStrippingImageDataPreservesSignature() throws {
-        let sigInput = SignatureInput(
-            strokeData: makeTestStrokeData(),
-            inkColor: CGColor(red: 1, green: 0, blue: 0, alpha: 1),
-            strokeWidth: 4.0
-        )
-
-        let config = WatermarkConfiguration(watermarks: [
-            .signature(sigInput, position: .center, scale: 0.25, opacity: 0.9, isVisible: true),
-            .text(
-                TextWatermarkInput(text: "Test", fontSize: 48, color: CGColor(gray: 1, alpha: 1), opacity: 1.0),
-                position: .bottomRight,
-                scale: 0.15,
-                opacity: 1.0,
-                isVisible: true
-            )
-        ])
-
-        let stripped = config.strippingImageData()
-        #expect(stripped.watermarks.count == 2)
-
-        // Text layer should be unchanged
-        if case .text = stripped.watermarks[1] {
-            // OK
-        } else {
-            Issue.record("Text layer should be unchanged after strippingImageData")
-        }
-
-        // Signature layer should pass through unchanged (no-op)
-        if case .signature(let input, let pos, let scl, let opac, let vis) = stripped.watermarks[0] {
-            #expect(input.strokeData == sigInput.strokeData)
-            #expect(pos == .center)
-            #expect(abs(scl - 0.25) < 0.001)
-            #expect(abs(opac - 0.9) < 0.001)
-            #expect(vis == true)
-        } else {
-            Issue.record("Signature layer should be preserved in strippingImageData")
         }
     }
 }

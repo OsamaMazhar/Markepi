@@ -22,15 +22,31 @@ struct ThumbnailStripView: View {
                     ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
                         thumbnailCell(for: photo, index: index)
                             .id(photo.id)
+                            // A plain tap switches the editor to that photo.
+                            // Adjusting a single item's watermark is a
+                            // deliberate, less-frequent action, so it lives
+                            // behind a long-press context menu instead of
+                            // hijacking every tap.
                             .onTapGesture {
-                                onItemTapped?(index)
                                 currentIndex = index
+                            }
+                            .contextMenu {
+                                Button {
+                                    currentIndex = index
+                                    onItemTapped?(index)
+                                } label: {
+                                    Label("Adjust This Photo", systemImage: "slider.horizontal.3")
+                                }
                             }
                             .onDrag {
                                 NSItemProvider(object: String(index) as NSString)
                             }
-                            .accessibilityLabel("Photo \(index + 1) of \(photos.count)")
-                            .accessibilityHint("Double tap to select")
+                            .accessibilityLabel(accessibilityLabel(for: photo, index: index))
+                            .accessibilityHint("Double tap to view this photo. Touch and hold to adjust its watermark.")
+                            .accessibilityAction(named: "Adjust this photo") {
+                                currentIndex = index
+                                onItemTapped?(index)
+                            }
                     }
                 }
                 .padding(.horizontal, 16)
@@ -57,6 +73,13 @@ struct ThumbnailStripView: View {
                 }
             }
         }
+    }
+
+    /// VoiceOver label noting position and whether the item carries a
+    /// custom (overridden) watermark.
+    private func accessibilityLabel(for photo: PhotoItem, index: Int) -> String {
+        let base = "Photo \(index + 1) of \(photos.count)"
+        return perItemOverrides[photo.id] != nil ? "\(base), custom watermark" : base
     }
 
     @ViewBuilder

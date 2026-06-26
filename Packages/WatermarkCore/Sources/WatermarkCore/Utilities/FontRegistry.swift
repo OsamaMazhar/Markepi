@@ -21,9 +21,20 @@ public enum FontRegistry {
         let bundle = Bundle.main
         #endif
 
-        guard let fontURLs = bundle.urls(forResourcesWithExtension: "ttf", subdirectory: "Fonts") else {
-            return
+        // SwiftPM's `.process("Resources/Fonts")` FLATTENS the .ttf files into the
+        // bundle root, not a "Fonts" subdirectory — so the old lookup with
+        // `subdirectory: "Fonts"` returned nil and NOTHING registered (every
+        // bundled font silently fell back to the system face). Search the root
+        // and the subdirectory, deduplicated, so registration works regardless
+        // of how the build system lays the resources out.
+        var seen = Set<URL>()
+        var fontURLs: [URL] = []
+        for subdir in [nil, "Fonts"] as [String?] {
+            for url in bundle.urls(forResourcesWithExtension: "ttf", subdirectory: subdir) ?? [] {
+                if seen.insert(url).inserted { fontURLs.append(url) }
+            }
         }
+        guard !fontURLs.isEmpty else { return }
 
         for url in fontURLs {
             let fontName = url.deletingPathExtension().lastPathComponent

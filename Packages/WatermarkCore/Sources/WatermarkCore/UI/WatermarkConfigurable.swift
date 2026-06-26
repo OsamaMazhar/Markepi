@@ -32,6 +32,14 @@ public protocol WatermarkConfigurable: AnyObject {
     /// processes single items by design.
     var hasMultiplePhotos: Bool { get }
 
+    /// Number of currently loaded batch items that can receive C2PA signing in
+    /// this build. Defaults to zero for single-item surfaces and extensions.
+    var batchSignableImageCount: Int { get }
+
+    /// Number of currently loaded batch videos. C2PA signing is image-only in
+    /// this build, so videos export without a C2PA signature.
+    var batchVideoCount: Int { get }
+
     // Template Management (Phase 12)
     var showSaveTemplateAlert: Bool { get set }
     var showTemplateList: Bool { get set }
@@ -50,6 +58,10 @@ public protocol WatermarkConfigurable: AnyObject {
     /// Triggers full-resolution rendering.
     /// Both ViewModels implement this with the same signature.
     func renderAndPrepareShare() async
+
+    /// Records that the user accepted image-only C2PA signing for a mixed
+    /// batch. Default no-op for single-item surfaces and extensions.
+    func acknowledgeBatchC2PAImageOnlyNotice()
 
     /// Presents the share sheet (sets internal showShareSheet flag).
     func presentShareSheet()
@@ -224,6 +236,9 @@ extension WatermarkConfigurable {
 
     // MARK: - Batch Processing (Phase 13)
 
+    /// Default no-op — only the main app ViewModel tracks batch C2PA notices.
+    public func acknowledgeBatchC2PAImageOnlyNotice() {}
+
     /// Default no-op — only the main app ViewModel (WatermarkViewModel)
     /// implements batch processing. The Share Extension ViewModel uses this
     /// default, which safely does nothing.
@@ -237,6 +252,12 @@ extension WatermarkConfigurable {
     /// Default returns false — the Share Extension ViewModel processes single
     /// items by design.
     public var hasMultiplePhotos: Bool { false }
+
+    /// Default returns zero — only the main app batch ViewModel exposes counts.
+    public var batchSignableImageCount: Int { 0 }
+
+    /// Default returns zero — only the main app batch ViewModel exposes counts.
+    public var batchVideoCount: Int { 0 }
 
     /// Default returns nil — ViewModels override with stored properties.
     public var sourceProvenanceReport: SourceProvenanceReport? { nil }

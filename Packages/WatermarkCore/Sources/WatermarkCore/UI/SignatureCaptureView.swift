@@ -23,32 +23,42 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
     @State private var showCaptureSheet = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    public init(viewModel: ViewModel) {
+    /// Whether to render the built-in section header. Hidden when the host
+    /// already provides a single title (editor tool panel); shown when the view
+    /// stands alone as a labeled section (extensions' ControlsView).
+    private let showsSectionHeader: Bool
+
+    public init(viewModel: ViewModel, showsSectionHeader: Bool = true) {
         self.viewModel = viewModel
+        self.showsSectionHeader = showsSectionHeader
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             // Section header
-            Text("Signature")
-                .markepiTypography(.sectionHeader)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
-
-            // Row container with glass backing
-            VStack(spacing: 0) {
-                if hasSignatureLayer {
-                    signatureSelectedView
-                } else {
-                    addSignatureButton
-                }
+            if showsSectionHeader {
+                Text("Signature")
+                    .markepiTypography(.sectionHeader)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
             }
-            .markepiGlass(
-                shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
-                isEnabled: !reduceTransparency
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .padding(.horizontal, 16)
+
+            if hasSignatureLayer {
+                // The populated state is a multi-row card → glass backing fits.
+                signatureSelectedView
+                    .markepiGlass(
+                        shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                        isEnabled: !reduceTransparency
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(.horizontal, 16)
+            } else {
+                // Empty state is a single capsule button — no surrounding card,
+                // so the button's own shape isn't fighting a rounded-rect.
+                addSignatureButton
+                    .padding(.horizontal, 16)
+            }
         }
         .sheet(isPresented: $showCaptureSheet) {
             signatureCaptureSheet
@@ -79,6 +89,8 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
             startNewSignature()
         } label: {
             Label("Add Signature", systemImage: "signature")
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
         }
         .buttonStyle(.markepiPrimary())
         .accessibilityLabel("Add signature watermark")

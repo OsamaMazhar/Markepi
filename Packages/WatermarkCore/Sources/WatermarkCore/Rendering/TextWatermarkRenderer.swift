@@ -1,4 +1,5 @@
 import CoreImage
+import CoreText
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -85,7 +86,7 @@ public struct TextWatermarkRenderer {
         // font's actual ascent/descent metrics. This makes the CIImage
         // extent match what the eye sees, so positioning math produces
         // equal visible spacing on all sides.
-        return cropToVisibleGlyphBounds(rgbImage, attributes: attributes)
+        return cropToVisibleGlyphBounds(rgbImage, attributed: attributed, attributes: attributes)
     }
 
     /// Colors a white glyph-coverage image by masking a solid color with the
@@ -115,6 +116,7 @@ public struct TextWatermarkRenderer {
     /// sides of the image.
     private static func cropToVisibleGlyphBounds(
         _ image: CIImage,
+        attributed: NSAttributedString,
         attributes: [NSAttributedString.Key: Any]
     ) -> CIImage {
         #if canImport(UIKit)
@@ -123,49 +125,48 @@ public struct TextWatermarkRenderer {
         guard let font = attributes[.font] as? NSFont else { return image }
         #endif
 
-        // The attributedTextImageGenerator output extent starts at (0, -leading)
-        // with height = ascent + descent + leading. The visible glyphs occupy
-        // (0, descent) to (width, ascent + descent) within this extent
-        // (CIImage bottom-left origin: y=descent is the baseline, y=ascent+descent
-        // is the top of capital letters). The space y=0 to y=descent below the
-        // baseline is empty for text with no descenders (e.g. "Osama").
+        // `attributedTextImageGenerator`'s extent is the typographic line box:
+        // its bottom edge is the descent line and the baseline sits `descent`
+        // above it (leading, if any, is above the cap line). The PREVIOUS code
+        // cropped from the baseline up by `ascent`, which dropped everything
+        // below the baseline — clipping descenders ('p', 'g', 'y', …).
         //
-        // Crop to the visible glyph region starting at the baseline, then
-        // translate the image so the extent bottom aligns with the visible
-        // glyph bottom. This ensures corner-positioning padding produces equal
-        // visible spacing on all sides of the image.
+        // Instead, measure the ACTUAL inked glyph bounds of this exact string
+        // via Core Text (`.useGlyphPathBounds`) and crop to that. The result is
+        // tight on every side — no descender is cut, and a line with no
+        // descenders (e.g. "Osama Mazhar") still sits flush to its visible
+        // bottom — so corner padding yields accurate, consistent spacing.
         let extent = image.extent
-        let ascent = font.ascender
         let descent = abs(font.descender)
+        guard descent.isFinite, extent.height > 0 else { return image }
 
-        // Skip if the font metrics are zero/invalid — fallback to original
-        guard ascent > 0, descent > 0 else { return image }
+        let line = CTLineCreateWithAttributedString(attributed)
+        let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+        guard ink.height > 0, ink.width > 0 else { return image }
 
-        // Baseline position in the extent coordinate space
-        let baselineY = extent.origin.y + descent
-        let visibleHeight = ascent
+        // Map ink bounds (origin at the baseline) into the extent's coordinate
+        // space (origin at the extent's bottom-left). Baseline local-y = descent.
+        let cropY = extent.origin.y + descent + ink.minY
+        let cropHeight = ink.height
 
-        // Guard against invalid rect before cropping
-        guard visibleHeight > 0,
-              baselineY + visibleHeight <= extent.origin.y + extent.height + 0.5 else {
+        // Stay within the generated extent; fall back if metrics look off.
+        guard cropY >= extent.origin.y - 1.0,
+              cropY + cropHeight <= extent.origin.y + extent.height + 1.0 else {
             return image
         }
 
         let visibleRect = CGRect(
             x: extent.origin.x,
-            y: baselineY,
+            y: cropY,
             width: extent.width,
-            height: visibleHeight
+            height: cropHeight
         )
 
         let cropped = image.cropped(to: visibleRect)
 
-        // Translate the cropped image down by baselineY so the extent origin
-        // becomes (0, 0). After this, the visible glyph bottom (the baseline)
-        // sits at the extent's bottom edge, and corner-positioning padding
-        // calculations produce equal visible spacing.
-        let adjusted = cropped.transformed(by: CGAffineTransform(translationX: 0, y: -baselineY))
-        return adjusted
+        // Re-origin so the visible glyph bottom sits at (0, 0); positioning math
+        // downstream then produces accurate spacing from the image edges.
+        return cropped.transformed(by: CGAffineTransform(translationX: 0, y: -cropY))
     }
 
     /// Renders a text watermark with EXIF token substitution applied to the text string.

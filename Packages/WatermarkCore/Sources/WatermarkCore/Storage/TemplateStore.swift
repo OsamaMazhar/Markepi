@@ -4,7 +4,7 @@ import os.log
 /// Manages template persistence in App Group UserDefaults with schema migration.
 ///
 /// Templates are stored as a `[Template]` JSON array in the shared App Group
-/// `UserDefaults` suite `group.com.watermark.app`. The store provides full CRUD
+/// `UserDefaults` suite `group.com.osamamazhar.markepi`. The store provides full CRUD
 /// operations, a migration chain for forward-compatible schema upgrades, and
 /// thumbnail caching in the app's caches directory.
 ///
@@ -20,8 +20,9 @@ public final class TemplateStore {
 
     // MARK: - Constants
 
-    /// App Group suite — same as AppGroupConfigSync.suiteName
-    private let suiteName = "group.com.watermark.app"
+    /// App Group suite — single source of truth shared with AppGroupConfigSync
+    /// so the two can never drift apart.
+    private let suiteName = AppGroupConfigSync.suiteName
 
     /// Key for the serialized `[Template]` JSON array in UserDefaults
     private let templatesKey = "com.watermark.app.templates"

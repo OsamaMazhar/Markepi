@@ -34,12 +34,33 @@ class SceneDelegate: NSObject, UIWindowSceneDelegate {
 struct WatermarkApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var viewModel = WatermarkViewModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             ContentView(viewModel: viewModel)
+                // This is a media-focused editor on a permanently dark canvas
+                // (HIG: media apps may adopt a permanent dark appearance). Lock
+                // the dark scheme so semantic colors (.primary/.secondary)
+                // resolve light and stay legible on the black surfaces — without
+                // this, `.primary` text renders black-on-black and vanishes.
+                .preferredColorScheme(.dark)
                 .onOpenURL { url in
-                    viewModel.handleIncomingFile(url: url)
+                    // The Share Extension hands media off via `watermark://shared`,
+                    // staging it in the App Group inbox. Everything else is a
+                    // file/template open routed through the file importer.
+                    if url.scheme == "watermark" {
+                        viewModel.importPendingShares()
+                    } else {
+                        viewModel.handleIncomingFile(url: url)
+                    }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // Fallback drain: if the URL open didn't fire (or the app was
+                    // already foregrounded), pick up any shares on activation.
+                    if phase == .active {
+                        viewModel.importPendingShares()
+                    }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .didReceiveQuickAction)) { notif in
                     guard let type = notif.object as? String else { return }

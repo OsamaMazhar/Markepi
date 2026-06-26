@@ -13,13 +13,26 @@ struct ToolPanelView: View {
     var onClose: () -> Void
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Output-format state (mirrors the previous ControlsView behaviour).
     @State private var showHDRLossWarning = false
 
+    /// Live downward drag offset for the swipe-to-dismiss gesture.
+    @State private var dragOffset: CGFloat = 0
+
     var body: some View {
         VStack(spacing: 0) {
-            header
+            // Grab handle + title row: swiping down here dismisses the panel.
+            // Attaching the gesture only to this region keeps it from fighting
+            // the inner ScrollView and the sliders/steppers in the content.
+            VStack(spacing: 0) {
+                grabber
+                header
+            }
+            .contentShape(Rectangle())
+            .gesture(dismissDrag)
+
             ScrollView {
                 VStack(spacing: 16) {
                     content
@@ -28,6 +41,7 @@ struct ToolPanelView: View {
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
         }
         .background {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
@@ -39,7 +53,36 @@ struct ToolPanelView: View {
                 .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
         }
         .shadow(color: .black.opacity(0.18), radius: 20, y: 8)
+        .offset(y: dragOffset)
         .task(id: tool) { syncActiveLayer() }
+    }
+
+    /// Centered grab handle hinting that the panel can be swiped down to close.
+    private var grabber: some View {
+        Capsule()
+            .fill(Color.secondary.opacity(0.4))
+            .frame(width: 40, height: 5)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
+            .padding(.bottom, 2)
+            .accessibilityHidden(true)
+    }
+
+    /// Swipe-down-to-dismiss. Follows the finger downward and closes once the
+    /// drag (or its predicted end) passes a comfortable threshold.
+    private var dismissDrag: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                dragOffset = max(0, value.translation.height)
+            }
+            .onEnded { value in
+                let shouldClose = value.translation.height > 80
+                    || value.predictedEndTranslation.height > 200
+                withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.85)) {
+                    dragOffset = 0
+                }
+                if shouldClose { onClose() }
+            }
     }
 
     /// Points `activeLayerIndex` at the layer this tool edits, so the shared
@@ -52,7 +95,13 @@ struct ToolPanelView: View {
         case .logo:      matches = { if case .image = $0 { return true }; return false }
         default: return
         }
-        if let idx = viewModel.config.watermarks.firstIndex(where: matches) {
+        let wms = viewModel.config.watermarks
+        let active = viewModel.activeLayerIndex
+        // Keep the current selection if it's already the right kind of layer, so
+        // a specific instance chosen in the Layers tool (or just added) stays the
+        // one being edited instead of snapping back to the first.
+        if active >= 0, active < wms.count, matches(wms[active]) { return }
+        if let idx = wms.firstIndex(where: matches) {
             viewModel.activeLayerIndex = idx
         }
     }
@@ -89,14 +138,14 @@ struct ToolPanelView: View {
     private var content: some View {
         switch tool {
         case .text:
-            TextWatermarkInputView(viewModel: viewModel)
+            TextWatermarkInputView(viewModel: viewModel, showsSectionHeader: false)
             EditorCard {
                 positionRow
                 Divider().padding(.leading, 16)
                 ScaleStepperView(viewModel: viewModel)
             }
         case .logo:
-            LogoPickerView(viewModel: viewModel)
+            LogoPickerView(viewModel: viewModel, showsSectionHeader: false)
             if hasLayer(matching: { if case .image = $0 { return true }; return false }) {
                 EditorCard {
                     positionRow
@@ -105,7 +154,7 @@ struct ToolPanelView: View {
                 }
             }
         case .signature:
-            SignatureCaptureView(viewModel: viewModel)
+            SignatureCaptureView(viewModel: viewModel, showsSectionHeader: false)
             if hasLayer(matching: { if case .signature = $0 { return true }; return false }) {
                 EditorCard {
                     positionRow
@@ -118,13 +167,21 @@ struct ToolPanelView: View {
         case .layers:
             layersContent
         case .output:
+            // Provenance & Content Credentials (C2PA) signing. Surfaced first so
+            // the "Sign with Content Credentials" action is immediately visible
+            // when the More panel opens (design decision D-25: signing lives in More).
+            ProvenanceControlsView(viewModel: viewModel)
+            EditorCard { DateStampToggleView(viewModel: viewModel) }
             EditorCard {
                 exportFormatRow
                 Divider().padding(.leading, 16)
                 qualitySliderRow
             }
-            saveTemplateButton
-                .padding(.horizontal, 16)
+            VStack(spacing: 8) {
+                saveTemplateButton
+                loadTemplateButton
+            }
+            .padding(.horizontal, 16)
         }
     }
 
@@ -137,7 +194,7 @@ struct ToolPanelView: View {
                 message: "Add text, a logo, or a signature to build up your watermark."
             )
         } else {
-            LayerListView(viewModel: viewModel)
+            LayerListView(viewModel: viewModel, showsSectionHeader: false)
         }
     }
 
@@ -281,6 +338,16 @@ struct ToolPanelView: View {
             viewModel.showSaveTemplateAlert = true
         } label: {
             Label("Save as Template", systemImage: "square.and.arrow.down.on.square")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.markepiSecondary())
+    }
+
+    private var loadTemplateButton: some View {
+        Button {
+            viewModel.showTemplateList = true
+        } label: {
+            Label("Load Template", systemImage: "square.and.arrow.up.on.square")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.markepiSecondary())

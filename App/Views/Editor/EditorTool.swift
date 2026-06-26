@@ -23,7 +23,7 @@ enum EditorTool: String, CaseIterable, Identifiable {
         case .signature: return "Sign"
         case .frame: return "Frame"
         case .layers: return "Layers"
-        case .output: return "Output"
+        case .output: return "More"
         }
     }
 
@@ -35,7 +35,7 @@ enum EditorTool: String, CaseIterable, Identifiable {
         case .signature: return "Signature"
         case .frame: return "White Frame"
         case .layers: return "Layers"
-        case .output: return "Output Settings"
+        case .output: return "More Settings"
         }
     }
 

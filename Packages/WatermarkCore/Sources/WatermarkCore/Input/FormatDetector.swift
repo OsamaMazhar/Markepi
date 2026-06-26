@@ -56,7 +56,16 @@ public struct FormatDetector {
         case "public.png":  return "png"
         case "public.tiff": return "tiff"
         case "com.adobe.raw-image": return "dng"
-        default:            return "jpg"
+        case "com.apple.quicktime-movie": return "mov"
+        case "public.mpeg-4": return "mp4"
+        default:
+            // Last resort: ask the type system for the real extension before
+            // defaulting to jpg — otherwise videos (and other formats) get
+            // written with a `.jpg` extension and look like images.
+            if let ext = UTType(utiString)?.preferredFilenameExtension {
+                return ext
+            }
+            return "jpg"
         }
     }
 

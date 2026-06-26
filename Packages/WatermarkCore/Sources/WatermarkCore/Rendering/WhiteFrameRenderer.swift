@@ -53,12 +53,18 @@ public struct WhiteFrameRenderer {
         // 2. Determine attribution text (if metadata text is enabled)
         let attributionText: String?
         if config.metadataTextEnabled {
-            if let customText = config.customAttributionText {
+            if let customText = config.customAttributionText, !customText.isEmpty {
+                // Legacy/advanced verbatim override (with token substitution).
                 attributionText = EXIFTokenParser.substitute(customText, metadata: metadata)
             } else {
-                // Rich default caption: camera · focal · aperture · shutter · ISO ·
-                // dimensions · format (present fields only).
-                attributionText = DeviceMetadataProvider.detailedAttribution(from: metadata)
+                // Caption assembled from the user's prefix + ticked fields.
+                // Empty (no prefix, no resolvable fields) → render nothing.
+                let caption = DeviceMetadataProvider.caption(
+                    prefix: config.captionPrefix,
+                    fields: config.captionFields,
+                    metadata: metadata
+                )
+                attributionText = caption.isEmpty ? nil : caption
             }
         } else {
             attributionText = nil

@@ -9,31 +9,36 @@ import AppKit
 
 /// Text watermark input view — editable text field bound to the first watermark layer.
 ///
-/// Generic over any `WatermarkConfigurable & Observable` ViewModel so both
-/// the main app and share extension can reuse it without code duplication.
+/// Uses `Menu`-based font and color pickers (not `ColorPicker` or sheet-based
+/// `FontPickerView`) because those system components crash in the Photos
+/// editing extension's `UIHostingController` hosting context.
 public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observable>: View {
     @Bindable var viewModel: ViewModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var isTextFocused: Bool
 
-    public init(viewModel: ViewModel) {
+    private let showsSectionHeader: Bool
+
+    public init(viewModel: ViewModel, showsSectionHeader: Bool = true) {
         self.viewModel = viewModel
+        self.showsSectionHeader = showsSectionHeader
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            Text("Text")
-                .markepiTypography(.sectionHeader)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+            if showsSectionHeader {
+                Text("Text")
+                    .markepiTypography(.sectionHeader)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+
+            if textLayers.count > 1 {
+                textLayerSelector
+            }
 
             VStack(spacing: 0) {
-                // A single-line TextField (not TextEditor): TextEditor has its own
-                // internal scroll view that fought the panel's surrounding
-                // ScrollView and swallowed taps/keystrokes. A watermark is a
-                // single line, which also matches the renderer (it crops to one
-                // line's glyph bounds), so Return dismisses the keyboard instead
-                // of inserting a newline that would render clipped.
                 TextField("Enter your watermark text", text: textBinding)
                     .font(.body)
                     .focused($isTextFocused)
@@ -48,11 +53,29 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
                 Divider()
                     .padding(.leading, 52)
 
+                // Font picker — Menu-based for compact extension-safe presentation.
                 HStack {
                     Text("Font")
                         .markepiTypography(.controlLabel)
                     Spacer()
-                    FontPickerView(selectedFontID: fontNameBinding)
+                    Menu {
+                        Button("System (San Francisco)") {
+                            updateText(fontNameChange: .some(nil), createIfMissing: false)
+                        }
+                        ForEach(FontCatalog.all) { font in
+                            Button(font.displayName) {
+                                updateText(fontNameChange: .some(font.postScriptName), createIfMissing: false)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(currentFontDisplayName)
+                                .markepiTypography(.value)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -60,12 +83,36 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
                 Divider()
                     .padding(.leading, 16)
 
+                // Color picker — Menu with preset swatches for compact,
+                // extension-safe presentation.
                 HStack {
                     Text("Color")
                         .markepiTypography(.controlLabel)
                     Spacer()
-                    ColorPicker("", selection: textColorBinding, supportsOpacity: false)
-                        .labelsHidden()
+                    Menu {
+                        ForEach(presetColors, id: \.name) { preset in
+                            Button {
+                                updateText(color: preset.cgColor, createIfMissing: false)
+                            } label: {
+                                HStack {
+                                    Text(preset.name)
+                                    if isCurrentColor(preset.cgColor) {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Color(cgColor: currentTextInput?.color ?? CGColor(gray: 1, alpha: 1)))
+                                .frame(width: 18, height: 18)
+                                .overlay(Circle().stroke(.secondary, lineWidth: 1))
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -97,16 +144,150 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
             )
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .padding(.horizontal, 16)
+
+            addTextButton
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
         }
     }
 
-    // MARK: - Text layer access (robust: first text layer, create on demand)
+    // MARK: - Preset Colors
 
-    /// Index of the first `.text` layer, wherever it sits in the stack. The
-    /// previous code hard-coded index 0 and silently no-opped once the user
-    /// added/removed/reordered layers — so typed text never reached the model.
+    private struct PresetColor {
+        let name: String
+        let cgColor: CGColor
+    }
+
+    private var presetColors: [PresetColor] {
+        [
+            .init(name: "White", cgColor: CGColor(red: 1, green: 1, blue: 1, alpha: 1)),
+            .init(name: "Black", cgColor: CGColor(red: 0, green: 0, blue: 0, alpha: 1)),
+            .init(name: "Red", cgColor: CGColor(red: 1, green: 0.23, blue: 0.19, alpha: 1)),
+            .init(name: "Orange", cgColor: CGColor(red: 1, green: 0.58, blue: 0, alpha: 1)),
+            .init(name: "Yellow", cgColor: CGColor(red: 1, green: 0.8, blue: 0, alpha: 1)),
+            .init(name: "Green", cgColor: CGColor(red: 0.2, green: 0.78, blue: 0.35, alpha: 1)),
+            .init(name: "Blue", cgColor: CGColor(red: 0, green: 0.48, blue: 1, alpha: 1)),
+            .init(name: "Purple", cgColor: CGColor(red: 0.55, green: 0.35, blue: 0.77, alpha: 1)),
+            .init(name: "Pink", cgColor: CGColor(red: 1, green: 0.18, blue: 0.58, alpha: 1)),
+            .init(name: "Gray", cgColor: CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)),
+        ]
+    }
+
+    private func isCurrentColor(_ color: CGColor) -> Bool {
+        guard let current = currentTextInput?.color else { return false }
+        return current == color
+    }
+
+    private var currentFontDisplayName: String {
+        guard let fontName = currentTextInput?.fontName,
+              let font = FontCatalog.font(byPostScriptName: fontName) else {
+            return "System"
+        }
+        return font.displayName
+    }
+
+    // MARK: - Text Layer Selector
+
+    private var textLayerSelector: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Editing")
+                .markepiTypography(.metadata)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(textLayers, id: \.index) { entry in
+                        textLayerChip(entry)
+                    }
+                }
+                .padding(.horizontal, 1)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
+    }
+
+    @ViewBuilder
+    private func textLayerChip(_ entry: TextLayerEntry) -> some View {
+        let isActive = entry.index == textLayerIndex
+        Button {
+            viewModel.activeLayerIndex = entry.index
+        } label: {
+            Text(chipLabel(for: entry))
+                .markepiTypography(.controlLabel)
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(isActive ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.10))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(isActive ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                )
+                .foregroundStyle(isActive ? Color.accentColor : Color.primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Edit \(chipLabel(for: entry))")
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
+    }
+
+    private func chipLabel(for entry: TextLayerEntry) -> String {
+        let trimmed = entry.input.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Text \(entry.ordinal)" }
+        let truncated = String(trimmed.prefix(20))
+        return truncated.count < trimmed.count ? truncated + "…" : truncated
+    }
+
+    private var addTextButton: some View {
+        Button {
+            appendTextLayer()
+        } label: {
+            Label(textLayers.isEmpty ? "Add Text" : "Add Another Text",
+                  systemImage: "textbox")
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .buttonStyle(.markepiPrimary())
+        .accessibilityHint("Adds a new text watermark you can position and style on its own")
+    }
+
+    private func appendTextLayer() {
+        let seed = TextWatermarkInput(
+            text: "",
+            fontSize: 48,
+            color: CGColor(gray: 1, alpha: 1),
+            opacity: 1.0,
+            fontName: WatermarkConfiguration.defaultFontPostScriptName
+        )
+        viewModel.config.watermarks.append(
+            .text(seed, position: .bottomRight, scale: WatermarkConfiguration.defaultTextScale, opacity: 1.0, isVisible: true)
+        )
+        viewModel.activeLayerIndex = viewModel.config.watermarks.count - 1
+    }
+
+    private struct TextLayerEntry {
+        let index: Int
+        let ordinal: Int
+        let input: TextWatermarkInput
+    }
+
+    private var textLayers: [TextLayerEntry] {
+        var entries: [TextLayerEntry] = []
+        for (index, layer) in viewModel.config.watermarks.enumerated() {
+            if case .text(let input, _, _, _, _) = layer {
+                entries.append(TextLayerEntry(index: index, ordinal: entries.count + 1, input: input))
+            }
+        }
+        return entries
+    }
+
     private var textLayerIndex: Int? {
-        viewModel.config.watermarks.firstIndex { if case .text = $0 { return true }; return false }
+        let wms = viewModel.config.watermarks
+        let active = viewModel.activeLayerIndex
+        if active >= 0, active < wms.count, case .text = wms[active] { return active }
+        return wms.firstIndex { if case .text = $0 { return true }; return false }
     }
 
     private var currentTextInput: TextWatermarkInput? {
@@ -117,16 +298,6 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
 
     private var currentText: String { currentTextInput?.text ?? "" }
 
-    private var currentFontID: String? {
-        guard let fontName = currentTextInput?.fontName,
-              let font = FontCatalog.font(byPostScriptName: fontName) else { return nil }
-        return font.id
-    }
-
-    /// Updates the text layer's fields, creating a text layer if none exists
-    /// (so the very first keystroke always lands). `fontNameChange` is a double
-    /// optional: `nil` = leave unchanged, `.some(nil)` = system font,
-    /// `.some(name)` = that PostScript name.
     private func updateText(
         text: String? = nil,
         fontNameChange: String?? = nil,
@@ -138,7 +309,6 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
             if let change = fontNameChange { return change }
             return current
         }
-        // Watermarks are single-line; collapse any pasted newlines and cap length.
         func sanitize(_ s: String) -> String {
             String(s.replacingOccurrences(of: "\n", with: " ").prefix(500))
         }
@@ -162,10 +332,10 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
                 fontSize: 48,
                 color: color ?? CGColor(gray: 1, alpha: 1),
                 opacity: opacity ?? 1.0,
-                fontName: resolvedFont(nil)
+                fontName: resolvedFont(WatermarkConfiguration.defaultFontPostScriptName)
             )
             viewModel.config.watermarks.append(
-                .text(seed, position: .bottomRight, scale: 0.10, opacity: 1.0, isVisible: true)
+                .text(seed, position: .bottomRight, scale: WatermarkConfiguration.defaultTextScale, opacity: 1.0, isVisible: true)
             )
             viewModel.activeLayerIndex = viewModel.config.watermarks.count - 1
         }
@@ -175,38 +345,10 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
         Binding(get: { currentText }, set: { updateText(text: $0) })
     }
 
-    private var textColorBinding: Binding<Color> {
-        Binding(
-            get: { currentTextInput.map { Color(cgColor: $0.color) } ?? .white },
-            set: { updateText(color: Self.cgColor(from: $0), createIfMissing: false) }
-        )
-    }
-
     private var textOpacityBinding: Binding<Double> {
         Binding(
             get: { Double(currentTextInput?.opacity ?? 1.0) },
             set: { updateText(opacity: CGFloat($0), createIfMissing: false) }
         )
-    }
-
-    private var fontNameBinding: Binding<String?> {
-        Binding(
-            get: { currentFontID },
-            set: { newFontID in
-                let ps = newFontID.flatMap { FontCatalog.font(byID: $0)?.postScriptName }
-                updateText(fontNameChange: .some(ps), createIfMissing: false)
-            }
-        )
-    }
-
-    /// Converts a SwiftUI `Color` to a `CGColor` on either platform.
-    private static func cgColor(from color: Color) -> CGColor {
-        #if canImport(UIKit)
-        return UIColor(color).cgColor
-        #elseif canImport(AppKit)
-        return NSColor(color).cgColor
-        #else
-        return CGColor(red: 1, green: 1, blue: 1, alpha: 1)
-        #endif
     }
 }

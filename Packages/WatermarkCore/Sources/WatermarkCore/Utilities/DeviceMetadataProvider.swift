@@ -95,4 +95,42 @@ public struct DeviceMetadataProvider {
         }
         return parts.joined(separator: "   ·   ")
     }
+
+    /// Builds the white-frame caption from a free-text prefix plus the
+    /// user-selected metadata fields.
+    ///
+    /// Fields are resolved via `EXIFTokenParser` and emitted in canonical
+    /// `CaptionField.allCases` order, joined by " · ". Fields whose metadata is
+    /// missing (parser returns "--") are dropped rather than shown. The prefix,
+    /// which may itself contain `{token}` patterns, is substituted and placed
+    /// first. Returns an empty string when neither the prefix nor any selected
+    /// field yields content — the renderer treats that as "no caption".
+    ///
+    /// - Parameters:
+    ///   - prefix: Free text shown before the fields (may be empty).
+    ///   - fields: Metadata fields to include.
+    ///   - metadata: Source image metadata dictionary.
+    /// - Returns: The assembled caption, or "" when nothing renders.
+    public static func caption(
+        prefix: String,
+        fields: [CaptionField],
+        metadata: [String: Any]
+    ) -> String {
+        var parts: [String] = []
+
+        let trimmedPrefix = prefix.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedPrefix.isEmpty {
+            parts.append(EXIFTokenParser.substitute(trimmedPrefix, metadata: metadata))
+        }
+
+        // Render in canonical declaration order, not tick order, and de-dupe.
+        for field in CaptionField.allCases where fields.contains(field) {
+            let value = EXIFTokenParser.substitute(field.token, metadata: metadata)
+            if value != "--" && !value.isEmpty {
+                parts.append(value)
+            }
+        }
+
+        return parts.joined(separator: " · ")
+    }
 }

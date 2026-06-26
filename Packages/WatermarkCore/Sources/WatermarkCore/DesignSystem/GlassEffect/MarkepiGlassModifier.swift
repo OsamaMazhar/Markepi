@@ -33,20 +33,34 @@ public struct MarkepiGlassModifier<S: Shape>: ViewModifier {
         self.isEnabled = isEnabled
     }
 
+    @ViewBuilder
     public func body(content: Content) -> some View {
-        content
-            .modify { view in
-                // D-02: iOS/macOS 26 Liquid Glass with material fallback on earlier OS
-                if #available(iOS 26, macOS 26, *), isEnabled {
-                    // D-03: system-adaptive tint (cool light, warm dark) —
-                    // the .regular variant handles this automatically (no custom tint)
-                    view.glassEffect(.regular, in: shape)
-                } else if isEnabled {
-                    view.background(fallbackMaterial, in: shape)
-                }
-                // When isEnabled is false (e.g., Reduce Transparency),
-                // render view unmodified with no background
+        if isEnabled {
+            #if MARKEPI_LIQUID_GLASS
+            // D-02: iOS/macOS 26 Liquid Glass with material fallback on earlier OS.
+            // Gated behind the MARKEPI_LIQUID_GLASS compile flag: the iOS-26
+            // `glassEffect` opaque-type descriptor crashes (`EXC_BAD_ACCESS` in
+            // `swift_getOpaqueTypeMetadata`) on simulator runtimes whose Swift
+            // ABI predates the SDK the app is built with — and merely *compiling*
+            // the call into the render path is enough to trigger it, even when
+            // the branch isn't taken. Define MARKEPI_LIQUID_GLASS in build
+            // settings only when the run destination's runtime matches the SDK.
+            if #available(iOS 26, macOS 26, *) {
+                // D-03: system-adaptive tint (cool light, warm dark) — the
+                // .regular variant handles this automatically (no custom tint).
+                content.glassEffect(.regular, in: shape)
+            } else {
+                content.background(fallbackMaterial, in: shape)
             }
+            #else
+            content.background(fallbackMaterial, in: shape)
+            #endif
+        } else {
+            // Reduce Transparency: render content unmodified (no background).
+            // Previously this branch returned EmptyView via `.modify`, which
+            // dropped the content entirely.
+            content
+        }
     }
 }
 

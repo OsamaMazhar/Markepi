@@ -14,6 +14,11 @@ struct PhotoItem: Identifiable, Hashable, Sendable {
     /// The media type detected from the source URL.
     var mediaType: WatermarkEngine.MediaType = .unknown
 
+    /// The user's original filename (e.g. "IMG_4567.HEIC"), when known — from
+    /// a Files import or a Photos asset resource. Used to keep the shared/saved
+    /// file's name instead of an internal "watermark_UUID" temp name.
+    var originalFilename: String? = nil
+
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }

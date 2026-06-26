@@ -10,7 +10,9 @@ import WatermarkCore
 ///
 /// Presented as a sheet from `ContentView` (wired in Plan 04).
 public struct TemplateListView<ViewModel: WatermarkConfigurable & Observable>: View {
-    @State var viewModel: ViewModel
+    var viewModel: ViewModel
+
+    @Environment(\.dismiss) private var dismiss
 
     /// The current media source URL used for rendering preview thumbnails.
     /// Wired by ContentView in Plan 04 from `viewModel.currentPhoto?.sourceURL`.
@@ -134,7 +136,7 @@ public struct TemplateListView<ViewModel: WatermarkConfigurable & Observable>: V
                 ContentUnavailableView(
                     "No Templates Saved",
                     systemImage: "doc.text.magnifyingglass",
-                    description: Text("Configure your watermark then tap **Save Template** to create your first reusable template. Templates work across the app, share extension, and Photos extension.")
+                    description: Text("Configure your watermark then tap **Save Template** to create your first reusable template. Templates work across the app and share extension.")
                 )
             }
         }
@@ -148,6 +150,7 @@ public struct TemplateListView<ViewModel: WatermarkConfigurable & Observable>: V
         )
         .onTapGesture {
             viewModel.applyTemplate(template)
+            dismiss()
         }
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
@@ -166,6 +169,7 @@ public struct TemplateListView<ViewModel: WatermarkConfigurable & Observable>: V
     private func contextMenuContent(for template: Template) -> some View {
         Button {
             viewModel.applyTemplate(template)
+            dismiss()
         } label: {
             Label("Apply", systemImage: "checkmark")
         }

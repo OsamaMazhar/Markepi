@@ -2,7 +2,7 @@ import SwiftUI
 
 /// A standalone Share/Render button that drives off the ViewModel's
 /// `renderingState`. Generic over any `WatermarkConfigurable & Observable`
-/// ViewModel so all three targets can consume it.
+/// ViewModel so the main app and Share Extension can consume it.
 ///
 /// Placement-agnostic — does not assume it's in ControlsView, a toolbar,
 /// or a floating pill. The caller provides the container styling.
@@ -22,7 +22,7 @@ import SwiftUI
 /// | `.done` | "Ready to Share" / "Ready to Share All" (primary) | `presentShareSheet()` |
 /// | `.error` | "Retry" (secondary) | `renderAndPrepareShare()` |
 public struct ShareActionButton<ViewModel: WatermarkConfigurable & Observable>: View {
-    @State var viewModel: ViewModel
+    var viewModel: ViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 

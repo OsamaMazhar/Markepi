@@ -15,32 +15,54 @@ public struct LogoPickerView<ViewModel: WatermarkConfigurable & Observable>: Vie
     @State private var logoPickerItems: [PhotosPickerItem] = []
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    public init(viewModel: ViewModel) {
+    /// Whether to render the built-in section header. Hidden when the host
+    /// already provides a single title (editor tool panel); shown when the view
+    /// stands alone as a labeled section (extensions' ControlsView).
+    private let showsSectionHeader: Bool
+
+    public init(viewModel: ViewModel, showsSectionHeader: Bool = true) {
         self.viewModel = viewModel
+        self.showsSectionHeader = showsSectionHeader
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             // Section header
-            Text("Logo")
-                .markepiTypography(.sectionHeader)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
-
-            // Row container with glass backing
-            VStack(spacing: 0) {
-                if hasLogoLayer {
-                    logoSelectedView
-                } else {
-                    addLogoButton
-                }
+            if showsSectionHeader {
+                Text("Logo")
+                    .markepiTypography(.sectionHeader)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
             }
-            .markepiGlass(
-                shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
-                isEnabled: !reduceTransparency
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .padding(.horizontal, 16)
+
+            if logoLayerIndices.isEmpty {
+                // Empty state: a single capsule button, with no surrounding card
+                // so its shape isn't nested inside a mismatched rounded rect.
+                addLogoButton
+                    .padding(.horizontal, 16)
+            } else {
+                // One selectable, removable row per logo instance.
+                VStack(spacing: 0) {
+                    ForEach(Array(logoLayerIndices.enumerated()), id: \.element) { ordinal, index in
+                        logoRow(index: index, ordinal: ordinal + 1)
+                        if index != logoLayerIndices.last {
+                            Divider().padding(.leading, 16)
+                        }
+                    }
+                }
+                .markepiGlass(
+                    shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                    isEnabled: !reduceTransparency
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.horizontal, 16)
+
+                // "Add another logo" — capsule button below the card.
+                addLogoButton
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+            }
         }
         .confirmationDialog("Add Logo Watermark", isPresented: $showConfirmationDialog) {
             Button("From Photos") {
@@ -80,16 +102,10 @@ public struct LogoPickerView<ViewModel: WatermarkConfigurable & Observable>: Vie
         }
     }
 
-    private var hasLogoLayer: Bool {
-        viewModel.config.watermarks.contains { layer in
-            if case .image = layer { return true }
-            return false
-        }
-    }
-
-    private var logoLayerIndex: Int? {
-        viewModel.config.watermarks.firstIndex { layer in
-            if case .image = layer { return true }
+    /// Indices of every image (logo) layer, in stack order.
+    private var logoLayerIndices: [Int] {
+        viewModel.config.watermarks.indices.filter {
+            if case .image = viewModel.config.watermarks[$0] { return true }
             return false
         }
     }
@@ -98,35 +114,56 @@ public struct LogoPickerView<ViewModel: WatermarkConfigurable & Observable>: Vie
         Button {
             showConfirmationDialog = true
         } label: {
-            Label("Add Logo", systemImage: "photo.badge.plus")
+            Label(logoLayerIndices.isEmpty ? "Add Logo" : "Add Another Logo",
+                  systemImage: "photo.badge.plus")
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
         }
         .buttonStyle(.markepiPrimary())
         .accessibilityLabel("Add logo watermark")
         .accessibilityHint("Choose a logo image from your photo library or files")
     }
 
-    private var logoSelectedView: some View {
-        HStack {
+    /// A single logo instance: tap to select (so position/scale edit it),
+    /// trash to remove. The active instance is highlighted.
+    private func logoRow(index: Int, ordinal: Int) -> some View {
+        let isActive = viewModel.activeLayerIndex == index
+        return HStack(spacing: 12) {
             Image(systemName: "photo")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isActive ? Color.accentColor : .secondary)
                 .frame(width: 24)
 
-            Text("Logo")
+            Text("Logo \(ordinal)")
                 .markepiTypography(.controlLabel)
+
+            if isActive {
+                Text("Editing")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Color.accentColor.opacity(0.16), in: Capsule())
+            }
 
             Spacer()
 
-            Button {
-                if let index = logoLayerIndex {
+            Button(role: .destructive) {
+                withAnimation(.easeOut(duration: 0.25)) {
                     viewModel.removeLayer(at: index)
                 }
             } label: {
-                Text("Remove")
-                    .font(.body)
+                Image(systemName: "trash")
+                    .foregroundStyle(.red)
             }
-            .buttonStyle(.markepiDestructive())
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove Logo \(ordinal)")
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .onTapGesture { viewModel.activeLayerIndex = index }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isActive ? [.isSelected, .isButton] : .isButton)
+        .accessibilityHint("Double tap to select this logo for position and size edits")
     }
 }
