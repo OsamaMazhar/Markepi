@@ -72,9 +72,18 @@ public actor WatermarkEngine {
     ///   d. Render via shared CIContext to CGImage
     ///   e. Write to temp file with metadata + HDR re-attached
     ///   f. Return ProcessingResult with temp file URL
+    ///
+    /// When `provenance` is non-nil (Plan 19-02), the pipeline additionally:
+    ///   - analyzes the source provenance (19-01 analyzer),
+    ///   - applies the metadata privacy profile to the outgoing metadata dict,
+    ///   - merges IPTC rights metadata into the outgoing metadata dict,
+    ///   - signs the output with the injected C2PA client (no-op by default),
+    ///   - returns an `ExportReceipt` on the `ProcessingResult`.
     public func process(
         sourceURL: URL,
-        config: WatermarkConfiguration
+        config: WatermarkConfiguration,
+        metadataOverride: [String: Any]? = nil,
+        provenance: ProvenanceExportOptions? = nil
     ) async throws -> ProcessingResult {
         // 1. Load (validates size, extracts metadata + HDR + CIImage)
         let loaded = try ImageLoader.load(from: sourceURL)
@@ -83,14 +92,23 @@ public actor WatermarkEngine {
         let normalized = OrientationNormalizer.normalize(loaded.ciImage)
 
         // 3. Build filter graph (pure CIImage ops, no context needed).
-        // Inject the source UTI so the white-frame caption's {format} token and
-        // detailed-attribution line can show the file format (HEIC/JPEG/…).
-        var graphMetadata = loaded.metadata
-        graphMetadata["_SourceUTI"] = loaded.sourceUTI
-        // Use the true (orientation-normalized) output size for the {dimensions}
-        // caption token so it's always present and correct.
-        graphMetadata["PixelWidth"] = Int(normalized.extent.width.rounded())
-        graphMetadata["PixelHeight"] = Int(normalized.extent.height.rounded())
+        // `metadataOverride` lets a caller supply the caption's source metadata —
+        // used by the VIDEO preview, which renders an extracted PNG frame but
+        // must show the *video's* device/date/dimensions/format, not the PNG's.
+        var graphMetadata: [String: Any]
+        if let metadataOverride {
+            graphMetadata = metadataOverride
+            graphMetadata["_SourceUTI"] = metadataOverride["_SourceUTI"] ?? loaded.sourceUTI
+        } else {
+            // Inject the source UTI so the white-frame caption's {format} token and
+            // detailed-attribution line can show the file format (HEIC/JPEG/…).
+            graphMetadata = loaded.metadata
+            graphMetadata["_SourceUTI"] = loaded.sourceUTI
+            // Use the true (orientation-normalized) output size for the {dimensions}
+            // caption token so it's always present and correct.
+            graphMetadata["PixelWidth"] = Int(normalized.extent.width.rounded())
+            graphMetadata["PixelHeight"] = Int(normalized.extent.height.rounded())
+        }
         let composited = try buildFilterGraph(
             base: normalized,
             config: config,
@@ -122,12 +140,34 @@ public actor WatermarkEngine {
             throw PipelineError.renderFailed
         }
 
-        // 5. Write to temp file with metadata + HDR re-attached
+        // 5. Write to temp file with metadata + HDR re-attached.
+        // Provenance hook (Plan 19-02): when `provenance` options are supplied,
+        // analyze the source, apply the privacy profile, and merge IPTC rights
+        // into the outgoing metadata dict BEFORE ImageWriter.write. C2PA signing
+        // happens AFTER write (the manifest attaches to the already-written file).
         let destinationUTI = config.outputFormat.uti ?? loaded.sourceUTI
         let outputURL = try TempFileManager.createTempFile(uti: destinationUTI as CFString)
+
+        var outgoing: [String: Any] = loaded.metadata
+        var report: SourceProvenanceReport?
+
+        if let prov = provenance {
+            // (a) Analyze source provenance — reads C2PA summary via the client.
+            let c2paSummary = await prov.c2paClient.readSourceSummary(from: sourceURL)
+            report = SourceProvenanceAnalyzer().analyze(
+                metadata: loaded.metadata,
+                userDeclaration: prov.userDeclaration,
+                c2paSummary: c2paSummary
+            )
+            // (c) Apply privacy profile (GPS strip, serial removal) — D-10.
+            outgoing = MetadataPreservationPolicy().apply(prov.privacyProfile, to: outgoing)
+            // (d) Merge IPTC rights metadata — AUTH-03, D-07.
+            outgoing = IPTCRightsMetadataWriter().merged(into: outgoing, rights: prov.rights)
+        }
+
         try ImageWriter.write(
             cgImage: cgImage,
-            metadata: loaded.metadata,
+            metadata: outgoing,
             gainMapAuxData: loaded.gainMapAuxData,
             dngMetadata: loaded.dngMetadata,
             destinationUTI: destinationUTI,
@@ -135,8 +175,40 @@ public actor WatermarkEngine {
             to: outputURL
         )
 
+        // (e) C2PA signing — AFTER ImageWriter.write. The manifest attaches to
+        // the already-written file. Noop client reports 'not signed' honestly.
+        var receipt: ExportReceipt?
+        if let prov = provenance, prov.includeC2PA, let report {
+            let identity = C2PASigningIdentityStore().currentIdentity()
+            let manifest = C2PAManifestRequest(
+                appVersion: prov.appVersion,
+                sourceState: report.state,
+                sourceEvidenceSummary: report.evidence.map(\.summary),
+                visibleWatermarkApplied: !config.watermarks.isEmpty,
+                whiteFrameApplied: config.whiteFrame?.isEnabled == true,
+                privacyAction: prov.privacyProfile == .preserveAll
+                    ? nil : "Sensitive metadata removed",
+                userDeclaration: prov.userDeclaration,
+                invisibleWatermarkPayloadID: nil
+            )
+            let signing = try await prov.c2paClient.signExport(
+                outputURL: outputURL,
+                source: sourceURL,
+                manifest: manifest,
+                identity: identity
+            )
+            receipt = ExportReceipt(report: report, signingResult: signing)
+        } else if let report {
+            receipt = ExportReceipt(report: report)
+        }
+
         // 6. Return result
-        return ProcessingResult(url: outputURL, data: nil, outputUTI: destinationUTI)
+        return ProcessingResult(
+            url: outputURL,
+            data: nil,
+            outputUTI: destinationUTI,
+            provenanceReceipt: receipt
+        )
     }
 
     /// Processes a video file, applying watermark via AVFoundation CALayer overlay.
@@ -156,12 +228,14 @@ public actor WatermarkEngine {
     public func processVideo(
         sourceURL: URL,
         config: WatermarkConfiguration,
-        onProgress: (@Sendable (Double, TimeInterval?) -> Void)? = nil
+        onProgress: (@Sendable (Double, TimeInterval?) -> Void)? = nil,
+        provenance: ProvenanceExportOptions? = nil
     ) async throws -> ProcessingResult {
         let (outputURL, validation) = try await VideoProcessor.process(
             sourceURL: sourceURL,
             config: config,
-            onProgress: onProgress
+            onProgress: onProgress,
+            provenance: provenance
         )
 
         let sourceUTI = (try? sourceURL.resourceValues(forKeys: [.typeIdentifierKey]).typeIdentifier)
@@ -356,6 +430,29 @@ public actor WatermarkEngine {
             position.y += positioningExtent.origin.y
 
             layers.append((opacityAdjusted, position))
+        }
+
+        // Retro date stamp — composited above all watermark layers, positioned
+        // within the same (frame-inset) content rect so it stays clear of the
+        // white border. Scales by HEIGHT like text (sizeRatio == digit height as
+        // a fraction of image height).
+        if let dateConfig = config.dateStamp,
+           let stampImage = DateStampRenderer.render(config: dateConfig, metadata: metadata) {
+            let factor = WatermarkScaling.transformFactor(
+                layerScale: dateConfig.sizeRatio,
+                naturalWidth: stampImage.extent.height,
+                baseWidth: extent.height
+            )
+            let scaled = stampImage.transformed(by: CGAffineTransform(scaleX: factor, y: factor))
+            var position = PositionCalculator.position(
+                for: dateConfig.position,
+                watermarkExtent: scaled.extent,
+                baseExtent: positioningExtent,
+                padding: effectivePadding
+            )
+            position.x += positioningExtent.origin.x
+            position.y += positioningExtent.origin.y
+            layers.append((scaled, position))
         }
 
         // D-12: Composite watermark layers onto base (text → image, bottom to top)

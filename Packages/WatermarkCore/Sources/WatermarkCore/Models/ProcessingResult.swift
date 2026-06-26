@@ -30,18 +30,25 @@ public struct ProcessingResult: Sendable {
     /// Nil for non-Live-Photo results.
     public let livePhotoVideoURL: URL?
 
+    /// Provenance export receipt (Plan 19-02). Nil when no provenance options
+    /// were passed to `WatermarkEngine.process` (today's default behavior — no
+    /// source analysis, no IPTC merge, no C2PA signing).
+    public let provenanceReceipt: ExportReceipt?
+
     public init(
         url: URL?,
         data: Data?,
         outputUTI: String,
         videoValidation: ExportValidator.ExportValidationResult? = nil,
-        livePhotoVideoURL: URL? = nil
+        livePhotoVideoURL: URL? = nil,
+        provenanceReceipt: ExportReceipt? = nil
     ) {
         self.url = url
         self.data = data
         self.outputUTI = outputUTI
         self.videoValidation = videoValidation
         self.livePhotoVideoURL = livePhotoVideoURL
+        self.provenanceReceipt = provenanceReceipt
     }
 }
 
