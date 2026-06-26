@@ -189,7 +189,8 @@ public actor WatermarkEngine {
                 privacyAction: prov.privacyProfile == .preserveAll
                     ? nil : "Sensitive metadata removed",
                 userDeclaration: prov.userDeclaration,
-                invisibleWatermarkPayloadID: nil
+                invisibleWatermarkPayloadID: nil,
+                creator: prov.rights.creator.isEmpty ? nil : prov.rights.creator
             )
             let signing = try await prov.c2paClient.signExport(
                 outputURL: outputURL,

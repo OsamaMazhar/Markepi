@@ -1,0 +1,8 @@
+.build/
+Certs/*-key*.pem
+Certs/*-sec1*.pem
+Certs/*.srl
+Certs/leaf.csr
+Certs/leaf-ext.cnf
+Certs/test-chain.pem
+Certs/test-leaf-key.pem

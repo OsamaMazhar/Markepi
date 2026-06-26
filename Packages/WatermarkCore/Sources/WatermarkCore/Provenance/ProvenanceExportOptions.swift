@@ -17,7 +17,8 @@ public struct ProvenanceExportOptions: Sendable {
     public var userDeclaration: UserSourceDeclaration
     /// App version string for the manifest claim generator.
     public var appVersion: String
-    /// Injected C2PA client (NoopC2PAProvenanceClient by default).
+    /// Injected C2PA client. Defaults to the real `C2PASwiftProvenanceClient`
+    /// when c2pa-swift is available, otherwise `NoopC2PAProvenanceClient`.
     public var c2paClient: any C2PAProvenanceClient
 
     public init(
@@ -26,13 +27,17 @@ public struct ProvenanceExportOptions: Sendable {
         includeC2PA: Bool,
         userDeclaration: UserSourceDeclaration,
         appVersion: String,
-        c2paClient: any C2PAProvenanceClient
+        c2paClient: (any C2PAProvenanceClient)? = nil
     ) {
         self.rights = rights
         self.privacyProfile = privacyProfile
         self.includeC2PA = includeC2PA
         self.userDeclaration = userDeclaration
         self.appVersion = appVersion
-        self.c2paClient = c2paClient
+        #if canImport(C2PA)
+        self.c2paClient = c2paClient ?? C2PASwiftProvenanceClient()
+        #else
+        self.c2paClient = c2paClient ?? NoopC2PAProvenanceClient()
+        #endif
     }
 }
