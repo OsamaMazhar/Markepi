@@ -36,6 +36,13 @@ struct ProvenanceExportTests {
             #expect(C2PASigningIdentity.IdentityType.unsupported.rawValue == "unsupported")
         }
 
+        @Test("Only concrete local identity types are usable for signing")
+        func identityUsabilityIsExplicit() {
+            #expect(C2PASigningIdentity.IdentityType.secureEnclave.isUsableForSigning)
+            #expect(C2PASigningIdentity.IdentityType.localSoftware.isUsableForSigning)
+            #expect(!C2PASigningIdentity.IdentityType.unsupported.isUsableForSigning)
+        }
+
         @Test("Display name never describes a verified legal identity (D-24)")
         func displayNameIsNotVerifiedLegalIdentity() {
             let store = C2PASigningIdentityStore()
@@ -375,6 +382,61 @@ struct ProvenanceExportTests {
     @Suite("WatermarkEngine Provenance Hook")
     struct WatermarkEngineProvenanceHookTests {
 
+        struct ExplodingC2PAClient: C2PAProvenanceClient {
+            enum Error: Swift.Error { case signWasCalled }
+
+            func readSourceSummary(from url: URL) async -> SourceProvenanceAnalyzer.C2PASummary? {
+                nil
+            }
+
+            func signExport(
+                outputURL: URL,
+                source: URL,
+                manifest: C2PAManifestRequest,
+                identity: C2PASigningIdentity
+            ) async throws -> C2PASigningResult {
+                throw Error.signWasCalled
+            }
+
+            func verifyExport(at url: URL) async -> C2PAVerificationResult? {
+                nil
+            }
+        }
+
+        actor SigningProbe {
+            private(set) var creators: [String?] = []
+
+            func record(creator: String?) {
+                creators.append(creator)
+            }
+        }
+
+        struct RecordingC2PAClient: C2PAProvenanceClient {
+            let probe: SigningProbe
+
+            func readSourceSummary(from url: URL) async -> SourceProvenanceAnalyzer.C2PASummary? {
+                nil
+            }
+
+            func signExport(
+                outputURL: URL,
+                source: URL,
+                manifest: C2PAManifestRequest,
+                identity: C2PASigningIdentity
+            ) async throws -> C2PASigningResult {
+                await probe.record(creator: manifest.creator)
+                return C2PASigningResult(
+                    status: .signed,
+                    identityType: identity.type,
+                    displayName: identity.displayName
+                )
+            }
+
+            func verifyExport(at url: URL) async -> C2PAVerificationResult? {
+                nil
+            }
+        }
+
         @Test("Photo export with provenance returns a receipt with source state")
         func photoExportReturnsReceipt() async throws {
             // Generate a small JPEG test image.
@@ -422,6 +484,84 @@ struct ProvenanceExportTests {
             // C2PA was requested but Noop client → not signed honestly
             #expect(receipt.signingResult?.status == .notSigned)
             #expect(receipt.signingResult?.displayName == "Markepi device signing identity")
+        }
+
+        @Test("C2PA signing is not attempted without a creator name")
+        func c2paSigningRequiresCreatorBeforeClientCall() async throws {
+            let (cgImage, _) = TestImageFactory.solidColorImage(
+                color: CGColor(red: 0.4, green: 0.4, blue: 0.8, alpha: 1),
+                size: CGSize(width: 32, height: 32)
+            )
+            let tmp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("prov-no-creator-\(UUID().uuidString).jpg")
+            let destData = NSMutableData()
+            let dest = try #require(CGImageDestinationCreateWithData(
+                destData, "public.jpeg" as CFString, 1, nil
+            ))
+            CGImageDestinationAddImage(dest, cgImage, nil)
+            #expect(CGImageDestinationFinalize(dest))
+            try (destData as Data).write(to: tmp)
+            defer { try? FileManager.default.removeItem(at: tmp) }
+
+            let provenance = ProvenanceExportOptions(
+                rights: RightsMetadata(),
+                privacyProfile: .preserveAll,
+                includeC2PA: true,
+                userDeclaration: .none,
+                appVersion: "2.2.0-test",
+                c2paClient: ExplodingC2PAClient()
+            )
+
+            let result = try await WatermarkEngine.shared.process(
+                sourceURL: tmp,
+                config: WatermarkConfiguration(),
+                provenance: provenance
+            )
+            let receipt = try #require(result.provenanceReceipt)
+            #expect(receipt.signingResult?.status == .notSigned)
+            #expect(receipt.signingResult?.warnings.contains {
+                $0.localizedCaseInsensitiveContains("creator")
+            } == true)
+        }
+
+        @Test("C2PA signing trims creator before building manifest")
+        func c2paSigningTrimsCreatorBeforeClientCall() async throws {
+            let (cgImage, _) = TestImageFactory.solidColorImage(
+                color: CGColor(red: 0.9, green: 0.6, blue: 0.2, alpha: 1),
+                size: CGSize(width: 32, height: 32)
+            )
+            let tmp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("prov-trim-creator-\(UUID().uuidString).jpg")
+            let destData = NSMutableData()
+            let dest = try #require(CGImageDestinationCreateWithData(
+                destData, "public.jpeg" as CFString, 1, nil
+            ))
+            CGImageDestinationAddImage(dest, cgImage, nil)
+            #expect(CGImageDestinationFinalize(dest))
+            try (destData as Data).write(to: tmp)
+            defer { try? FileManager.default.removeItem(at: tmp) }
+
+            var rights = RightsMetadata()
+            rights.creator = "  Jane Doe  "
+            let probe = SigningProbe()
+            let provenance = ProvenanceExportOptions(
+                rights: rights,
+                privacyProfile: .preserveAll,
+                includeC2PA: true,
+                userDeclaration: .none,
+                appVersion: "2.2.0-test",
+                c2paClient: RecordingC2PAClient(probe: probe)
+            )
+
+            let result = try await WatermarkEngine.shared.process(
+                sourceURL: tmp,
+                config: WatermarkConfiguration(),
+                provenance: provenance
+            )
+            let receipt = try #require(result.provenanceReceipt)
+            #expect(receipt.signingResult?.status == .signed)
+            let creators = await probe.creators
+            #expect(creators == ["Jane Doe"])
         }
 
         @Test("Photo export WITHOUT provenance returns nil receipt (backward compat)")

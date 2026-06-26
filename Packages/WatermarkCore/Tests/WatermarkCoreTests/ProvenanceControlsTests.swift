@@ -60,10 +60,12 @@ struct ProvenanceControlsTests {
         func defaultsDoNotEnableVerifiedCamera() {
             // Verified-camera language is gated by the runtime report, NOT config.
             // The default config must not carry any verified-camera enabling flag.
-            let config = WatermarkConfiguration()
             // No config field can unlock verified-camera wording; the gate is
             // `report.allowsVerifiedCameraClaim` which only the analyzer sets.
-            #expect(config.sourceDeclaration != .verifiedCamera)
+            let config = WatermarkConfiguration()
+            // A neutral default declaration; verified-camera is never a config value.
+            #expect(config.sourceDeclaration == .none)
+            #expect(config.includeC2PAManifest == false)
         }
     }
 
@@ -136,6 +138,35 @@ struct ProvenanceControlsTests {
         func signingNeverAutomatic() {
             let config = WatermarkConfiguration()
             #expect(config.includeC2PAManifest == false)
+        }
+    }
+
+    @Suite("Batch C2PA Disclosure")
+    struct BatchC2PADisclosureTests {
+
+        @Test("Mixed batches say images are signed and videos continue without errors")
+        func mixedBatchDisclosure() {
+            let disclosure = BatchC2PASigningDisclosure(signableImageCount: 3, videoCount: 2)
+
+            #expect(disclosure.hasVideos)
+            #expect(disclosure.hasSignableImages)
+            #expect(disclosure.confirmationButtonTitle == "OK, Sign Images")
+            #expect(disclosure.alertContinueButtonTitle == "OK, Sign Images")
+            #expect(disclosure.alertMessage.contains("sign the image exports"))
+            #expect(disclosure.alertMessage.contains("videos without C2PA signatures"))
+            #expect(disclosure.alertMessage.contains("Videos will not be treated as signing errors"))
+        }
+
+        @Test("All-video batches do not pretend signing is available")
+        func allVideoDisclosure() {
+            let disclosure = BatchC2PASigningDisclosure(signableImageCount: 0, videoCount: 2)
+
+            #expect(disclosure.hasVideos)
+            #expect(disclosure.hasSignableImages == false)
+            #expect(disclosure.confirmationButtonTitle == "OK, Continue")
+            #expect(disclosure.alertContinueButtonTitle == "OK, Continue")
+            #expect(disclosure.sheetText.contains("no images"))
+            #expect(disclosure.sheetText.contains("not available for videos"))
         }
     }
 }

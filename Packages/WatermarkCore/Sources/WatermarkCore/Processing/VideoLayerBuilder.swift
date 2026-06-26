@@ -26,7 +26,8 @@ public struct VideoLayerBuilder {
     /// - Throws: `PipelineError` if watermark rendering fails
     public static func buildLayers(
         config: WatermarkConfiguration,
-        videoSize: CGSize
+        videoSize: CGSize,
+        metadata: [String: Any] = [:]
     ) throws -> (parentLayer: CALayer, videoLayer: CALayer) {
         let parentLayer = CALayer()
         parentLayer.frame = CGRect(origin: .zero, size: videoSize)
@@ -41,7 +42,8 @@ public struct VideoLayerBuilder {
             let frameLayer = try buildWhiteFrameLayer(
                 config: frameConfig,
                 baseExtent: CGRect(origin: .zero, size: videoSize),
-                videoSize: videoSize
+                videoSize: videoSize,
+                metadata: metadata
             )
             parentLayer.addSublayer(frameLayer)
         }
@@ -67,6 +69,38 @@ public struct VideoLayerBuilder {
                 padding: config.padding
             )
             parentLayer.addSublayer(watermarkLayer)
+        }
+
+        // Retro date stamp — above watermark layers, parity with the photo path
+        // in WatermarkEngine.buildFilterGraph. Scaled by HEIGHT (digit height as
+        // a fraction of the video height).
+        if let dateConfig = config.dateStamp,
+           let stampCI = DateStampRenderer.render(config: dateConfig, metadata: metadata) {
+            let cgImage = try renderToCGImage(stampCI)
+            let factor = WatermarkScaling.transformFactor(
+                layerScale: dateConfig.sizeRatio,
+                naturalWidth: CGFloat(cgImage.height),
+                baseWidth: videoSize.height
+            )
+            let scaledWidth = CGFloat(cgImage.width) * factor
+            let scaledHeight = CGFloat(cgImage.height) * factor
+            let scaledExtent = CGRect(x: 0, y: 0, width: scaledWidth, height: scaledHeight)
+
+            var ciPosition = PositionCalculator.position(
+                for: dateConfig.position,
+                watermarkExtent: scaledExtent,
+                baseExtent: positioningExtent,
+                padding: config.padding
+            )
+            ciPosition.x += positioningExtent.origin.x
+            ciPosition.y += positioningExtent.origin.y
+
+            let dateLayer = CALayer()
+            dateLayer.contents = cgImage
+            dateLayer.contentsGravity = .resizeAspect
+            let calayerY = videoSize.height - ciPosition.y - scaledHeight
+            dateLayer.frame = CGRect(origin: CGPoint(x: ciPosition.x, y: calayerY), size: scaledExtent.size)
+            parentLayer.addSublayer(dateLayer)
         }
 
         return (parentLayer, videoLayer)
@@ -145,19 +179,19 @@ public struct VideoLayerBuilder {
 
     /// Builds a white frame CALayer for video compositing.
     ///
-    /// Renders the white frame via `WhiteFrameRenderer` with empty metadata
-    /// (videos don't carry EXIF in the same way as photos), converts to CGImage,
-    /// and creates a CALayer with the frame contents.
+    /// Renders the white frame via `WhiteFrameRenderer` with the video's
+    /// metadata (device/model, creation date, dimensions, format — extracted in
+    /// `VideoProcessor`), converts to CGImage, and creates the frame CALayer.
     private static func buildWhiteFrameLayer(
         config: WhiteFrameConfig,
         baseExtent: CGRect,
-        videoSize: CGSize
+        videoSize: CGSize,
+        metadata: [String: Any]
     ) throws -> CALayer {
-        // Videos don't have EXIF metadata — pass empty dict
         let frameCIImage = try WhiteFrameRenderer.render(
             config: config,
             baseExtent: baseExtent,
-            metadata: [:],
+            metadata: metadata,
             scale: 1.0
         )
 

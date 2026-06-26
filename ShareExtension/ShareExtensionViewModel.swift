@@ -30,6 +30,10 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
             if config.sourceDeclaration != analyzedDeclaration {
                 analyzeCurrentSource()
             }
+            if !config.provenanceEnabled && oldValue.provenanceEnabled {
+                config.includeC2PAManifest = false
+                lastExportReceipt = nil
+            }
         }
     }
 
@@ -53,22 +57,53 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
     var lastExportReceipt: ExportReceipt?
     private var analyzedDeclaration: UserSourceDeclaration = .none
 
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    private func provenanceOptions(for config: WatermarkConfiguration) -> ProvenanceExportOptions {
+        ProvenanceExportOptions(
+            rights: config.rightsMetadata,
+            privacyProfile: config.metadataPrivacyProfile,
+            includeC2PA: config.includeC2PAManifest,
+            userDeclaration: config.sourceDeclaration,
+            appVersion: appVersion
+        )
+    }
+
+    /// Provenance options for an export, gated by the master switch. Returns nil
+    /// when provenance is disabled, so the engine produces no receipt and the
+    /// share opens directly with no signing or metadata changes.
+    private func exportProvenance(for config: WatermarkConfiguration) -> ProvenanceExportOptions? {
+        config.provenanceEnabled ? provenanceOptions(for: config) : nil
+    }
+
     func analyzeCurrentSource() {
         guard let url = sourceURL else {
             sourceProvenanceReport = nil; return
         }
         let declaration = config.sourceDeclaration
-        if isVideo {
-            sourceProvenanceReport = SourceProvenanceReport(
-                state: .unknown, evidence: [],
-                warnings: ["Video source provenance is not analyzed in this version."],
-                userDeclaration: declaration)
-        } else {
-            sourceProvenanceReport = SourceProvenanceAnalyzer()
-                .analyze(imageURL: url, userDeclaration: declaration)
-                ?? SourceProvenanceReport(state: .unknown, evidence: [], userDeclaration: declaration)
+        let mediaIsVideo = isVideo
+        let client = provenanceOptions(for: config).c2paClient
+        Task { [weak self] in
+            guard let self else { return }
+            let report: SourceProvenanceReport
+            if mediaIsVideo {
+                report = SourceProvenanceReport(
+                    state: .unknown, evidence: [],
+                    warnings: ["Video source provenance is not analyzed in this version."],
+                    userDeclaration: declaration)
+            } else {
+                let c2paSummary = await client.readSourceSummary(from: url)
+                report = SourceProvenanceAnalyzer()
+                    .analyze(imageURL: url, userDeclaration: declaration, c2paSummary: c2paSummary)
+                    ?? SourceProvenanceReport(state: .unknown, evidence: [], userDeclaration: declaration)
+            }
+            guard self.sourceURL == url,
+                  self.config.sourceDeclaration == declaration else { return }
+            self.sourceProvenanceReport = report
+            self.analyzedDeclaration = declaration
         }
-        analyzedDeclaration = declaration
     }
 
     var showExportReceipt = false
@@ -347,6 +382,7 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
             isVideo = true
             isLoadingMedia = false
             Task { await loadSourceForComparison() }
+            analyzeCurrentSource()
 
             // Generate static frame preview (D-03)
             await generateVideoPreview()
@@ -474,11 +510,13 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
         guard let sourceURL = sourceURL, isVideo else { return }
         renderingState = .renderingVideo(progress: 0.0, estimatedTimeRemaining: nil)
 
+        let exportConfig = config
+        let provenance = exportProvenance(for: exportConfig)
         let task = Task {
             do {
                 let result = try await engine.processVideo(
                     sourceURL: sourceURL,
-                    config: config,
+                    config: exportConfig,
                     onProgress: { [weak self] progress, eta in
                         Task { @MainActor in
                             self?.renderingState = .renderingVideo(
@@ -486,10 +524,12 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
                                 estimatedTimeRemaining: eta
                             )
                         }
-                    }
+                    },
+                    provenance: provenance
                 )
                 await MainActor.run {
                     fullResResult = result
+                    lastExportReceipt = result.provenanceReceipt
                     renderingState = .done
                     // Check HDR/audio warnings
                     if let validation = result.videoValidation {
@@ -500,6 +540,9 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
                         if !validation.audioTrackCountMatch {
                             showAudioWarning = true
                         }
+                    }
+                    if lastExportReceipt != nil {
+                        showExportReceipt = true
                     }
                 }
             } catch is CancellationError {
@@ -570,13 +613,7 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
         renderingState = .rendering
 
         do {
-            let prov = ProvenanceExportOptions(
-                rights: config.rightsMetadata,
-                privacyProfile: config.metadataPrivacyProfile,
-                includeC2PA: config.includeC2PAManifest,
-                userDeclaration: config.sourceDeclaration,
-                appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-            )
+            let prov = exportProvenance(for: config)
             let result = try await engine.process(sourceURL: sourceURL, config: config, provenance: prov)
             fullResResult = result
             renderingState = .done
@@ -627,6 +664,8 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
             itemResults.append(result)
         }
         fullResResult = nil
+        lastExportReceipt = nil
+        showExportReceipt = false
         renderingState = .idle
 
         if isMultiItem {
@@ -673,6 +712,8 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
         previewImage = nil
         originalSourceImage = nil
         fullResResult = nil
+        lastExportReceipt = nil
+        showExportReceipt = false
         renderingState = .idle
         isVideo = false
         isLoadingMedia = true

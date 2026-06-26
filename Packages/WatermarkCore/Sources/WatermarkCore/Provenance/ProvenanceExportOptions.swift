@@ -4,8 +4,9 @@ import Foundation
 /// (Plan 19-02 Task 6). nil ⇒ today's behavior — no provenance analysis,
 /// no IPTC merge, no C2PA signing, no receipt.
 ///
-/// The `c2paClient` is injected so callers can supply `NoopC2PAProvenanceClient`
-/// (default, v2.2 build) or a concrete client once c2pa-swift integrates.
+/// The `c2paClient` is injected so tests and fallback builds can supply
+/// `NoopC2PAProvenanceClient`; when c2pa-swift is linked, the default client is
+/// the concrete `C2PASwiftProvenanceClient`.
 public struct ProvenanceExportOptions: Sendable {
     /// IPTC rights metadata to merge into the output (AUTH-03).
     public var rights: RightsMetadata

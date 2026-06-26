@@ -18,6 +18,10 @@ public struct C2PASigningIdentity: @unchecked Sendable {
         case secureEnclave
         case localSoftware
         case unsupported
+
+        public var isUsableForSigning: Bool {
+            self != .unsupported
+        }
     }
 
     public let type: IdentityType
@@ -43,7 +47,8 @@ public struct C2PASigningIdentity: @unchecked Sendable {
 /// Never exports Secure Enclave private key material. Never describes either
 /// local identity as a verified legal/person identity.
 public struct C2PASigningIdentityStore: Sendable {
-    private static let tag = "com.osamamazhar.markepi.c2pa.signing".data(using: .utf8)!
+    private static let secureEnclaveTag = "com.osamamazhar.markepi.c2pa.signing.secure-enclave".data(using: .utf8)!
+    private static let softwareTag = "com.osamamazhar.markepi.c2pa.signing.software".data(using: .utf8)!
 
     public init() {}
 
@@ -69,12 +74,13 @@ public struct C2PASigningIdentityStore: Sendable {
     /// to a software key. Any existing key with the same application tag is
     /// reused (kSecAttrIsPermanent stores it in the Keychain).
     private func makeKey(secureEnclave: Bool) -> SecKey? {
+        let tag = secureEnclave ? Self.secureEnclaveTag : Self.softwareTag
         var attrs: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits as String: 256,
             kSecPrivateKeyAttrs as String: [
                 kSecAttrIsPermanent as String: true,
-                kSecAttrApplicationTag as String: Self.tag,
+                kSecAttrApplicationTag as String: tag,
             ],
         ]
         if secureEnclave {
@@ -85,20 +91,25 @@ public struct C2PASigningIdentityStore: Sendable {
         // unavailable — e.g. on the Simulator — or when a key already exists
         // under the tag and cannot be overwritten.
         guard let key = SecKeyCreateRandomKey(attrs as CFDictionary, &error) else {
-            // Try to fetch an existing key under this tag before giving up.
-            return fetchExistingKey()
+            // Try to fetch an existing key under the same identity class before
+            // giving up. Do not let the Secure Enclave probe fetch a software key,
+            // or the receipt could mislabel the identity type.
+            return fetchExistingKey(secureEnclave: secureEnclave)
         }
         return key
     }
 
     /// Loads a previously-created persistent key from the Keychain by tag.
-    private func fetchExistingKey() -> SecKey? {
-        let query: [String: Any] = [
+    private func fetchExistingKey(secureEnclave: Bool) -> SecKey? {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassKey,
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-            kSecAttrApplicationTag as String: Self.tag,
+            kSecAttrApplicationTag as String: secureEnclave ? Self.secureEnclaveTag : Self.softwareTag,
             kSecReturnRef as String: true,
         ]
+        if secureEnclave {
+            query[kSecAttrTokenID as String] = kSecAttrTokenIDSecureEnclave
+        }
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         guard status == errSecSuccess, let ref = result else { return nil }

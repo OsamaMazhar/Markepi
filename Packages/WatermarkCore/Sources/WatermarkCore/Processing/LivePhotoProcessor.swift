@@ -2,7 +2,6 @@ import AVFoundation
 import CoreImage
 import Foundation
 import os.log
-import Photos
 import UniformTypeIdentifiers
 
 /// Processes Live Photo pairs by watermarking both the still image and video
@@ -16,11 +15,6 @@ import UniformTypeIdentifiers
 ///      (reuses the existing AVFoundation CALayer overlay pipeline with
 ///      HDR preservation and audio passthrough).
 ///   3. Return a `LivePhotoPairResult` with both URLs.
-///
-/// `PHLivePhotoEditingContext.frameProcessor` is NOT used here because
-/// PhotosPicker returns raw URLs, not `PHContentEditingInput`. The
-/// frameProcessor approach will be used in the Photo Edit Extension
-/// (PHContentEditingController) in a follow-up phase.
 ///
 /// Uses `public struct` with static method pattern matching `VideoProcessor`.
 public struct LivePhotoProcessor {
@@ -37,6 +31,9 @@ public struct LivePhotoProcessor {
 
         /// Output UTI of the still image (e.g., "public.heic", "public.jpeg")
         public let stillOutputUTI: String
+
+        /// Provenance receipt from the still-image component.
+        public let provenanceReceipt: ExportReceipt?
     }
 
     // MARK: - Entry Point
@@ -63,18 +60,21 @@ public struct LivePhotoProcessor {
     public static func process(
         stillImageURL: URL,
         videoURL: URL,
-        config: WatermarkConfiguration
+        config: WatermarkConfiguration,
+        provenance: ProvenanceExportOptions? = nil
     ) async throws -> LivePhotoPairResult {
         // Step 1: Watermark still frame via existing photo pipeline
         let stillResult = try await WatermarkEngine.shared.process(
             sourceURL: stillImageURL,
-            config: config
+            config: config,
+            provenance: provenance
         )
 
         // Step 2: Watermark video component via existing video pipeline
         let videoResult = try await WatermarkEngine.shared.processVideo(
             sourceURL: videoURL,
-            config: config
+            config: config,
+            provenance: provenance
         )
 
         guard let stillURL = stillResult.url else {
@@ -91,7 +91,8 @@ public struct LivePhotoProcessor {
         return LivePhotoPairResult(
             watermarkedStillURL: stillURL,
             watermarkedVideoURL: videoOutputURL,
-            stillOutputUTI: stillResult.outputUTI
+            stillOutputUTI: stillResult.outputUTI,
+            provenanceReceipt: stillResult.provenanceReceipt
         )
     }
 }

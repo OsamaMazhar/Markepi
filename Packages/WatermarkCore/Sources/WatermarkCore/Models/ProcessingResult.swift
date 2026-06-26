@@ -31,8 +31,8 @@ public struct ProcessingResult: Sendable {
     public let livePhotoVideoURL: URL?
 
     /// Provenance export receipt (Plan 19-02). Nil when no provenance options
-    /// were passed to `WatermarkEngine.process` (today's default behavior — no
-    /// source analysis, no IPTC merge, no C2PA signing).
+    /// were passed to the engine (today's default behavior — no source analysis,
+    /// no IPTC merge, no C2PA signing).
     public let provenanceReceipt: ExportReceipt?
 
     public init(

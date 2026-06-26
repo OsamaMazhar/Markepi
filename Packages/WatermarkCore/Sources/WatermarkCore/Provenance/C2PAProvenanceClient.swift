@@ -3,18 +3,16 @@ import Foundation
 /// Adapter boundary over C2PA read/verify/sign so the engine never depends
 /// on a concrete library (D-11/D-12). Async + Sendable ⇒ Share-Extension safe.
 ///
-/// The default production client is `NoopC2PAProvenanceClient` because the
-/// c2pa-spike (tools/c2pa-spike/) never completed and `contentauth/c2pa-swift`
-/// is NOT a dependency of this package (fallback path, plan 19-02 Task 1).
-/// When a future spike proves c2pa-swift integrates, a concrete client guarded
-/// by `#if canImport(C2PA)` will replace the noop without touching the engine.
+/// The default production client is `C2PASwiftProvenanceClient` when the
+/// `contentauth/c2pa-swift` package is linked. `NoopC2PAProvenanceClient`
+/// remains the honest fallback for builds where C2PA is unavailable.
 public protocol C2PAProvenanceClient: Sendable {
     /// Read & verify any manifest already in the source; returns the small
     /// summary the 19-01 analyzer consumes. nil = no manifest.
     ///
     /// - Parameter url: Source file URL to inspect for an existing C2PA manifest.
     /// - Returns: A `SourceProvenanceAnalyzer.C2PASummary`, or nil when no
-    ///   manifest is present (or signing is disabled in this build).
+    ///   manifest is present or the manifest cannot be read for this source.
     func readSourceSummary(from url: URL) async -> SourceProvenanceAnalyzer.C2PASummary?
 
     /// Build + sign a Markepi manifest and attach it to `outputURL` in place.
@@ -123,7 +121,7 @@ public struct C2PASigningResult: Sendable, Codable, Equatable {
     public let identityType: C2PASigningIdentity.IdentityType
     /// Receipt-safe display name: "Markepi device signing identity" (D-24).
     public let displayName: String
-    /// Honest warnings (e.g. "C2PA signing is disabled in this build").
+    /// Honest warnings (e.g. missing creator name, unsupported format, fallback build).
     public let warnings: [String]
     /// Post-sign verification — read back from the manifest after signing.
     /// nil when signing did not occur or read-back failed.
@@ -172,9 +170,7 @@ public struct C2PAVerificationResult: Sendable, Codable, Equatable {
 /// `notSigned` so the receipt stays honest — it never claims a manifest was
 /// attached when none was (AUTH-02).
 ///
-/// This is the only concrete client that ships in the v2.2 build. A
-/// `C2PASwiftProvenanceClient` guarded by `#if canImport(C2PA)` will replace
-/// it once the c2pa-spike proves the dependency integrates.
+/// Used only when the C2PA package is not linked, or when tests inject it.
 public struct NoopC2PAProvenanceClient: C2PAProvenanceClient {
     public init() {}
 
@@ -207,6 +203,7 @@ public struct NoopC2PAProvenanceClient: C2PAProvenanceClient {
 #if canImport(C2PA)
 import C2PA
 import Security
+import UniformTypeIdentifiers
 
 /// Production C2PA client backed by `contentauth/c2pa-swift`.
 ///
@@ -246,7 +243,7 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
                 status: .notSigned,
                 identityType: identity.type,
                 displayName: identity.displayName,
-                warnings: ["No signing key available on this device."]
+                warnings: ["Markepi could not create or load a local device signing key. Try signing again on your iPhone in Markepi."]
             )
         }
 
@@ -275,15 +272,35 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
         }
 
         let builder = try Builder(manifestJSON: manifestJSON)
-        let sourceStream = try Stream(readFrom: source)
-        let destStream = try Stream(writeTo: outputURL)
+        var warnings: [String] = []
+        do {
+            try addSourceIngredient(source, to: builder)
+        } catch {
+            warnings.append("Source ingredient could not be attached to the Content Credentials manifest.")
+        }
 
-        _ = try builder.sign(
-            format: "image/jpeg",
-            source: sourceStream,
-            destination: destStream,
-            signer: signer
-        )
+        let signedURL = signedTemporaryURL(for: outputURL)
+        do {
+            let format = c2paFormat(for: outputURL)
+            do {
+                // Sign the already-rendered export, not the original source.
+                // Builder.sign reads from `source` and writes a complete signed
+                // file to `destination`, so using the original input here would
+                // replace the user's edited/watermarked pixels.
+                let renderedStream = try Stream(readFrom: outputURL)
+                let signedStream = try Stream(writeTo: signedURL)
+                _ = try builder.sign(
+                    format: format,
+                    source: renderedStream,
+                    destination: signedStream,
+                    signer: signer
+                )
+            }
+            try replaceOutput(at: outputURL, with: signedURL)
+        } catch {
+            try? FileManager.default.removeItem(at: signedURL)
+            throw error
+        }
 
         // Read back the manifest and verify signature integrity.
         let verification = await verifyExport(at: outputURL)
@@ -292,7 +309,7 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
             status: .signed,
             identityType: identity.type,
             displayName: identity.displayName,
-            warnings: [],
+            warnings: warnings,
             verification: verification
         )
     }
@@ -309,18 +326,18 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
     // MARK: - Private
 
     private func certChain(for secKey: SecKey, identity: C2PASigningIdentity) throws -> String {
-        let cacheKey = identity.type.rawValue
+        let publicKey = SecKeyCopyPublicKey(secKey)!
+        let cacheKey = certCacheKey(for: publicKey, identity: identity)
         if let cached = certCache.get(cacheKey) {
             return cached
         }
-        let publicKey = SecKeyCopyPublicKey(secKey)!
         let config = CertificateManager.CertificateConfig(
             commonName: "Markepi Device Signer",
             organization: "Markepi",
             organizationalUnit: "Markepi App",
             country: "US",
-            state: "—",
-            locality: "—",
+            state: "NA",
+            locality: "NA",
             emailAddress: nil,
             validityDays: 365
         )
@@ -331,8 +348,97 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
         return pem
     }
 
+    private func certCacheKey(for publicKey: SecKey, identity: C2PASigningIdentity) -> String {
+        var error: Unmanaged<CFError>?
+        guard let data = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
+            return identity.type.rawValue
+        }
+        return "\(identity.type.rawValue)-\(data.base64EncodedString())"
+    }
+
+    private func signedTemporaryURL(for outputURL: URL) -> URL {
+        let baseName = outputURL.deletingPathExtension().lastPathComponent
+        let ext = outputURL.pathExtension
+        let signedName = "\(baseName)-signed-\(UUID().uuidString)"
+        var url = outputURL.deletingLastPathComponent().appendingPathComponent(signedName)
+        if !ext.isEmpty {
+            url = url.appendingPathExtension(ext)
+        }
+        return url
+    }
+
+    private func replaceOutput(at outputURL: URL, with signedURL: URL) throws {
+        let fileManager = FileManager.default
+        let backupURL = unsignedBackupURL(for: outputURL)
+
+        // Keep the rendered export recoverable until the signed replacement is
+        // safely in place. These are temp files, but losing a completed render
+        // because a move failed would make signing failures unnecessarily costly.
+        try fileManager.moveItem(at: outputURL, to: backupURL)
+        do {
+            try fileManager.moveItem(at: signedURL, to: outputURL)
+            try? fileManager.removeItem(at: backupURL)
+        } catch {
+            if !fileManager.fileExists(atPath: outputURL.path) {
+                try? fileManager.moveItem(at: backupURL, to: outputURL)
+            }
+            throw error
+        }
+    }
+
+    private func unsignedBackupURL(for outputURL: URL) -> URL {
+        let name = "\(outputURL.lastPathComponent).unsigned-\(UUID().uuidString)"
+        return outputURL.deletingLastPathComponent().appendingPathComponent(name)
+    }
+
+    private func c2paFormat(for url: URL) -> String {
+        if let type = UTType(filenameExtension: url.pathExtension) {
+            if type.conforms(to: .jpeg) { return "image/jpeg" }
+            if type.conforms(to: .heic) { return "image/heic" }
+            if type.conforms(to: .png) { return "image/png" }
+            if type.conforms(to: .tiff) { return "image/tiff" }
+            if type.conforms(to: .mpeg4Movie) { return "video/mp4" }
+            if type.conforms(to: .quickTimeMovie) { return "video/quicktime" }
+        }
+        return "image/jpeg"
+    }
+
+    private func addSourceIngredient(_ source: URL, to builder: Builder) throws {
+        guard FileManager.default.fileExists(atPath: source.path) else { return }
+        let ingredient = try Stream(readFrom: source)
+        let json = ingredientJSON(title: source.lastPathComponent, format: c2paFormat(for: source))
+        try builder.addIngredient(json: json, format: c2paFormat(for: source), from: ingredient)
+    }
+
+    private func ingredientJSON(title: String, format: String) -> String {
+        let object: [String: Any] = [
+            "title": title,
+            "format": format,
+            "relationship": "parentOf",
+        ]
+        let data = (try? JSONSerialization.data(withJSONObject: object, options: [])) ?? Data()
+        return String(data: data, encoding: .utf8) ?? #"{"relationship":"parentOf"}"#
+    }
+
     private func buildManifestJSON(_ request: C2PAManifestRequest) -> String {
         var assertions: [[String: Any]] = []
+
+        // C2PA requires a `c2pa.actions` assertion whose FIRST action is
+        // `c2pa.created` or `c2pa.opened`; otherwise verifiers report
+        // `assertion.action.malformed`. We use `c2pa.created` (Markepi creates a
+        // new watermarked rendition) rather than `c2pa.opened` — `opened`,
+        // `placed` and `removed` actions must carry explicit `ingredients`
+        // parameters or verifiers report `assertion.action.ingredientMismatch`.
+        // `created` and `edited` have no such requirement; the source lineage is
+        // still recorded via the `parentOf` ingredient.
+        var actions: [[String: Any]] = [["action": "c2pa.created"]]
+        if request.visibleWatermarkApplied || request.whiteFrameApplied {
+            actions.append(["action": "c2pa.edited"])
+        }
+        assertions.append([
+            "label": "c2pa.actions",
+            "data": ["actions": actions] as [String: Any]
+        ])
 
         // Tier-1 sealed author assertion (D-26). Only when creator is non-empty.
         if let creator = request.creator, !creator.isEmpty {
@@ -347,17 +453,24 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
             ])
         }
 
+        var provenanceData: [String: Any] = [
+            "sourceState": request.sourceState.rawValue,
+            "evidenceSummary": request.sourceEvidenceSummary,
+            "userDeclaration": request.userDeclaration.rawValue,
+            "visibleWatermarkApplied": request.visibleWatermarkApplied,
+            "whiteFrameApplied": request.whiteFrameApplied,
+        ]
+        if let privacyAction = request.privacyAction {
+            provenanceData["privacyAction"] = privacyAction
+        }
+        if let payloadID = request.invisibleWatermarkPayloadID {
+            provenanceData["invisibleWatermarkPayloadID"] = payloadID
+        }
+
         // Provenance summary assertion — records source state as a declaration.
         assertions.append([
             "label": "c2pa.markepi.provenance",
-            "data": [
-                "sourceState": request.sourceState.rawValue,
-                "evidenceSummary": request.sourceEvidenceSummary,
-                "userDeclaration": request.userDeclaration.rawValue,
-                "visibleWatermarkApplied": request.visibleWatermarkApplied,
-                "whiteFrameApplied": request.whiteFrameApplied,
-                "privacyAction": request.privacyAction as Any
-            ] as [String: Any]
+            "data": provenanceData
         ])
 
         let manifest: [String: Any] = [
@@ -377,7 +490,7 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
 
-        let statusItems = root["validation_status"] as? [[String: Any]] ?? []
+        let statusItems = validationStatusItems(in: root)
         var items: [C2PAVerificationItem] = []
 
         // Look for signature-related validation codes.
@@ -412,9 +525,7 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
     private func parseManifestSummary(_ json: String) -> SourceProvenanceAnalyzer.C2PASummary? {
         guard let data = json.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let manifests = root["manifests"] as? [String: Any],
-              let activeID = root["active_manifest"] as? String,
-              let active = manifests[activeID] as? [String: Any]
+              let active = activeManifest(in: root)
         else { return nil }
 
         // Look for provenance assertions that indicate AI or trusted capture.
@@ -448,6 +559,37 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
             indicatesAIGeneration: indicatesAI,
             indicatesTrustedCapture: indicatesTrustedCapture
         )
+    }
+
+    private func activeManifest(in root: [String: Any]) -> [String: Any]? {
+        if let active = root["active_manifest"] as? [String: Any] {
+            return active
+        }
+        if let activeID = root["active_manifest"] as? String,
+           let manifests = root["manifests"] as? [String: Any],
+           let active = manifests[activeID] as? [String: Any] {
+            return active
+        }
+        if let manifests = root["manifests"] as? [String: Any] {
+            return manifests.values.compactMap { $0 as? [String: Any] }.first
+        }
+        return nil
+    }
+
+    private func validationStatusItems(in root: [String: Any]) -> [[String: Any]] {
+        if let status = root["validation_status"] as? [[String: Any]] {
+            return status
+        }
+        if let active = activeManifest(in: root),
+           let status = active["validation_status"] as? [[String: Any]] {
+            return status
+        }
+        if let manifests = root["manifests"] as? [String: Any] {
+            return manifests.values
+                .compactMap { $0 as? [String: Any] }
+                .flatMap { $0["validation_status"] as? [[String: Any]] ?? [] }
+        }
+        return []
     }
 }
 

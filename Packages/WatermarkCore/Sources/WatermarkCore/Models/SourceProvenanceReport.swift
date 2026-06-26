@@ -35,6 +35,17 @@ public struct ProvenanceEvidence: Codable, Equatable, Sendable, Identifiable {
 
 public enum UserSourceDeclaration: String, Codable, Equatable, Sendable {
     case none, camera, ai, aiEdited, composite
+
+    /// Human-friendly label for display in controls and the export receipt.
+    public var displayLabel: String {
+        switch self {
+        case .none:      return "Not declared"
+        case .camera:    return "Photographed (camera)"
+        case .ai:        return "AI-generated"
+        case .aiEdited:  return "AI-edited"
+        case .composite: return "Composite"
+        }
+    }
 }
 
 public struct SourceProvenanceReport: Codable, Equatable, Sendable {

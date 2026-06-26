@@ -15,7 +15,7 @@ public struct AppGroupConfigSync {
 
     /// App Group suite name (placeholder — developer must configure in Xcode).
     /// Must match the App Group ID in both the main app and extension entitlements.
-    public static let suiteName = "group.com.watermark.app"
+    public static let suiteName = "group.com.osamamazhar.markepi"
 
     /// Key used to store the serialized `WatermarkConfiguration` JSON data.
     private static let configKey = "watermarkConfiguration"
@@ -79,7 +79,7 @@ public struct AppGroupConfigSync {
     // MARK: - Sanitization
 
     /// Drops `.image` watermark layers whose PNG data is empty or cannot be
-    /// decoded as an image. A corrupt or un-rehydrated image layer would
+    /// decoded as an image. A corrupt image layer would
     /// otherwise make every preview/render throw `invalidImageData`
     /// ("The image data is empty or corrupt"), blocking the whole pipeline.
     ///

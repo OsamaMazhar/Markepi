@@ -54,7 +54,7 @@ public struct InspectorSheetView<ViewModel: WatermarkConfigurable & Observable>:
     public let expandedHeight: CGFloat
 
     /// The ViewModel driving ControlsView.
-    @State var viewModel: ViewModel
+    var viewModel: ViewModel
 
     /// Live drag offset during gesture (not animated).
     /// Negative translation (dragging up) increases height, positive (dragging down) decreases.

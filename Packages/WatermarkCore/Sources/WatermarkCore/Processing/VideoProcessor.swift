@@ -54,7 +54,7 @@ public struct VideoProcessor {
         config: WatermarkConfiguration,
         onProgress: (@Sendable (Double, TimeInterval?) -> Void)? = nil,
         provenance: ProvenanceExportOptions? = nil
-    ) async throws -> (outputURL: URL, validation: ExportValidator.ExportValidationResult) {
+    ) async throws -> (outputURL: URL, validation: ExportValidator.ExportValidationResult, provenanceReceipt: ExportReceipt?) {
         let asset = AVURLAsset(url: sourceURL)
 
         // Step 1: Load duration and validate video track
@@ -227,7 +227,12 @@ public struct VideoProcessor {
         // DROPS these by default — only an explicit `metadata` assignment carries
         // them into the exported file. We gather metadata across every format the
         // asset advertises so location and capture date survive the re-encode.
-        exportSession.metadata = await preservedMetadata(for: asset)
+        let preserved = await preservedMetadata(for: asset)
+        exportSession.metadata = metadataItems(
+            applying: provenance?.privacyProfile ?? .preserveAll,
+            rights: provenance?.rights,
+            to: preserved
+        )
 
         // Match source container type (D-04) BEFORE creating the temp file so the
         // file's extension matches the chosen container. A mismatch (e.g. MOV
@@ -325,12 +330,51 @@ public struct VideoProcessor {
             os_log(.default, "WatermarkCore VideoProcessor: Audio track count mismatch in output")
         }
 
-        // Plan 19-02 Task 6: video C2PA signing is format-limited. The noop
-        // client (and most concrete C2PA libraries) cannot sign video containers
-        // in this build. When a caller requests C2PA for video, surface an honest
-        // receipt warning rather than silently claiming success (acceptance criterion).
+        // Plan 19-02 Task 6: video C2PA signing is format-limited in this build.
+        // When a caller requests C2PA for video, surface an honest receipt
+        // warning rather than silently claiming success.
         var finalValidation = validationResult
-        if provenance?.includeC2PA == true {
+        var receipt: ExportReceipt?
+        if let provenance {
+            let report = SourceProvenanceReport(
+                state: .unknown,
+                evidence: [],
+                warnings: ["Video source provenance is not analyzed in this version."],
+                userDeclaration: provenance.userDeclaration
+            )
+            if provenance.includeC2PA {
+                let creator = provenance.rights.creator.trimmingCharacters(in: .whitespacesAndNewlines)
+                let identity = C2PASigningIdentityStore().currentIdentity()
+                let signing = C2PASigningResult(
+                    status: creator.isEmpty ? .notSigned : .notSupported,
+                    identityType: identity.type,
+                    displayName: identity.displayName,
+                    warnings: [
+                        creator.isEmpty
+                            ? "Add a creator name before signing with Content Credentials."
+                            : "Video Content Credentials not available for this format",
+                    ]
+                )
+                receipt = ExportReceipt(
+                    report: report,
+                    signingResult: signing,
+                    rightsMetadata: provenance.rights,
+                    privacyProfile: provenance.privacyProfile,
+                    privacyActions: privacyActionDescriptions(for: provenance.privacyProfile)
+                )
+            } else {
+                receipt = ExportReceipt(
+                    report: report,
+                    rightsMetadata: provenance.rights,
+                    privacyProfile: provenance.privacyProfile,
+                    privacyActions: privacyActionDescriptions(for: provenance.privacyProfile)
+                )
+            }
+        }
+
+        if let provenance,
+           provenance.includeC2PA,
+           !provenance.rights.creator.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let warning = "Video Content Credentials not available for this format"
             os_log(.default, "WatermarkCore VideoProcessor: %{public}@", warning)
             finalValidation = ExportValidator.ExportValidationResult(
@@ -341,7 +385,7 @@ public struct VideoProcessor {
         }
 
         // Step 8: Return output URL with validation result
-        return (outputURL, finalValidation)
+        return (outputURL, finalValidation, receipt)
     }
 
     // MARK: - Metadata Preservation
@@ -383,6 +427,69 @@ public struct VideoProcessor {
         }
 
         return items
+    }
+
+    private static func metadataItems(
+        applying profile: MetadataPrivacyProfile,
+        rights: RightsMetadata?,
+        to items: [AVMetadataItem]
+    ) -> [AVMetadataItem] {
+        var output: [AVMetadataItem]
+        switch profile {
+        case .preserveAll:
+            output = items
+        case .stripSensitive:
+            output = items.filter { !isSensitiveVideoMetadata($0) }
+        case .minimalPublic:
+            output = []
+        }
+        if let rights {
+            output.append(contentsOf: videoRightsMetadataItems(rights))
+        }
+        return output
+    }
+
+    private static func privacyActionDescriptions(for profile: MetadataPrivacyProfile) -> [String] {
+        switch profile {
+        case .preserveAll:
+            return []
+        case .stripSensitive:
+            return ["Location metadata removed from video export"]
+        case .minimalPublic:
+            return ["Source video metadata minimized; rights records retained"]
+        }
+    }
+
+    private static func isSensitiveVideoMetadata(_ item: AVMetadataItem) -> Bool {
+        guard let id = item.identifier else { return false }
+        return id == .commonIdentifierLocation
+            || id == .quickTimeMetadataLocationISO6709
+            || id == .quickTimeUserDataLocationISO6709
+    }
+
+    private static func videoRightsMetadataItems(_ rights: RightsMetadata) -> [AVMetadataItem] {
+        var items: [AVMetadataItem] = []
+        appendMetadataItem(.commonIdentifierCreator, value: rights.creator, to: &items)
+        appendMetadataItem(.commonIdentifierCopyrights, value: rights.copyrightNotice, to: &items)
+        appendMetadataItem(.commonIdentifierContributor, value: rights.creditLine, to: &items)
+        appendMetadataItem(.commonIdentifierDescription, value: rights.usageTerms, to: &items)
+        appendMetadataItem(.quickTimeMetadataAuthor, value: rights.creator, to: &items)
+        appendMetadataItem(.quickTimeMetadataCopyright, value: rights.copyrightNotice, to: &items)
+        appendMetadataItem(.quickTimeMetadataComment, value: rights.usageTerms, to: &items)
+        return items
+    }
+
+    private static func appendMetadataItem(
+        _ identifier: AVMetadataIdentifier,
+        value: String,
+        to items: inout [AVMetadataItem]
+    ) {
+        guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let item = AVMutableMetadataItem()
+        item.identifier = identifier
+        item.value = value as NSString
+        item.dataType = kCMMetadataBaseDataType_UTF8 as String
+        items.append(item)
     }
 
     // MARK: - Caption Metadata Extraction

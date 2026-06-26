@@ -10,8 +10,8 @@ requires:
   - phase: 19-02
     provides: C2PAProvenanceClient, RightsMetadata, ExportReceipt, ProvenanceExportOptions, C2PASigningIdentityStore
 provides:
-  - Persisted provenance settings (rightsMetadata, privacyProfile, C2PA toggle, sourceDeclaration)
-  - ProvenanceControlsView with source badge, evidence, rights editor, privacy picker, Sign button
+  - Persisted provenance settings (rightsMetadata, privacyProfile, C2PA sign state, sourceDeclaration)
+  - ProvenanceControlsView with source badge, evidence, rights editor, privacy picker, Sign button, and no raw C2PA toggle bypass
   - C2PASigningInfoSheet (Tier-1 honest explainer popup — D-27)
   - ExportReceiptView (source state, signing status, identity caveat — D-19/D-24)
   - More section (ControlsSection.more) in MarkepiPillBar (D-25)
@@ -48,7 +48,7 @@ key-files:
 
 key-decisions:
   - "More section houses signing controls, separate from watermark/style/output per D-25"
-  - "Creator name is compulsory — Sign button disabled when empty per D-26"
+  - "Creator name is compulsory — Sign button disabled when empty per D-26, with engine-level enforcement as a backstop"
   - "Explainer popup shown before signing with Tier-1 honest wording: device identity, not verified legal identity per D-27"
   - "Pixel-free metadata analysis: CGImageSourceCreateWithURL + CGImageSourceCopyPropertiesAtIndex (no pixel decode)"
 
@@ -84,11 +84,11 @@ completed: 2026-06-26
 - **Files modified:** 14
 
 ## Accomplishments
-- `ProvenanceControlsView` — source badge, evidence summary, rights editor, privacy picker, C2PA toggle, source declaration, invisible protection placeholder, Sign button
+- `ProvenanceControlsView` — source badge, evidence summary, rights editor, privacy picker, C2PA status/removal controls, source declaration, invisible protection placeholder, Sign button
 - `C2PASigningInfoSheet` — Tier-1 honest explainer popup (D-27): what signing is, the device identity caveat, Tier 2/3 unavailable
 - `ExportReceiptView` — source state, evidence, rights added, C2PA signing status with identity type and wording caveat (D-19/D-24)
 - `.more` section added to `ControlsSection` (D-25)
-- Compulsory-author gate: Sign button disabled when creator name is empty or whitespace-only (D-26)
+- Compulsory-author gate: Sign button disabled when creator name is empty or whitespace-only (D-26), with engine-level enforcement preventing direct config bypass
 - ViewModel integration: analyze source on photo load, navigation, and declaration change; surface receipt after export
 - Pixel-free metadata analysis via `SourceProvenanceAnalyzer.analyze(imageURL:)` using `CGImageSourceCreateWithURL`
 - Migration-safe Codable: old config JSON decodes to safe defaults (provenance fields default off)
@@ -122,6 +122,7 @@ None — plan executed exactly as written per reference implementation.
 - `$viewModel` not in scope inside `body(content:)` modifier — used `Binding(get:set:)` pattern matching existing sheets
 - `showExportReceipt` + `lastExportReceipt` not on protocol — added to `ShareExtensionRendering` and `SnapshotTestViewModel`
 - NSCache not Sendable for cert cache (19-02) — used custom `CertCache` class with NSLock
+- Post-review: replaced the raw C2PA toggle with an explainer-gated sign flow, wired receipt continuation to sharing, and extended provenance options/receipts through video, Live Photo, batch, app, and Share Extension paths.
 
 ## Next Phase Readiness
 - Ready for 19-04 (invisible watermark evaluation harness) — provenance controls are in place, export pipeline wires through, `invisibleProtectionEnabled` toggle placeholder exists

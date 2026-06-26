@@ -14,9 +14,28 @@ public struct ExportReceipt: Codable, Equatable, Sendable {
     public let report: SourceProvenanceReport
     /// C2PA signing result, nil when signing was not requested or not supported.
     public var signingResult: C2PASigningResult?
+    /// Rights metadata written or requested for this export.
+    public var rightsMetadata: RightsMetadata
+    /// Privacy profile applied to this export.
+    public var privacyProfile: MetadataPrivacyProfile
+    /// Human-readable privacy actions taken during export.
+    public var privacyActions: [String]
+    /// Whether an invisible watermark payload was applied.
+    public var invisibleWatermarkApplied: Bool
 
-    public init(report: SourceProvenanceReport, signingResult: C2PASigningResult? = nil) {
+    public init(
+        report: SourceProvenanceReport,
+        signingResult: C2PASigningResult? = nil,
+        rightsMetadata: RightsMetadata = RightsMetadata(),
+        privacyProfile: MetadataPrivacyProfile = .preserveAll,
+        privacyActions: [String] = [],
+        invisibleWatermarkApplied: Bool = false
+    ) {
         self.report = report
         self.signingResult = signingResult
+        self.rightsMetadata = rightsMetadata
+        self.privacyProfile = privacyProfile
+        self.privacyActions = privacyActions
+        self.invisibleWatermarkApplied = invisibleWatermarkApplied
     }
 }

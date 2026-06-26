@@ -1,85 +1,139 @@
 import UIKit
 import SwiftUI
+import UniformTypeIdentifiers
+import os.log
 import WatermarkCore
+
+private let shareLog = Logger(subsystem: "com.osamamazhar.markepi", category: "ShareExtension")
 
 /// UIKit entry point for the share extension.
 ///
-/// Hosts the SwiftUI `ShareExtensionRootView` via `UIHostingController`,
-/// following the standard iOS pattern for custom share extension UIs
-/// (RESEARCH.md Pattern 4).
+/// Markepi's share extension is a thin **handoff** bridge: it copies the shared
+/// photo(s)/video(s) into the App Group `PendingShares` inbox, then opens the
+/// main app via the `watermark://shared` URL scheme. The app drains the inbox
+/// and loads everything into the full editor.
 ///
-/// On `viewDidLoad`, sets up the hosting controller and begins loading
-/// the shared media from the first `NSItemProvider` in the extension context.
-/// After the share sheet dismisses, calls `completeRequest` to close the
-/// extension (D-07 one-shot workflow).
+/// This gives the share flow exact feature + design parity with the app (it *is*
+/// the app), and avoids the ~120MB extension memory ceiling that made the old
+/// in-extension rendering fragile (it would stall on "Preparing photo…").
 class ShareViewController: UIViewController {
 
-    // MARK: - Properties
-
-    private let viewModel = ShareExtensionViewModel()
-    private var hostingController: UIHostingController<ShareExtensionRootView<ShareExtensionViewModel>>?
+    private let hostingController = UIHostingController(rootView: ShareHandoffView())
 
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        setupHostingController()
-        setupDismissHandler()
-        Task { await loadSharedMedia() }
+        embedHandoffView()
+        Task { await handoffAndOpenApp() }
     }
 
-    // MARK: - Hosting Controller Setup
+    // MARK: - UI
 
-    private func setupHostingController() {
-        let rootView = ShareExtensionRootView(viewModel: viewModel)
-        let host = UIHostingController(rootView: rootView)
-        addChild(host)
-        view.addSubview(host.view)
-        host.view.translatesAutoresizingMaskIntoConstraints = false
+    private func embedHandoffView() {
+        addChild(hostingController)
+        view.addSubview(hostingController.view)
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            host.view.topAnchor.constraint(equalTo: view.topAnchor),
-            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            hostingController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            hostingController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
-        hostingController = host
+        hostingController.didMove(toParent: self)
     }
 
-    // MARK: - Dismiss Handler
+    // MARK: - Handoff
 
-    /// Sets the `completeRequest` closure on the ViewModel so it can close
-    /// the extension after the share sheet dismisses (D-07 one-shot).
-    /// Also sets `openURL` for URL scheme fallback (D-16).
-    private func setupDismissHandler() {
-        viewModel.completeRequest = { [weak self] in
-            self?.extensionContext?.completeRequest(returningItems: nil)
-        }
-        viewModel.openURL = { [weak self] url in
-            self?.extensionContext?.open(url, completionHandler: nil)
-        }
-    }
-
-    // MARK: - Media Loading
-
-    /// Collects ALL `NSItemProvider`s from the extension context's input items,
-    /// sets them on the ViewModel for sequential processing, and loads the first item.
-    private func loadSharedMedia() async {
-        guard let extensionContext = extensionContext else { return }
-
-        // Collect ALL providers from all input items (D-14: multi-item sequential)
-        let allProviders = extensionContext.inputItems
+    /// Copies every shared item into the App Group inbox, then opens the main app
+    /// and closes the extension.
+    private func handoffAndOpenApp() async {
+        let providers = (extensionContext?.inputItems ?? [])
             .compactMap { $0 as? NSExtensionItem }
             .flatMap { $0.attachments ?? [] }
 
-        guard !allProviders.isEmpty else {
-            viewModel.isLoadingMedia = false
+        shareLog.info("Handoff start: \(providers.count, privacy: .public) provider(s)")
+        for provider in providers {
+            await saveToInbox(provider)
+        }
+        shareLog.info("Handoff done; opening main app")
+
+        openMainApp()
+    }
+
+    /// Writes a single provider's media into the shared inbox, preserving the
+    /// original file (and thus its format, quality, and metadata).
+    ///
+    /// Uses `loadFileRepresentation` (not in-memory `Data`) so large videos and
+    /// HEIC photos stay on disk — critical under the extension memory ceiling.
+    private func saveToInbox(_ provider: NSItemProvider) async {
+        // Check video first — some movie containers also conform to public.image.
+        let typeID: String
+        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+            typeID = UTType.movie.identifier
+        } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+            typeID = UTType.image.identifier
+        } else {
+            shareLog.error("Provider has no image/movie representation; registered types: \(provider.registeredTypeIdentifiers, privacy: .public)")
             return
         }
 
-        viewModel.sharedItems = allProviders
-        viewModel.currentItemIndex = 0
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            provider.loadFileRepresentation(forTypeIdentifier: typeID) { url, error in
+                // The provided URL is ephemeral — copy into the App Group inbox now.
+                if let url = url {
+                    if SharedInboxStore.copy(from: url) == nil {
+                        shareLog.error("loadFileRepresentation gave a URL but inbox copy failed")
+                    }
+                } else {
+                    shareLog.error("loadFileRepresentation returned no URL: \(error?.localizedDescription ?? "nil", privacy: .public)")
+                }
+                continuation.resume()
+            }
+        }
+    }
 
-        // Load the first item
-        await viewModel.loadSharedMedia(from: allProviders[0])
+    /// Opens the main app via its custom URL scheme so it can drain the inbox,
+    /// then completes the extension request once the open is dispatched.
+    private func openMainApp() {
+        guard let url = URL(string: "watermark://shared") else {
+            extensionContext?.completeRequest(returningItems: nil)
+            return
+        }
+        extensionContext?.open(url) { [weak self] success in
+            if !success {
+                self?.openViaResponderChain(url)
+            }
+            self?.extensionContext?.completeRequest(returningItems: nil)
+        }
+    }
+
+    /// Fallback when `NSExtensionContext.open` is unavailable: walk the responder
+    /// chain to find `UIApplication` and ask it to open the URL.
+    private func openViaResponderChain(_ url: URL) {
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let app = current as? UIApplication {
+                app.open(url, options: [:], completionHandler: nil)
+                return
+            }
+            responder = current.next
+        }
+    }
+}
+
+/// Minimal "Opening Markepi…" view shown briefly while the extension copies the
+/// shared media and launches the app.
+private struct ShareHandoffView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .controlSize(.large)
+            Text("Opening Markepi…")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
     }
 }

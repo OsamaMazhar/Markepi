@@ -77,7 +77,7 @@ public actor WatermarkEngine {
     ///   - analyzes the source provenance (19-01 analyzer),
     ///   - applies the metadata privacy profile to the outgoing metadata dict,
     ///   - merges IPTC rights metadata into the outgoing metadata dict,
-    ///   - signs the output with the injected C2PA client (no-op by default),
+    ///   - signs the output with the injected C2PA client when requested,
     ///   - returns an `ExportReceipt` on the `ProcessingResult`.
     public func process(
         sourceURL: URL,
@@ -150,8 +150,14 @@ public actor WatermarkEngine {
 
         var outgoing: [String: Any] = loaded.metadata
         var report: SourceProvenanceReport?
+        var receiptRights = RightsMetadata()
+        var receiptPrivacyProfile: MetadataPrivacyProfile = .preserveAll
+        var receiptPrivacyActions: [String] = []
 
         if let prov = provenance {
+            receiptRights = prov.rights
+            receiptPrivacyProfile = prov.privacyProfile
+            receiptPrivacyActions = privacyActions(for: prov.privacyProfile)
             // (a) Analyze source provenance — reads C2PA summary via the client.
             let c2paSummary = await prov.c2paClient.readSourceSummary(from: sourceURL)
             report = SourceProvenanceAnalyzer().analyze(
@@ -180,6 +186,7 @@ public actor WatermarkEngine {
         var receipt: ExportReceipt?
         if let prov = provenance, prov.includeC2PA, let report {
             let identity = C2PASigningIdentityStore().currentIdentity()
+            let creator = prov.rights.creator.trimmingCharacters(in: .whitespacesAndNewlines)
             let manifest = C2PAManifestRequest(
                 appVersion: prov.appVersion,
                 sourceState: report.state,
@@ -190,17 +197,38 @@ public actor WatermarkEngine {
                     ? nil : "Sensitive metadata removed",
                 userDeclaration: prov.userDeclaration,
                 invisibleWatermarkPayloadID: nil,
-                creator: prov.rights.creator.isEmpty ? nil : prov.rights.creator
+                creator: creator.isEmpty ? nil : creator
             )
-            let signing = try await prov.c2paClient.signExport(
-                outputURL: outputURL,
-                source: sourceURL,
-                manifest: manifest,
-                identity: identity
+            let signing: C2PASigningResult
+            if creator.isEmpty {
+                signing = C2PASigningResult(
+                    status: .notSigned,
+                    identityType: identity.type,
+                    displayName: identity.displayName,
+                    warnings: ["Add a creator name before signing with Content Credentials."]
+                )
+            } else {
+                signing = try await prov.c2paClient.signExport(
+                    outputURL: outputURL,
+                    source: sourceURL,
+                    manifest: manifest,
+                    identity: identity
+                )
+            }
+            receipt = ExportReceipt(
+                report: report,
+                signingResult: signing,
+                rightsMetadata: receiptRights,
+                privacyProfile: receiptPrivacyProfile,
+                privacyActions: receiptPrivacyActions
             )
-            receipt = ExportReceipt(report: report, signingResult: signing)
         } else if let report {
-            receipt = ExportReceipt(report: report)
+            receipt = ExportReceipt(
+                report: report,
+                rightsMetadata: receiptRights,
+                privacyProfile: receiptPrivacyProfile,
+                privacyActions: receiptPrivacyActions
+            )
         }
 
         // 6. Return result
@@ -232,7 +260,7 @@ public actor WatermarkEngine {
         onProgress: (@Sendable (Double, TimeInterval?) -> Void)? = nil,
         provenance: ProvenanceExportOptions? = nil
     ) async throws -> ProcessingResult {
-        let (outputURL, validation) = try await VideoProcessor.process(
+        let (outputURL, validation, receipt) = try await VideoProcessor.process(
             sourceURL: sourceURL,
             config: config,
             onProgress: onProgress,
@@ -246,7 +274,8 @@ public actor WatermarkEngine {
             url: outputURL,
             data: nil,
             outputUTI: sourceUTI,
-            videoValidation: validation
+            videoValidation: validation,
+            provenanceReceipt: receipt
         )
     }
 
@@ -269,12 +298,14 @@ public actor WatermarkEngine {
     public func processLivePhoto(
         stillImageURL: URL,
         videoURL: URL,
-        config: WatermarkConfiguration
+        config: WatermarkConfiguration,
+        provenance: ProvenanceExportOptions? = nil
     ) async throws -> ProcessingResult {
         let pair = try await LivePhotoProcessor.process(
             stillImageURL: stillImageURL,
             videoURL: videoURL,
-            config: config
+            config: config,
+            provenance: provenance
         )
         // Determine source UTI from still image
         let sourceUTI = (try? stillImageURL.resourceValues(forKeys: [.typeIdentifierKey]).typeIdentifier)
@@ -283,7 +314,8 @@ public actor WatermarkEngine {
             url: pair.watermarkedStillURL,
             data: nil,
             outputUTI: sourceUTI,
-            livePhotoVideoURL: pair.watermarkedVideoURL
+            livePhotoVideoURL: pair.watermarkedVideoURL,
+            provenanceReceipt: pair.provenanceReceipt
         )
     }
 
@@ -304,6 +336,17 @@ public actor WatermarkEngine {
             colorSpace: CIContextProvider.workingColorSpace
         )
         return "\(bytes[0]),\(bytes[1]),\(bytes[2])"
+    }
+
+    private func privacyActions(for profile: MetadataPrivacyProfile) -> [String] {
+        switch profile {
+        case .preserveAll:
+            return []
+        case .stripSensitive:
+            return ["Location and device-identifying metadata removed"]
+        case .minimalPublic:
+            return ["Only rights/provenance and essential technical metadata retained"]
+        }
     }
 
     /// Builds the Core Image filter graph for watermark compositing.

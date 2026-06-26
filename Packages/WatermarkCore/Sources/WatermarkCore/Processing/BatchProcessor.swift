@@ -39,16 +39,22 @@ public actor BatchProcessor {
         /// When nil, the batch's `sharedConfig` is used for this item.
         public let overrideConfig: WatermarkConfiguration?
 
+        /// The user's original filename, when known — used to name the output so
+        /// batch exports keep their source names instead of temp names.
+        public let originalFilename: String?
+
         public init(
             id: UUID,
             sourceURL: URL,
             mediaType: WatermarkEngine.MediaType,
-            overrideConfig: WatermarkConfiguration? = nil
+            overrideConfig: WatermarkConfiguration? = nil,
+            originalFilename: String? = nil
         ) {
             self.id = id
             self.sourceURL = sourceURL
             self.mediaType = mediaType
             self.overrideConfig = overrideConfig
+            self.originalFilename = originalFilename
         }
     }
 
@@ -91,6 +97,7 @@ public actor BatchProcessor {
     public func process(
         items: [BatchItem],
         sharedConfig: WatermarkConfiguration,
+        provenanceAppVersion: String? = nil,
         onProgress: ProgressHandler? = nil
     ) async -> BatchProcessingResult {
         let batchStartTime = Date()
@@ -104,6 +111,15 @@ public actor BatchProcessor {
             if Task.isCancelled { break }
 
             let config = item.overrideConfig ?? sharedConfig
+            let provenance = provenanceAppVersion.map {
+                ProvenanceExportOptions(
+                    rights: config.rightsMetadata,
+                    privacyProfile: config.metadataPrivacyProfile,
+                    includeC2PA: config.includeC2PAManifest,
+                    userDeclaration: config.sourceDeclaration,
+                    appVersion: $0
+                )
+            }
 
             do {
                 let result: ProcessingResult
@@ -113,7 +129,8 @@ public actor BatchProcessor {
                     result = try await engine.processVideo(
                         sourceURL: item.sourceURL,
                         config: config,
-                        onProgress: { _, _ in /* video-level progress; batch tracks at item boundary */ }
+                        onProgress: { _, _ in /* video-level progress; batch tracks at item boundary */ },
+                        provenance: provenance
                     )
                     // Pitfall #4: 0.5s inter-export delay to prevent
                     // AVAssetExportSession hardware decoder exhaustion
@@ -124,13 +141,17 @@ public actor BatchProcessor {
                 case .photo, .livePhoto, .unknown:
                     result = try await engine.process(
                         sourceURL: item.sourceURL,
-                        config: config
+                        config: config,
+                        provenance: provenance
                     )
                 }
 
-                // Record success URL
+                // Record success URL, renamed to keep the source's filename
+                // (correct extension per media type) instead of a temp name.
                 if let url = result.url {
-                    successes.append(url)
+                    successes.append(
+                        renamedOutput(url, originalFilename: item.originalFilename, index: index)
+                    )
                 }
             } catch {
                 // Any error (except CancellationError at checkCancellation gate):
@@ -156,5 +177,35 @@ public actor BatchProcessor {
             failures: failures,
             duration: duration
         )
+    }
+
+    /// Copies a rendered output to a temp file named from the source's original
+    /// filename (keeping the output's extension), so batch exports retain user
+    /// filenames. Falls back to a unique "Markepi-<n>" when no name is known.
+    private func renamedOutput(_ url: URL, originalFilename: String?, index: Int) -> URL {
+        let ext = url.pathExtension.isEmpty ? "jpg" : url.pathExtension
+        let base: String
+        if let originalFilename, !originalFilename.isEmpty {
+            base = (originalFilename as NSString).deletingPathExtension
+        } else {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
+            base = "Markepi \(f.string(from: Date())) \(index + 1)"
+        }
+        let dir = FileManager.default.temporaryDirectory
+        var dest = dir.appendingPathComponent(base).appendingPathExtension(ext)
+        // Disambiguate collisions (e.g. two files with the same base name).
+        if FileManager.default.fileExists(atPath: dest.path) {
+            dest = dir.appendingPathComponent("\(base)-\(index + 1)").appendingPathExtension(ext)
+        }
+        try? FileManager.default.removeItem(at: dest)
+        do {
+            try FileManager.default.copyItem(at: url, to: dest)
+            try? FileManager.default.removeItem(at: url)  // remove the temp original
+            return dest
+        } catch {
+            return url
+        }
     }
 }

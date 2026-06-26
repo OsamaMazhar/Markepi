@@ -97,7 +97,10 @@ public struct ShareExtensionRootView<ViewModel: ShareExtensionRendering & Observ
             set: { viewModel.showExportReceipt = $0 }
         )) {
             if let receipt = viewModel.lastExportReceipt {
-                ExportReceiptView(receipt: receipt)
+                ExportReceiptView(receipt: receipt) {
+                    viewModel.showExportReceipt = false
+                    viewModel.presentShareSheet()
+                }
             }
         }
         .task(id: viewModel.previewIdentifier) {
