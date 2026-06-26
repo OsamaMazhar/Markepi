@@ -1,4 +1,5 @@
 import Testing
+import ImageIO
 import Foundation
 @testable import WatermarkCore
 
@@ -117,6 +118,87 @@ struct ProvenanceExportTests {
             #expect(notSupported.status == .notSupported)
             #expect(signed.warnings.isEmpty)
             #expect(notSigned.warnings == ["disabled"])
+        }
+    }
+
+    // MARK: - Task 4: IPTC Rights Metadata Writer
+
+    @Suite("IPTCRightsMetadataWriter")
+    struct IPTCRightsMetadataWriterTests {
+
+        let writer = IPTCRightsMetadataWriter()
+
+        @Test("Merges creator into IPTC byline without dropping existing EXIF")
+        func mergesCreatorPreservingExif() {
+            let metadata: [String: Any] = [
+                kCGImagePropertyExifDictionary as String: [
+                    kCGImagePropertyExifExposureTime as String: 0.001
+                ]
+            ]
+            var rights = RightsMetadata()
+            rights.creator = "Jane Photographer"
+            let out = writer.merged(into: metadata, rights: rights)
+            let exif = out[kCGImagePropertyExifDictionary as String] as? [String: Any]
+            #expect(exif?[kCGImagePropertyExifExposureTime as String] as? Double == 0.001)
+            let iptc = out[kCGImagePropertyIPTCDictionary as String] as? [String: Any]
+            #expect(iptc?[kCGImagePropertyIPTCByline as String] as? [String] == ["Jane Photographer"])
+        }
+
+        @Test("Writes copyright notice to IPTC and TIFF")
+        func writesCopyrightToIPTCAndTIFF() {
+            var rights = RightsMetadata()
+            rights.copyrightNotice = "© 2026 Jane Photographer"
+            let out = writer.merged(into: [:], rights: rights)
+            let iptc = out[kCGImagePropertyIPTCDictionary as String] as? [String: Any]
+            #expect(iptc?[kCGImagePropertyIPTCCopyrightNotice as String] as? String == "© 2026 Jane Photographer")
+            let tiff = out[kCGImagePropertyTIFFDictionary as String] as? [String: Any]
+            #expect(tiff?[kCGImagePropertyTIFFCopyright as String] as? String == "© 2026 Jane Photographer")
+        }
+
+        @Test("Writes credit line and usage terms")
+        func writesCreditAndUsageTerms() {
+            var rights = RightsMetadata()
+            rights.creditLine = "Markepi"
+            rights.usageTerms = "All rights reserved"
+            let out = writer.merged(into: [:], rights: rights)
+            let iptc = out[kCGImagePropertyIPTCDictionary as String] as? [String: Any]
+            #expect(iptc?[kCGImagePropertyIPTCCredit as String] as? String == "Markepi")
+            #expect(iptc?[kCGImagePropertyIPTCRightsUsageTerms as String] as? String == "All rights reserved")
+        }
+
+        @Test("Digital Source Type can represent trained algorithmic media")
+        func digitalSourceTypeTrainedAlgorithmic() {
+            var rights = RightsMetadata()
+            rights.digitalSourceType =
+                "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia"
+            let out = writer.merged(into: [:], rights: rights)
+            let iptc = out[kCGImagePropertyIPTCDictionary as String] as? [String: Any]
+            #expect(iptc?[kCGImagePropertyIPTCExtDigitalSourceType as String] as? String ==
+                "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia")
+        }
+
+        @Test("Empty rights metadata leaves IPTC dict untouched (no empty keys)")
+        func emptyRightsLeavesNoEmptyKeys() {
+            let rights = RightsMetadata()
+            let out = writer.merged(into: [:], rights: rights)
+            let iptc = out[kCGImagePropertyIPTCDictionary as String] as? [String: Any]
+            // IPTC dict exists but carries no creator/copyright/credit keys
+            #expect(iptc?[kCGImagePropertyIPTCByline as String] == nil)
+            #expect(iptc?[kCGImagePropertyIPTCCopyrightNotice as String] == nil)
+        }
+
+        @Test("RightsMetadata encodes and decodes")
+        func rightsMetadataCodable() throws {
+            var rights = RightsMetadata()
+            rights.creator = "C"
+            rights.copyrightNotice = "©"
+            rights.creditLine = "Cr"
+            rights.usageTerms = "UT"
+            rights.licensorURL = "https://example.com"
+            rights.digitalSourceType = "http://cv.iptc.org/newscodes/digitalsourcetype/photoCapture"
+            let data = try JSONEncoder().encode(rights)
+            let decoded = try JSONDecoder().decode(RightsMetadata.self, from: data)
+            #expect(decoded == rights)
         }
     }
 }
