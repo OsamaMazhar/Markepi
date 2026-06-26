@@ -46,6 +46,13 @@ public struct WatermarkConfiguration: Sendable, Codable {
     /// Defaults to `.preserveAll` (today's behavior) — old configs decode to this.
     public var metadataPrivacyProfile: MetadataPrivacyProfile = .preserveAll
 
+    /// Master switch for the Content Credentials / provenance feature. When
+    /// false (default), exports are shared directly with no provenance receipt,
+    /// signing, rights, or metadata changes — and the More panel hides all the
+    /// detailed controls. When true, the full controls are shown and every
+    /// export produces a provenance receipt.
+    public var provenanceEnabled: Bool = false
+
     /// True to attach a C2PA Content Credentials manifest on export. Defaults
     /// to false — signing is user-initiated from the More section (D-25), never
     /// automatic. The actual Sign button sets this to true after the explainer
@@ -64,7 +71,7 @@ public struct WatermarkConfiguration: Sendable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case watermarks, padding, whiteFrame, dateStamp, outputFormat, outputQuality
-        case rightsMetadata, metadataPrivacyProfile, includeC2PAManifest
+        case rightsMetadata, metadataPrivacyProfile, provenanceEnabled, includeC2PAManifest
         case sourceDeclaration, invisibleProtectionEnabled
     }
 
@@ -99,6 +106,7 @@ public struct WatermarkConfiguration: Sendable, Codable {
         self.outputQuality = try container.decodeIfPresent(Float.self, forKey: .outputQuality) ?? 1.0
         self.rightsMetadata = try container.decodeIfPresent(RightsMetadata.self, forKey: .rightsMetadata) ?? RightsMetadata()
         self.metadataPrivacyProfile = try container.decodeIfPresent(MetadataPrivacyProfile.self, forKey: .metadataPrivacyProfile) ?? .preserveAll
+        self.provenanceEnabled = try container.decodeIfPresent(Bool.self, forKey: .provenanceEnabled) ?? false
         self.includeC2PAManifest = try container.decodeIfPresent(Bool.self, forKey: .includeC2PAManifest) ?? false
         self.sourceDeclaration = try container.decodeIfPresent(UserSourceDeclaration.self, forKey: .sourceDeclaration) ?? .none
         self.invisibleProtectionEnabled = try container.decodeIfPresent(Bool.self, forKey: .invisibleProtectionEnabled) ?? false
@@ -114,6 +122,7 @@ public struct WatermarkConfiguration: Sendable, Codable {
         try container.encode(outputQuality, forKey: .outputQuality)
         try container.encode(rightsMetadata, forKey: .rightsMetadata)
         try container.encode(metadataPrivacyProfile, forKey: .metadataPrivacyProfile)
+        try container.encode(provenanceEnabled, forKey: .provenanceEnabled)
         try container.encode(includeC2PAManifest, forKey: .includeC2PAManifest)
         try container.encode(sourceDeclaration, forKey: .sourceDeclaration)
         try container.encode(invisibleProtectionEnabled, forKey: .invisibleProtectionEnabled)
