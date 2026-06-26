@@ -28,8 +28,8 @@ public protocol WatermarkConfigurable: AnyObject {
 
     /// Returns true when the ViewModel has more than one photo loaded.
     /// Used by ControlsView to gate batch-mode UI (Watermark All, batch progress).
-    /// Default implementation returns false — share/Photos extension ViewModels
-    /// process single items by design.
+    /// Default implementation returns false — the Share Extension ViewModel
+    /// processes single items by design.
     var hasMultiplePhotos: Bool { get }
 
     // Template Management (Phase 12)
@@ -53,6 +53,10 @@ public protocol WatermarkConfigurable: AnyObject {
 
     /// Presents the share sheet (sets internal showShareSheet flag).
     func presentShareSheet()
+
+    /// The analyzer's verdict for the currently-loaded source.
+    /// Runtime-only — NOT persisted in config. Default nil.
+    var sourceProvenanceReport: SourceProvenanceReport? { get }
 
     /// Cancels an in-progress video export.
     /// Called by ControlsView's Cancel button during .renderingVideo state.
@@ -221,16 +225,19 @@ extension WatermarkConfigurable {
     // MARK: - Batch Processing (Phase 13)
 
     /// Default no-op — only the main app ViewModel (WatermarkViewModel)
-    /// implements batch processing. Share and Photos extension ViewModels
-    /// use this default which safely does nothing.
+    /// implements batch processing. The Share Extension ViewModel uses this
+    /// default, which safely does nothing.
     public func cancelBatchProcessing() {}
 
     /// Default no-op — only the main app ViewModel (WatermarkViewModel)
-    /// implements unified cancel. Share and Photos extension ViewModels
-    /// use this default which safely does nothing.
+    /// implements unified cancel. The Share Extension ViewModel uses this
+    /// default, which safely does nothing.
     public func cancelProcessing() {}
 
-    /// Default returns false — share and Photos extension ViewModels
-    /// process single items by design.
+    /// Default returns false — the Share Extension ViewModel processes single
+    /// items by design.
     public var hasMultiplePhotos: Bool { false }
+
+    /// Default returns nil — ViewModels override with stored properties.
+    public var sourceProvenanceReport: SourceProvenanceReport? { nil }
 }

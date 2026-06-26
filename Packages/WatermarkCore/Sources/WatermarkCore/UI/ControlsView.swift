@@ -10,7 +10,7 @@ import WatermarkCore
 /// Includes the Share/Render button which adapts to the ViewModel's
 /// `renderingState` (idle/rendering/done/error).
 public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View {
-    @State var viewModel: ViewModel
+    var viewModel: ViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -43,6 +43,8 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                 styleSectionContent
             case .output:
                 outputSectionContent
+            case .more:
+                ProvenanceControlsView(viewModel: viewModel)
             }
         }
         .markepiScrollEdgeProtection {

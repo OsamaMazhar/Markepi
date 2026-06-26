@@ -97,3 +97,18 @@ public struct SourceProvenanceAnalyzer: Sendable {
         return tiff?[kCGImagePropertyTIFFSoftware as String] as? String
     }
 }
+
+// MARK: - Convenience — pixel-free metadata-only analysis
+
+extension SourceProvenanceAnalyzer {
+    public func analyze(imageURL: URL,
+                        userDeclaration: UserSourceDeclaration = .none,
+                        c2paSummary: C2PASummary? = nil) -> SourceProvenanceReport? {
+        guard let src = CGImageSourceCreateWithURL(imageURL as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]
+        else { return nil }
+        var metadata: [String: Any] = [:]
+        for (k, v) in props { metadata[k as String] = v }
+        return analyze(metadata: metadata, userDeclaration: userDeclaration, c2paSummary: c2paSummary)
+    }
+}

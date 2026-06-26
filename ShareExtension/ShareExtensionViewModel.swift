@@ -25,7 +25,12 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
     ///
     /// Loads saved config on init. Saves on every mutation via `didSet`.
     var config: WatermarkConfiguration {
-        didSet { AppGroupConfigSync.save(config) }
+        didSet {
+            AppGroupConfigSync.save(config)
+            if config.sourceDeclaration != analyzedDeclaration {
+                analyzeCurrentSource()
+            }
+        }
     }
 
     // MARK: - Media State
@@ -41,6 +46,32 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
     /// True while NSItemProvider is loading the shared media.
     /// Drives the loading spinner in the root view.
     var isLoadingMedia: Bool = true
+
+    // MARK: - Provenance (Plan 19-03)
+
+    var sourceProvenanceReport: SourceProvenanceReport?
+    var lastExportReceipt: ExportReceipt?
+    private var analyzedDeclaration: UserSourceDeclaration = .none
+
+    func analyzeCurrentSource() {
+        guard let url = sourceURL else {
+            sourceProvenanceReport = nil; return
+        }
+        let declaration = config.sourceDeclaration
+        if isVideo {
+            sourceProvenanceReport = SourceProvenanceReport(
+                state: .unknown, evidence: [],
+                warnings: ["Video source provenance is not analyzed in this version."],
+                userDeclaration: declaration)
+        } else {
+            sourceProvenanceReport = SourceProvenanceAnalyzer()
+                .analyze(imageURL: url, userDeclaration: declaration)
+                ?? SourceProvenanceReport(state: .unknown, evidence: [], userDeclaration: declaration)
+        }
+        analyzedDeclaration = declaration
+    }
+
+    var showExportReceipt = false
 
     // MARK: - Video Warning State
 
@@ -265,6 +296,7 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
             isVideo = false
             isLoadingMedia = false
             Task { await loadSourceForComparison() }
+            analyzeCurrentSource()
 
             // Trigger debounced preview generation
             await generatePreview()
@@ -538,13 +570,24 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
         renderingState = .rendering
 
         do {
-            let result = try await engine.process(sourceURL: sourceURL, config: config)
+            let prov = ProvenanceExportOptions(
+                rights: config.rightsMetadata,
+                privacyProfile: config.metadataPrivacyProfile,
+                includeC2PA: config.includeC2PAManifest,
+                userDeclaration: config.sourceDeclaration,
+                appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+            )
+            let result = try await engine.process(sourceURL: sourceURL, config: config, provenance: prov)
             fullResResult = result
             renderingState = .done
             if let url = result.url,
                let data = try? Data(contentsOf: url),
                let uiImage = UIImage(data: data) {
                 previewImage = uiImage
+            }
+            lastExportReceipt = result.provenanceReceipt
+            if lastExportReceipt != nil {
+                showExportReceipt = true
             }
         } catch {
             renderingState = .error(error)

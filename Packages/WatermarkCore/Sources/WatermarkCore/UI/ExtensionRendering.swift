@@ -43,7 +43,7 @@ public protocol ShareExtensionRendering: WatermarkConfigurable {
     /// Whether to show the audio mismatch warning banner.
     var showAudioWarning: Bool { get set }
 
-    /// File URL of the source media (from NSItemProvider or PHContentEditingInput).
+    /// File URL of the source media loaded from an `NSItemProvider`.
     var sourceURL: URL? { get set }
 
     /// Identifier for triggering preview generation via `.task(id:)`.
@@ -61,6 +61,12 @@ public protocol ShareExtensionRendering: WatermarkConfigurable {
     /// Closure set by ShareViewController to complete the extension request.
     var completeRequest: (() -> Void)? { get set }
 
+    /// When true, presents the export receipt view before sharing.
+    var showExportReceipt: Bool { get set }
+
+    /// Receipt from the last provenance-enabled export.
+    var lastExportReceipt: ExportReceipt? { get set }
+
     /// Dismisses the share sheet and completes the extension request.
     func handleShareDismiss()
 
@@ -74,51 +80,4 @@ public protocol ShareExtensionRendering: WatermarkConfigurable {
     func openInMainApp()
 }
 
-/// Protocol capturing the rendering surface required by `PhotosExtensionRootView`.
-///
-/// Extends `WatermarkConfigurable` with the view-model properties and methods
-/// that the Photos extension root view accesses directly. Uses an associated
-/// type for the `finishEditing` callback to avoid importing `Photos` framework
-/// into WatermarkCore (production VM uses `PHContentEditingOutput`, test VM
-/// uses `Any`).
-///
-/// All conforming types must be `@Observable` classes.
-@MainActor
-public protocol PhotosExtensionRendering: WatermarkConfigurable {
-    /// The type of the completion handler parameter for `finishEditing`.
-    /// `PhotosExtensionViewModel` uses `PHContentEditingOutput?`.
-    /// `SnapshotTestViewModel` uses `Any?` (test stub).
-    associatedtype FinishOutput
-
-    /// Watermarked preview image displayed in the preview area.
-    var previewImage: UIImage? { get set }
-
-    /// Whether the source media is a video.
-    var isVideo: Bool { get set }
-
-    /// True while media is loading (shows loading spinner).
-    var isLoadingMedia: Bool { get set }
-
-    /// Whether to show the HDR warning banner.
-    var showHDRWarning: Bool { get set }
-
-    /// Detailed HDR warning text.
-    var hdrWarningMessage: String? { get set }
-
-    /// File URL of the source media (from PHContentEditingInput).
-    var sourceURL: URL? { get set }
-
-    /// Identifier for triggering preview generation via `.task(id:)`.
-    var previewIdentifier: String { get set }
-
-    /// Completes editing in the Photos extension. Called by the "Done"
-    /// toolbar button in PhotosExtensionRootView.
-    ///
-    /// - Parameter completionHandler: Called with the editing output when done.
-    ///   The root view passes `{ _ in }` (parameter ignored).
-    func finishEditing(completionHandler: @escaping (FinishOutput?) -> Void)
-
-    /// Generates a watermarked preview image.
-    func generatePreview() async
-}
 #endif

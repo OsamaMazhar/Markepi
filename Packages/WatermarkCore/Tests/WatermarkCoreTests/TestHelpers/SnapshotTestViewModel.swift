@@ -4,15 +4,12 @@ import UIKit
 import SwiftUI
 import WatermarkCore
 
-/// Test-only ViewModel conforming to `ShareExtensionRendering` and
-/// `PhotosExtensionRendering` with pre-populated watermark configuration
-/// for snapshot testing of extension root views.
+/// Test-only ViewModel conforming to `ShareExtensionRendering` with
+/// pre-populated watermark configuration for snapshot testing.
 ///
-/// Provides the complete ViewModel surface needed by both
-/// `ShareExtensionRootView` and `PhotosExtensionRootView`, avoiding
-/// dependency on real ViewModels (ShareExtensionViewModel /
-/// PhotosExtensionViewModel) which require `NSExtensionContext`,
-/// `CGImageSource`, and `PHContentEditingInput`.
+/// Provides the complete ViewModel surface needed by
+/// `ShareExtensionRootView`, avoiding dependency on the real
+/// `ShareExtensionViewModel`, `NSExtensionContext`, and `CGImageSource`.
 @MainActor
 @Observable
 final class SnapshotTestViewModel {
@@ -59,6 +56,9 @@ final class SnapshotTestViewModel {
     var sourceURL: URL? = nil
     var previewIdentifier: String = UUID().uuidString
     var showShareSheet: Bool = false
+    var showExportReceipt: Bool = false
+    var lastExportReceipt: ExportReceipt? = nil
+    var sourceProvenanceReport: SourceProvenanceReport? = nil
     var fullResResult: ProcessingResult? = nil
     var unsupportedType: Bool = false
     var completeRequest: (() -> Void)? = nil
@@ -74,7 +74,6 @@ final class SnapshotTestViewModel {
     func generatePreview() async {}
     func processNextItem() async {}
     func openInMainApp() {}
-    func finishEditing(completionHandler: @escaping (Any?) -> Void) {}
 
     // MARK: - Init
 
@@ -130,19 +129,14 @@ final class SnapshotTestViewModel {
 // MARK: - Protocol Conformances
 
 extension SnapshotTestViewModel: ShareExtensionRendering {}
-extension SnapshotTestViewModel: PhotosExtensionRendering {
-    typealias FinishOutput = Any
-}
 
 // MARK: - SnapshotRenderer
 
 /// Test-only helper that renders a SwiftUI `View` to PNG `Data` using
 /// `UIHostingController` and `UIGraphicsImageRenderer`.
 ///
-/// Must use `UIHostingController` (NOT `ImageRenderer`) because toolbar
-/// items and accurate extension-context layout require a hosting controller
-/// (RESEARCH.md Pitfall 1). Wraps in `UINavigationController` when
-/// `inNavigationController` is true for toolbar rendering.
+/// Uses `UIHostingController` rather than `ImageRenderer` for accurate
+/// extension-context layout (RESEARCH.md Pitfall 1).
 @MainActor
 enum SnapshotRenderer {
 
@@ -156,36 +150,25 @@ enum SnapshotRenderer {
     ///   - view: The SwiftUI `View` to render.
     ///   - size: The render bounds in points (default: 430×932, iPhone 16 Pro Max).
     ///   - scale: The render scale factor (default: 3.0, matching iPhone 16 Pro Max).
-    ///   - inNavigationController: When true, wraps the hosting controller in a
-    ///     `UINavigationController` for toolbar rendering (required by
-    ///     `PhotosExtensionRootView`).
     /// - Returns: PNG `Data` for the rendered view.
     /// - Throws: `SnapshotError.renderingFailed` if PNG conversion fails.
     static func render<V: View>(
         _ view: V,
         size: CGSize = CGSize(width: 430, height: 932),
-        scale: CGFloat = 3.0,
-        inNavigationController: Bool = false
+        scale: CGFloat = 3.0
     ) throws -> Data {
         let rootView = view.frame(width: size.width, height: size.height)
         let host = UIHostingController(rootView: rootView)
 
-        let container: UIViewController
-        if inNavigationController {
-            container = UINavigationController(rootViewController: host)
-        } else {
-            container = host
-        }
-
-        container.view.bounds = CGRect(origin: .zero, size: size)
-        container.view.layoutIfNeeded()
+        host.view.bounds = CGRect(origin: .zero, size: size)
+        host.view.layoutIfNeeded()
 
         let format = UIGraphicsImageRendererFormat()
         format.scale = scale
 
-        let renderer = UIGraphicsImageRenderer(bounds: container.view.bounds, format: format)
+        let renderer = UIGraphicsImageRenderer(bounds: host.view.bounds, format: format)
         let image = renderer.image { ctx in
-            container.view.drawHierarchy(in: container.view.bounds, afterScreenUpdates: true)
+            host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
         }
 
         guard let pngData = image.pngData() else {

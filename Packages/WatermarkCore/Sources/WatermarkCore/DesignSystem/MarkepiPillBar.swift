@@ -14,6 +14,7 @@ public enum ControlsSection: String, CaseIterable, Identifiable {
     case watermark = "Watermark"
     case style = "Style"
     case output = "Output"
+    case more = "More"
 
     public var id: String { rawValue }
 }

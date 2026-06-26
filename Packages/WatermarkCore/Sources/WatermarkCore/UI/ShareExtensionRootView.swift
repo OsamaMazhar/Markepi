@@ -11,7 +11,7 @@ import SwiftUI
 /// production `ShareExtensionViewModel` and test-only `SnapshotTestViewModel`
 /// for XCTest snapshot tests (Phase 18, XTG-01).
 public struct ShareExtensionRootView<ViewModel: ShareExtensionRendering & Observable>: View {
-    @State var viewModel: ViewModel
+    @Bindable var viewModel: ViewModel
 
     public init(viewModel: ViewModel) {
         self.viewModel = viewModel
@@ -90,6 +90,14 @@ public struct ShareExtensionRootView<ViewModel: ShareExtensionRendering & Observ
                 ShareSheetView(activityItems: [url]) {
                     viewModel.handleShareDismiss()
                 }
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { viewModel.showExportReceipt },
+            set: { viewModel.showExportReceipt = $0 }
+        )) {
+            if let receipt = viewModel.lastExportReceipt {
+                ExportReceiptView(receipt: receipt)
             }
         }
         .task(id: viewModel.previewIdentifier) {

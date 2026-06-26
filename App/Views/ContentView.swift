@@ -10,7 +10,7 @@ struct IdentifiableIndex: Identifiable {
 }
 
 struct ContentView: View {
-    @State var viewModel: WatermarkViewModel
+    @Bindable var viewModel: WatermarkViewModel
     @State private var showFileImporter = false
 
     // Batch processing UI state (Phase 13)
@@ -25,24 +25,8 @@ struct ContentView: View {
     /// Settings pane (gear icon) presentation state.
     @State private var showSettings = false
 
-    /// Measured height of the active tool panel, used to lift the photo above it.
-    @State private var panelHeight: CGFloat = 0
-
-    /// Approximate vertical space the dock occupies — used to keep the batch
-    /// thumbnail strip clear of it.
-    private let dockClearance: CGFloat = 96
-
-    /// Space the dock + spacings + bottom safe area occupy below the panel.
-    /// Added to the measured panel height to compute how far to lift the photo.
-    private let dockReserve: CGFloat = 124
-
-    /// True when a tool panel is on screen (and not replaced by a render banner).
-    private var isPanelVisible: Bool { activeTool != nil && !isBusy }
-
-    /// How far to inset the photo's bottom so it sits fully above the tool panel.
-    private var imageBottomInset: CGFloat {
-        isPanelVisible ? panelHeight + dockReserve : 0
-    }
+    /// Premium upgrade (paywall) presentation state.
+    @State private var showPaywall = false
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -75,7 +59,11 @@ struct ContentView: View {
                         }
                     }
                     .onAppear {
-                        if viewModel.photos.isEmpty {
+                        // Don't pop the launch picker when a Share Extension
+                        // handoff is pending — importPendingShares will load it.
+                        if viewModel.photos.isEmpty
+                            && viewModel.openPickerOnLaunch
+                            && !SharedInboxStore.hasPending {
                             viewModel.showPicker = true
                         }
                     }
@@ -94,6 +82,16 @@ struct ContentView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView(viewModel: viewModel)
             }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView()
+            }
+            .overlay {
+                if viewModel.isImportingMedia {
+                    LoadingOverlay(message: "Loading your media…")
+                        .transition(.opacity)
+                }
+            }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.isImportingMedia)
         }
     }
 
@@ -104,23 +102,21 @@ struct ContentView: View {
         // the empty state during batch processing while photo data reloads.
         return Group {
             if viewModel.currentPhoto == nil && viewModel.renderingState != .rendering {
-                EmptyStateView(onChoosePhoto: { viewModel.showPicker = true })
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(canvasBackground.ignoresSafeArea())
+                firstPage
             } else {
-                ZStack(alignment: .bottom) {
-                    // z=0: Full-bleed preview on a neutral editing canvas.
-                    previewArea
-                        .ignoresSafeArea()
-
-                    // z=1: Batch overlays (thumbnail strip + batch progress).
-                    batchOverlays
-                        .zIndex(1)
-
-                    // z=2: Tool panel + persistent dock + render progress.
-                    bottomControls(geometry)
-                        .zIndex(2)
-                }
+                // The preview is the main content; it respects the safe area on
+                // top (so it stays below the status bar / toolbar) and SwiftUI's
+                // `safeAreaInset` automatically keeps it clear of the bottom
+                // chrome (batch strip, scrubber, panel, dock) — no manual height
+                // math, and the content rises into the free space above.
+                PreviewView(viewModel: viewModel)
+                    .background(canvasBackground.ignoresSafeArea())
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        bottomControls(geometry)
+                    }
+                    .overlay {
+                        batchOverlays
+                    }
             }
         }
         .task(id: viewModel.previewIdentifier) {
@@ -144,6 +140,55 @@ struct ContentView: View {
         Color.black
     }
 
+    // MARK: - First Page (no media loaded)
+
+    /// The app's launch / empty screen: a branded hero with the photo and
+    /// Files entry points, and the app name + version pinned to the bottom.
+    private var firstPage: some View {
+        ZStack(alignment: .bottom) {
+            EmptyStateView(
+                onChoosePhoto: { viewModel.showPicker = true },
+                onImportFiles: { showFileImporter = true }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            appVersionFooter
+                .padding(.bottom, 16)
+        }
+        .background(canvasBackground.ignoresSafeArea())
+    }
+
+    /// App name + version, shown only on the first page.
+    private var appVersionFooter: some View {
+        VStack(spacing: 3) {
+            Text(Self.appDisplayName)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(Self.appVersionString)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(Self.appDisplayName), \(Self.appVersionString)")
+    }
+
+    /// Display name from the bundle (falls back to "Markepi").
+    private static var appDisplayName: String {
+        let info = Bundle.main.infoDictionary
+        return (info?["CFBundleDisplayName"] as? String)
+            ?? (info?["CFBundleName"] as? String)
+            ?? "Markepi"
+    }
+
+    /// "Version X.Y (build)" string from the bundle.
+    private static var appVersionString: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = info?["CFBundleVersion"] as? String ?? "1"
+        return "Version \(short) (\(build))"
+    }
+
     /// True while a render/export/batch operation is in progress.
     private var isBusy: Bool {
         switch viewModel.renderingState {
@@ -157,84 +202,73 @@ struct ContentView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
+            if viewModel.currentPhoto != nil {
+                // Editing: back to the start screen. Routes through the discard
+                // confirmation so in-progress edits aren't lost by accident.
+                Button {
+                    viewModel.requestCancel()
+                } label: {
+                    Image(systemName: "chevron.backward")
+                }
+                .accessibilityLabel("Back to start")
+            } else {
+                // First page: upgrade to Premium.
+                Button {
+                    showPaywall = true
+                } label: {
+                    Image(systemName: "crown.fill")
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .tint(.yellow)
+                .accessibilityLabel("Upgrade to Premium")
+            }
+        }
+        ToolbarItemGroup(placement: .topBarTrailing) {
             Button {
                 showSettings = true
             } label: {
                 Image(systemName: "gearshape")
             }
             .accessibilityLabel("Settings")
-        }
-        if viewModel.hasMultiplePhotos {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Cancel") {
-                    viewModel.requestCancel()
-                }
-            }
-        }
-        ToolbarItemGroup(placement: .topBarTrailing) {
-            Button {
-                viewModel.showPicker = true
-            } label: {
-                Image(systemName: "photo.badge.plus")
-            }
-            .accessibilityLabel("Add photos")
 
-            Button {
-                showFileImporter = true
-            } label: {
-                Image(systemName: "folder.badge.plus")
-            }
-            .accessibilityLabel("Import from Files")
-
-            if viewModel.hasBatchOverrides {
+            // Add / import / reset / export only matter once media is loaded;
+            // on the first page the empty-state CTAs handle adding media.
+            if viewModel.currentPhoto != nil {
                 Button {
-                    showResetOverridesConfirmation = true
+                    viewModel.showPicker = true
                 } label: {
-                    Image(systemName: "arrow.counterclockwise")
+                    Image(systemName: "photo.badge.plus")
                 }
-                .accessibilityLabel("Reset all overrides")
+                .accessibilityLabel("Add photos")
+
+                Button {
+                    showFileImporter = true
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                }
+                .accessibilityLabel("Import from Files")
+
+                if viewModel.hasBatchOverrides {
+                    Button {
+                        showResetOverridesConfirmation = true
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                    }
+                    .accessibilityLabel("Reset all overrides")
+                }
+
+                ExportToolbarButton(viewModel: viewModel)
             }
-
-            ExportToolbarButton(viewModel: viewModel)
         }
     }
 
-    // MARK: - Preview Area (z=0)
+    // MARK: - Batch Overlays
 
-    private var previewArea: some View {
-        ZStack {
-            canvasBackground
-            // Lift the photo above the tool panel so it stays fully visible,
-            // animating smoothly as panels open/close or swap.
-            PreviewView(viewModel: viewModel)
-                .padding(.bottom, imageBottomInset)
-                .animation(
-                    reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.86),
-                    value: imageBottomInset
-                )
-        }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.renderingState)
-    }
-
-    // MARK: - Batch Overlays (z=1)
-
+    /// Full-screen batch progress overlay shown during processing. The thumbnail
+    /// strip now lives in the bottom chrome stack (see `bottomControls`) so it
+    /// stacks with — rather than hides behind — the tool panel.
     @ViewBuilder
     private var batchOverlays: some View {
-        if viewModel.hasMultiplePhotos {
-            ThumbnailStripView(
-                photos: viewModel.photos,
-                currentIndex: $viewModel.currentIndex,
-                perItemOverrides: viewModel.perItemOverrides,
-                onItemTapped: { index in
-                    selectedItemForOverride = IdentifiableIndex(value: index)
-                },
-                onReorder: { reordered in
-                    viewModel.photos = reordered
-                }
-            )
-            .padding(.bottom, dockClearance)
-        }
-
         if case .batchProcessing(let current, let total, let eta) = viewModel.renderingState {
             BatchProgressOverlay(
                 current: current,
@@ -257,6 +291,30 @@ struct ContentView: View {
             : geometry.size.height * 0.50
 
         return VStack(spacing: 12) {
+            // Batch thumbnail strip sits at the TOP of the chrome stack so it is
+            // always visible alongside (never hidden behind) the tool panel.
+            if viewModel.hasMultiplePhotos {
+                ThumbnailStripView(
+                    photos: viewModel.photos,
+                    currentIndex: $viewModel.currentIndex,
+                    perItemOverrides: viewModel.perItemOverrides,
+                    onItemTapped: { index in
+                        selectedItemForOverride = IdentifiableIndex(value: index)
+                    },
+                    onReorder: { reordered in
+                        viewModel.photos = reordered
+                    }
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.horizontal, 12)
+            }
+
+            // Frame scrubber: drag through the video timeline to preview the
+            // watermarked output at any frame (AVAssetImageGenerator-backed).
+            if viewModel.isCurrentVideo && !isBusy {
+                VideoScrubBar(fraction: $viewModel.videoPreviewFraction)
+            }
+
             RenderProgressBanner(viewModel: viewModel)
 
             if let tool = activeTool, !isBusy {
@@ -271,7 +329,6 @@ struct ContentView: View {
                 )
                 .frame(maxHeight: panelMaxHeight)
                 .padding(.horizontal, 12)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { panelHeight = $0 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
@@ -281,6 +338,7 @@ struct ContentView: View {
         .padding(.bottom, 8)
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: activeTool)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isBusy)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.hasMultiplePhotos)
     }
 }
 
@@ -311,7 +369,24 @@ private struct AlertModifiers: ViewModifier {
                 }
                 Button("Keep Editing", role: .cancel) {}
             } message: {
-                Text("All unsaved watermark configurations for the remaining photos will be lost.")
+                Text("Your loaded photos and any unsaved watermark adjustments will be discarded, returning you to the start.")
+            }
+            .confirmationDialog("Add These Photos?", isPresented: Binding(
+                get: { viewModel.showImportChoice },
+                set: { newValue in
+                    // Treat a swipe-to-dismiss as cancel so the pending temp
+                    // files don't leak.
+                    if !newValue && viewModel.showImportChoice {
+                        viewModel.cancelImport()
+                    }
+                    viewModel.showImportChoice = newValue
+                }
+            )) {
+                Button("Add to Batch") { viewModel.confirmImportAppend() }
+                Button("Replace Current", role: .destructive) { viewModel.confirmImportReplace() }
+                Button("Cancel", role: .cancel) { viewModel.cancelImport() }
+            } message: {
+                Text("You already have \(viewModel.photos.count) photo\(viewModel.photos.count == 1 ? "" : "s") loaded. Add the new \(viewModel.pendingImport.count == 1 ? "photo" : "photos") to the batch, or replace what's loaded?")
             }
     }
 }
@@ -378,13 +453,24 @@ private struct SheetModifiers: ViewModifier {
                 shareSheetContent
             }
             .sheet(isPresented: Binding(
+                get: { viewModel.showExportReceipt },
+                set: { viewModel.showExportReceipt = $0 }
+            )) {
+                if let receipt = viewModel.lastExportReceipt {
+                    ExportReceiptView(receipt: receipt)
+                }
+            }
+            .sheet(isPresented: Binding(
                 get: { viewModel.showTemplateList },
                 set: { viewModel.showTemplateList = $0 }
             )) {
                 NavigationStack {
-                    TemplateListView(viewModel: viewModel)
-                        .navigationTitle("Templates")
-                        .navigationBarTitleDisplayMode(.inline)
+                    TemplateListView(
+                        viewModel: viewModel,
+                        sourceURL: viewModel.currentPhoto?.sourceURL
+                    )
+                    .navigationTitle("Templates")
+                    .navigationBarTitleDisplayMode(.inline)
                 }
             }
             .sheet(item: $selectedItemForOverride) { (wrapper: IdentifiableIndex) in
@@ -414,8 +500,8 @@ private struct SheetModifiers: ViewModifier {
             ShareSheetView(activityItems: batchResults.successes) {
                 viewModel.cleanupTempFile()
             }
-        } else if let url = viewModel.fullResResult?.url {
-            ShareSheetView(activityItems: [url]) {
+        } else if viewModel.fullResResult?.url != nil {
+            ShareSheetView(activityItems: viewModel.singleShareItems) {
                 viewModel.cleanupTempFile()
             }
         }
@@ -424,17 +510,20 @@ private struct SheetModifiers: ViewModifier {
     @ViewBuilder
     private func perItemDetailSheet(for index: Int) -> some View {
         let photo = viewModel.photos[index]
-        NavigationStack {
-            BatchItemDetailSheet(
-                itemIndex: index,
-                perItemConfig: Binding(
-                    get: { viewModel.overrideConfig(for: photo.id) },
-                    set: { viewModel.setOverride($0, for: photo.id) }
-                ),
-                sharedConfig: viewModel.config,
-                onDismiss: { selectedItemForOverride = nil }
-            )
-        }
+        // BatchItemDetailSheet supplies its own NavigationStack; wrapping it in
+        // another here produced two stacked navigation bars that overlapped on
+        // presentation until the sheet was dismissed and reopened.
+        BatchItemDetailSheet(
+            itemIndex: index,
+            thumbnail: photo.thumbnail,
+            perItemConfig: Binding(
+                get: { viewModel.overrideConfig(for: photo.id) },
+                set: { viewModel.setOverride($0, for: photo.id) }
+            ),
+            sharedConfig: viewModel.config,
+            onReset: { viewModel.resetOverride(for: photo.id) },
+            onDismiss: { selectedItemForOverride = nil }
+        )
     }
 }
 
@@ -456,6 +545,12 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Open Photo Picker on Launch", isOn: $viewModel.openPickerOnLaunch)
+                } footer: {
+                    Text("When on, the photo picker opens automatically each time you launch the app. When off, you start on the home screen.")
+                }
+
+                Section {
                     Button(role: .destructive) {
                         viewModel.resetToDefaults()
                         dismiss()
@@ -465,12 +560,127 @@ struct SettingsView: View {
                 } footer: {
                     Text("Clears the current text, logo, signature, and frame so you can begin fresh.")
                 }
+
+                Section("About") {
+                    LabeledContent("Developer", value: "Orbitaar")
+                    LabeledContent("Version", value: Self.appVersionString)
+                    Link(destination: Self.termsURL) {
+                        Label("Terms of Use", systemImage: "doc.text")
+                    }
+                    Link(destination: Self.privacyURL) {
+                        Label("Privacy Policy", systemImage: "hand.raised")
+                    }
+                }
             }
             .navigationTitle("Settings")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+        }
+    }
+
+    /// "X.Y (build)" from the bundle.
+    private static var appVersionString: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = info?["CFBundleVersion"] as? String ?? "1"
+        return "\(short) (\(build))"
+    }
+
+    // Placeholder destinations — point these at the real hosted documents.
+    private static let termsURL = URL(string: "https://orbitaar.com/markepi/terms")!
+    private static let privacyURL = URL(string: "https://orbitaar.com/markepi/privacy")!
+}
+
+// MARK: - Loading Overlay
+
+/// A branded, animated full-screen loading overlay — a rotating accent arc
+/// around a pulsing app glyph, on a dimmed glass card. Used wherever the app
+/// would otherwise appear frozen (media import, share preparation).
+struct LoadingOverlay: View {
+    let message: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var spin = false
+    @State private var pulse = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55).ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.15), lineWidth: 4)
+                    Circle()
+                        .trim(from: 0, to: 0.28)
+                        .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .rotationEffect(.degrees(spin ? 360 : 0))
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .scaleEffect(pulse ? 1.08 : 0.9)
+                }
+                .frame(width: 64, height: 64)
+
+                Text(message)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(28)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(message)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) { pulse = true }
+        }
+    }
+}
+
+// MARK: - Video Scrub Bar
+
+/// A compact timeline scrubber for videos. Dragging updates the previewed
+/// frame fraction (0...1); the preview pipeline re-extracts and re-watermarks
+/// that frame via `AVAssetImageGenerator`, so the user sees exactly how the
+/// rendered video will look at any point. Lives inside the measured bottom
+/// chrome stack, so it never overlaps the photo content.
+private struct VideoScrubBar: View {
+    @Binding var fraction: Double
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "film")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Slider(value: $fraction, in: 0...1)
+                .tint(.accentColor)
+            Text("\(Int((fraction * 100).rounded()))%")
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .trailing)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.regularMaterial)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.horizontal, 12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Preview frame position")
+        .accessibilityValue("\(Int((fraction * 100).rounded())) percent through the video")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: fraction = min(1, fraction + 0.05)
+            case .decrement: fraction = max(0, fraction - 0.05)
+            @unknown default: break
             }
         }
     }
