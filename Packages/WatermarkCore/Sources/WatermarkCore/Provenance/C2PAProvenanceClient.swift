@@ -1,0 +1,153 @@
+import Foundation
+
+/// Adapter boundary over C2PA read/verify/sign so the engine never depends
+/// on a concrete library (D-11/D-12). Async + Sendable ⇒ Share-Extension safe.
+///
+/// The default production client is `NoopC2PAProvenanceClient` because the
+/// c2pa-spike (tools/c2pa-spike/) never completed and `contentauth/c2pa-swift`
+/// is NOT a dependency of this package (fallback path, plan 19-02 Task 1).
+/// When a future spike proves c2pa-swift integrates, a concrete client guarded
+/// by `#if canImport(C2PA)` will replace the noop without touching the engine.
+public protocol C2PAProvenanceClient: Sendable {
+    /// Read & verify any manifest already in the source; returns the small
+    /// summary the 19-01 analyzer consumes. nil = no manifest.
+    ///
+    /// - Parameter url: Source file URL to inspect for an existing C2PA manifest.
+    /// - Returns: A `SourceProvenanceAnalyzer.C2PASummary`, or nil when no
+    ///   manifest is present (or signing is disabled in this build).
+    func readSourceSummary(from url: URL) async -> SourceProvenanceAnalyzer.C2PASummary?
+
+    /// Build + sign a Markepi manifest and attach it to `outputURL` in place.
+    /// `source` becomes an ingredient so existing provenance is preserved (D-04).
+    ///
+    /// - Parameters:
+    ///   - outputURL: The already-rendered output file to attach the manifest to.
+    ///   - source: Original source file (added as an ingredient — D-04/AUTH-04).
+    ///   - manifest: Everything Markepi asserts, honestly (D-06, AUTH-02).
+    ///   - identity: Local device signing identity (never a verified legal identity).
+    /// - Returns: Signing status for the export receipt.
+    func signExport(
+        outputURL: URL,
+        source: URL,
+        manifest: C2PAManifestRequest,
+        identity: C2PASigningIdentity
+    ) async throws -> C2PASigningResult
+}
+
+/// Everything Markepi asserts, honestly (D-06, AUTH-02). User declaration is
+/// represented separately from any verified claim — it is recorded as a
+/// declaration, never as verified language.
+public struct C2PAManifestRequest: Sendable {
+    /// Product name mandated by D-23. Always "Markepi".
+    public var appName: String = "Markepi"
+    /// App version string (e.g. "2.2.0").
+    public var appVersion: String
+    /// Export timestamp.
+    public var exportedAt: Date
+    /// Analyzed source provenance state (single source of truth).
+    public var sourceState: ProvenanceState
+    /// Human-readable evidence summary lines (recorded, not verified).
+    public var sourceEvidenceSummary: [String]
+    /// True when a visible watermark layer was composited.
+    public var visibleWatermarkApplied: Bool
+    /// True when the white-frame metadata overlay was composited.
+    public var whiteFrameApplied: Bool
+    /// Privacy action description (e.g. "GPS removed"), or nil when nothing stripped.
+    public var privacyAction: String?
+    /// User-supplied source declaration — recorded as a declaration, not verified.
+    public var userDeclaration: UserSourceDeclaration
+    /// Optional soft-binding ID for an invisible watermark payload (Plan 19-04).
+    public var invisibleWatermarkPayloadID: String?
+
+    public init(
+        appVersion: String,
+        sourceState: ProvenanceState,
+        sourceEvidenceSummary: [String],
+        visibleWatermarkApplied: Bool,
+        whiteFrameApplied: Bool,
+        privacyAction: String?,
+        userDeclaration: UserSourceDeclaration,
+        invisibleWatermarkPayloadID: String?,
+        exportedAt: Date = Date()
+    ) {
+        self.appVersion = appVersion
+        self.sourceState = sourceState
+        self.sourceEvidenceSummary = sourceEvidenceSummary
+        self.visibleWatermarkApplied = visibleWatermarkApplied
+        self.whiteFrameApplied = whiteFrameApplied
+        self.privacyAction = privacyAction
+        self.userDeclaration = userDeclaration
+        self.invisibleWatermarkPayloadID = invisibleWatermarkPayloadID
+        self.exportedAt = exportedAt
+    }
+}
+
+/// Result of a C2PA signing attempt — carried on the export receipt.
+///
+/// `status` is the honest outcome: `.signed` only when a manifest was actually
+/// attached, `.notSigned` when signing is disabled (noop), `.notSupported`
+/// when the format/path cannot carry C2PA (e.g. some video containers).
+public struct C2PASigningResult: Sendable, Codable, Equatable {
+    public enum Status: String, Sendable, Codable {
+        case signed
+        case notSigned
+        case notSupported
+    }
+
+    public let status: Status
+    public let identityType: C2PASigningIdentity.IdentityType
+    /// Receipt-safe display name: "Markepi device signing identity" (D-24).
+    public let displayName: String
+    /// Honest warnings (e.g. "C2PA signing is disabled in this build").
+    public let warnings: [String]
+
+    public init(
+        status: Status,
+        identityType: C2PASigningIdentity.IdentityType,
+        displayName: String,
+        warnings: [String] = []
+    ) {
+        self.status = status
+        self.identityType = identityType
+        self.displayName = displayName
+        self.warnings = warnings
+    }
+}
+
+/// Safe default when c2pa-swift is unavailable/disabled. Always reports
+/// `notSigned` so the receipt stays honest — it never claims a manifest was
+/// attached when none was (AUTH-02).
+///
+/// This is the only concrete client that ships in the v2.2 build. A
+/// `C2PASwiftProvenanceClient` guarded by `#if canImport(C2PA)` will replace
+/// it once the c2pa-spike proves the dependency integrates.
+public struct NoopC2PAProvenanceClient: C2PAProvenanceClient {
+    public init() {}
+
+    public func readSourceSummary(from url: URL) async -> SourceProvenanceAnalyzer.C2PASummary? {
+        // No library available to read JUMBF manifests — report none honestly.
+        nil
+    }
+
+    public func signExport(
+        outputURL: URL,
+        source: URL,
+        manifest: C2PAManifestRequest,
+        identity: C2PASigningIdentity
+    ) async throws -> C2PASigningResult {
+        C2PASigningResult(
+            status: .notSigned,
+            identityType: identity.type,
+            displayName: identity.displayName,
+            warnings: ["C2PA signing is disabled in this build."]
+        )
+    }
+}
+
+// MARK: - Concrete Client (deferred — c2pa-spike incomplete)
+
+// A real `C2PASwiftProvenanceClient` will live here, guarded by
+// `#if canImport(C2PA)`, once the c2pa-spike (tools/c2pa-spike/) is completed
+// and proves `contentauth/c2pa-swift` links cleanly for iOS in the build gate.
+// The protocol boundary above means the engine never needs to change when the
+// concrete client ships — only the injected instance swaps.
