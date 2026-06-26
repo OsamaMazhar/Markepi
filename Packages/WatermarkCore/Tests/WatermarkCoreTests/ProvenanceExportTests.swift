@@ -201,4 +201,100 @@ struct ProvenanceExportTests {
             #expect(decoded == rights)
         }
     }
+
+    // MARK: - Task 5: Metadata Preservation Policy
+
+    @Suite("MetadataPreservationPolicy")
+    struct MetadataPreservationPolicyTests {
+
+        let policy = MetadataPreservationPolicy()
+
+        @Test("preserveAll returns metadata unchanged")
+        func preserveAllReturnsUnchanged() {
+            let metadata: [String: Any] = [
+                kCGImagePropertyGPSDictionary as String: ["Latitude": 37.7],
+                kCGImagePropertyIPTCDictionary as String: ["Byline": ["J"]],
+            ]
+            let out = policy.apply(.preserveAll, to: metadata)
+            #expect(out[kCGImagePropertyGPSDictionary as String] != nil)
+            #expect(out[kCGImagePropertyIPTCDictionary as String] != nil)
+        }
+
+        @Test("stripSensitive removes GPS dict (CTRL-04)")
+        func stripSensitiveRemovesGPS() {
+            let metadata: [String: Any] = [
+                kCGImagePropertyGPSDictionary as String: ["Latitude": 37.7],
+            ]
+            let out = policy.apply(.stripSensitive, to: metadata)
+            #expect(out[kCGImagePropertyGPSDictionary as String] == nil)
+        }
+
+        @Test("stripSensitive removes body + lens serial numbers")
+        func stripSensitiveRemovesSerials() {
+            let metadata: [String: Any] = [
+                kCGImagePropertyExifDictionary as String: [
+                    kCGImagePropertyExifBodySerialNumber as String: "SN123",
+                    kCGImagePropertyExifLensSerialNumber as String: "LS456",
+                    kCGImagePropertyExifExposureTime as String: 0.001,
+                ]
+            ]
+            let out = policy.apply(.stripSensitive, to: metadata)
+            let exif = out[kCGImagePropertyExifDictionary as String] as? [String: Any]
+            #expect(exif?[kCGImagePropertyExifBodySerialNumber as String] == nil)
+            #expect(exif?[kCGImagePropertyExifLensSerialNumber as String] == nil)
+            // Non-sensitive EXIF is preserved
+            #expect(exif?[kCGImagePropertyExifExposureTime as String] as? Double == 0.001)
+        }
+
+        @Test("stripSensitive removes Apple maker note dict")
+        func stripSensitiveRemovesMakerApple() {
+            let metadata: [String: Any] = [
+                kCGImagePropertyMakerAppleDictionary as String: ["33": "metadata"],
+            ]
+            let out = policy.apply(.stripSensitive, to: metadata)
+            #expect(out[kCGImagePropertyMakerAppleDictionary as String] == nil)
+        }
+
+        @Test("stripSensitive preserves IPTC rights/copyright (D-10)")
+        func stripSensitivePreservesRights() {
+            let metadata: [String: Any] = [
+                kCGImagePropertyIPTCDictionary as String: [
+                    kCGImagePropertyIPTCCopyrightNotice as String: "© 2026",
+                ],
+                kCGImagePropertyTIFFDictionary as String: [
+                    kCGImagePropertyTIFFCopyright as String: "© 2026",
+                ],
+            ]
+            let out = policy.apply(.stripSensitive, to: metadata)
+            let iptc = out[kCGImagePropertyIPTCDictionary as String] as? [String: Any]
+            #expect(iptc?[kCGImagePropertyIPTCCopyrightNotice as String] as? String == "© 2026")
+            let tiff = out[kCGImagePropertyTIFFDictionary as String] as? [String: Any]
+            #expect(tiff?[kCGImagePropertyTIFFCopyright as String] as? String == "© 2026")
+        }
+
+        @Test("minimalPublic keeps only rights + technical requirements")
+        func minimalPublicKeepsEssentials() {
+            let metadata: [String: Any] = [
+                kCGImagePropertyGPSDictionary as String: ["Latitude": 37.7],
+                kCGImagePropertyIPTCDictionary as String: ["Byline": ["J"]],
+                kCGImagePropertyPixelWidth as String: 1000,
+                kCGImagePropertyPixelHeight as String: 800,
+                kCGImagePropertyProfileName as String: "Display P3",
+            ]
+            let out = policy.apply(.minimalPublic, to: metadata)
+            #expect(out[kCGImagePropertyIPTCDictionary as String] != nil)
+            #expect(out[kCGImagePropertyPixelWidth as String] as? Int == 1000)
+            #expect(out[kCGImagePropertyPixelHeight as String] as? Int == 800)
+            #expect(out[kCGImagePropertyProfileName as String] as? String == "Display P3")
+            // GPS and other sensitive data dropped
+            #expect(out[kCGImagePropertyGPSDictionary as String] == nil)
+        }
+
+        @Test("MetadataPrivacyProfile raw values are stable")
+        func privacyProfileRawValues() {
+            #expect(MetadataPrivacyProfile.preserveAll.rawValue == "preserveAll")
+            #expect(MetadataPrivacyProfile.stripSensitive.rawValue == "stripSensitive")
+            #expect(MetadataPrivacyProfile.minimalPublic.rawValue == "minimalPublic")
+        }
+    }
 }
