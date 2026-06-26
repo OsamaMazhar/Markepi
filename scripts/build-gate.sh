@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# build-gate.sh — xcodebuild verification for all 3 targets
-# Runs xcodebuild across WatermarkApp, ShareExtension, PhotoEditExtension
+# build-gate.sh — xcodebuild verification for both targets
+# Runs xcodebuild across WatermarkApp and ShareExtension
 # via the single WatermarkApp scheme. Propagates xcodebuild exit code.
 set -euo pipefail
 
