@@ -1,6 +1,7 @@
 import Testing
 import ImageIO
 import Foundation
+import CoreImage
 @testable import WatermarkCore
 
 @Suite("ProvenanceExport")
@@ -295,6 +296,164 @@ struct ProvenanceExportTests {
             #expect(MetadataPrivacyProfile.preserveAll.rawValue == "preserveAll")
             #expect(MetadataPrivacyProfile.stripSensitive.rawValue == "stripSensitive")
             #expect(MetadataPrivacyProfile.minimalPublic.rawValue == "minimalPublic")
+        }
+    }
+
+    // MARK: - Task 6: Export Pipeline Hook + ExportReceipt
+
+    @Suite("ExportReceipt")
+    struct ExportReceiptTests {
+
+        @Test("Receipt wraps source report and optional signing result")
+        func receiptWrapsReportAndSigning() {
+            let report = SourceProvenanceReport(
+                state: .unknown,
+                evidence: [],
+                warnings: [],
+                userDeclaration: .none
+            )
+            let signing = C2PASigningResult(
+                status: .notSigned,
+                identityType: .unsupported,
+                displayName: "Markepi device signing identity",
+                warnings: ["disabled"]
+            )
+            let receipt = ExportReceipt(report: report, signingResult: signing)
+            #expect(receipt.report.state == .unknown)
+            #expect(receipt.signingResult?.status == .notSigned)
+            #expect(receipt.signingResult?.displayName == "Markepi device signing identity")
+        }
+
+        @Test("Receipt with nil signing result is valid (no C2PA requested)")
+        func receiptWithoutSigning() {
+            let report = SourceProvenanceReport(
+                state: .userDeclared,
+                evidence: [],
+                userDeclaration: .camera
+            )
+            let receipt = ExportReceipt(report: report)
+            #expect(receipt.signingResult == nil)
+        }
+
+        @Test("ExportReceipt is Codable + Equatable + Sendable")
+        func receiptCodable() throws {
+            let report = SourceProvenanceReport(
+                state: .markedAI,
+                evidence: [],
+                userDeclaration: .ai
+            )
+            let receipt = ExportReceipt(report: report)
+            let data = try JSONEncoder().encode(receipt)
+            let decoded = try JSONDecoder().decode(ExportReceipt.self, from: data)
+            #expect(decoded == receipt)
+        }
+    }
+
+    @Suite("ProvenanceExportOptions")
+    struct ProvenanceExportOptionsTests {
+
+        @Test("Options carry rights, privacy profile, c2pa flag, client")
+        func optionsCarryAllFields() {
+            var rights = RightsMetadata()
+            rights.creator = "Markepi User"
+            let opts = ProvenanceExportOptions(
+                rights: rights,
+                privacyProfile: .stripSensitive,
+                includeC2PA: true,
+                userDeclaration: .camera,
+                appVersion: "2.2.0",
+                c2paClient: NoopC2PAProvenanceClient()
+            )
+            #expect(opts.rights.creator == "Markepi User")
+            #expect(opts.privacyProfile == .stripSensitive)
+            #expect(opts.includeC2PA == true)
+            #expect(opts.userDeclaration == .camera)
+            #expect(opts.appVersion == "2.2.0")
+        }
+    }
+
+    @Suite("WatermarkEngine Provenance Hook")
+    struct WatermarkEngineProvenanceHookTests {
+
+        @Test("Photo export with provenance returns a receipt with source state")
+        func photoExportReturnsReceipt() async throws {
+            // Generate a small JPEG test image.
+            let (cgImage, _) = TestImageFactory.solidColorImage(
+                color: CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1),
+                size: CGSize(width: 64, height: 64)
+            )
+            let tmp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("prov-test-\(UUID().uuidString).jpg")
+            let destData = NSMutableData()
+            guard let dest = CGImageDestinationCreateWithData(
+                destData, "public.jpeg" as CFString, 1, nil
+            ) else {
+                Issue.record("failed to create destination")
+                return
+            }
+            CGImageDestinationAddImage(dest, cgImage, nil)
+            guard CGImageDestinationFinalize(dest) else {
+                Issue.record("failed to finalize JPEG")
+                return
+            }
+            try (destData as Data).write(to: tmp)
+            defer { try? FileManager.default.removeItem(at: tmp) }
+
+            let config = WatermarkConfiguration()
+            var rights = RightsMetadata()
+            rights.creator = "Test Creator"
+            let provenance = ProvenanceExportOptions(
+                rights: rights,
+                privacyProfile: .stripSensitive,
+                includeC2PA: true,
+                userDeclaration: .none,
+                appVersion: "2.2.0-test",
+                c2paClient: NoopC2PAProvenanceClient()
+            )
+
+            let result = try await WatermarkEngine.shared.process(
+                sourceURL: tmp,
+                config: config,
+                provenance: provenance
+            )
+            #expect(result.provenanceReceipt != nil)
+            let receipt = try #require(result.provenanceReceipt)
+            #expect(receipt.report.state == .unknown)
+            // C2PA was requested but Noop client → not signed honestly
+            #expect(receipt.signingResult?.status == .notSigned)
+            #expect(receipt.signingResult?.displayName == "Markepi device signing identity")
+        }
+
+        @Test("Photo export WITHOUT provenance returns nil receipt (backward compat)")
+        func photoExportWithoutProvenanceIsBackwardCompatible() async throws {
+            let (cgImage, _) = TestImageFactory.solidColorImage(
+                color: CGColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1),
+                size: CGSize(width: 32, height: 32)
+            )
+            let tmp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("prov-noprov-\(UUID().uuidString).jpg")
+            let destData = NSMutableData()
+            guard let dest = CGImageDestinationCreateWithData(
+                destData, "public.jpeg" as CFString, 1, nil
+            ) else {
+                Issue.record("failed to create destination")
+                return
+            }
+            CGImageDestinationAddImage(dest, cgImage, nil)
+            guard CGImageDestinationFinalize(dest) else {
+                Issue.record("failed to finalize JPEG")
+                return
+            }
+            try (destData as Data).write(to: tmp)
+            defer { try? FileManager.default.removeItem(at: tmp) }
+
+            let config = WatermarkConfiguration()
+            // No provenance option → nil receipt, exactly today's behavior.
+            let result = try await WatermarkEngine.shared.process(
+                sourceURL: tmp,
+                config: config
+            )
+            #expect(result.provenanceReceipt == nil)
         }
     }
 }
