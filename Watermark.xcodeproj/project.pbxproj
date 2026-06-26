@@ -3,54 +3,58 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 71;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		001 /* AsyncButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101; };
-		002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102; };
-		7B0 /* EditorTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A0; };
-		7B1 /* EditorToolDock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1; };
-		7B2 /* ToolPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2; };
-		7B3 /* ExportControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3; };
-		003 /* ControlsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 103; };
-		004 /* ErrorAlertModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104; };
-		005 /* PhotoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105; };
-		006 /* PositionGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106; };
-		007 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107; };
-		008 /* ScaleStepperView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 108; };
-		00A /* TextWatermarkInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10A; };
-		00B /* ThumbnailStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10B; };
-		00C /* WatermarkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10C; };
-		00D /* WatermarkViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D; };
-		00F /* LogoPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10F; };
-		010 /* LayerListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110; };
-		011 /* WhiteFrameToggleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111; };
-		012 /* ScaleLabelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112; };
-		00E /* WatermarkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 30E; };
-		013 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 600; };
-		014 /* ShareExtensionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601; };
-		017 /* PhotoEditingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 610; };
-		018 /* PhotosExtensionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 611; };
-		01A /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 620; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		01B /* PhotoEditExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 621; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		723 /* TemplateListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F; };
-		724 /* TemplateRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 720; };
-		725 /* TemplatePreviewThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 721; };
-		726 /* SaveTemplateAlertModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 722; };
-		727 /* BatchProgressOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 730; };
-		728 /* BatchItemConfigProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 731; };
-		729 /* BatchItemDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 732; };
+		151 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 150 /* AppIcon.icon */; };
+		001 /* AsyncButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101 /* AsyncButton.swift */; };
+		002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102 /* ContentView.swift */; };
+		004 /* ErrorAlertModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104 /* ErrorAlertModifier.swift */; };
+		005 /* PhotoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105 /* PhotoItem.swift */; };
+		007 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107 /* PreviewView.swift */; };
+		00B /* ThumbnailStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10B /* ThumbnailStripView.swift */; };
+		00C /* WatermarkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10C /* WatermarkApp.swift */; };
+		00D /* WatermarkViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D /* WatermarkViewModel.swift */; };
+		00E /* WatermarkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 30E /* WatermarkCore */; };
+		012 /* ScaleLabelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112 /* ScaleLabelView.swift */; };
+		013 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 600 /* ShareViewController.swift */; };
+		014 /* ShareExtensionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601 /* ShareExtensionViewModel.swift */; };
+		01A /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 620 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		4AF4A26C2FE9816900C77DCC /* WatermarkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 30E /* WatermarkCore */; };
+		723 /* TemplateListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F /* TemplateListView.swift */; };
+		724 /* TemplateRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 720 /* TemplateRowView.swift */; };
+		725 /* TemplatePreviewThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 721 /* TemplatePreviewThumbnail.swift */; };
+		726 /* SaveTemplateAlertModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 722 /* SaveTemplateAlertModifier.swift */; };
+		727 /* BatchProgressOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 730 /* BatchProgressOverlay.swift */; };
+		728 /* BatchItemConfigProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 731 /* BatchItemConfigProxy.swift */; };
+		729 /* BatchItemDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 732 /* BatchItemDetailSheet.swift */; };
+		74A /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74B /* PaywallView.swift */; };
+		7B0 /* EditorTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A0 /* EditorTool.swift */; };
+		7B1 /* EditorToolDock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1 /* EditorToolDock.swift */; };
+		7B2 /* ToolPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2 /* ToolPanelView.swift */; };
+		7B3 /* ExportControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3 /* ExportControls.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		409 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				01A /* ShareExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		100 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		150 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		101 /* AsyncButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncButton.swift; sourceTree = "<group>"; };
 		102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		7A0 /* EditorTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTool.swift; sourceTree = "<group>"; };
-		7A1 /* EditorToolDock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorToolDock.swift; sourceTree = "<group>"; };
-		7A2 /* ToolPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolPanelView.swift; sourceTree = "<group>"; };
-		7A3 /* ExportControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportControls.swift; sourceTree = "<group>"; };
 		103 /* ControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlsView.swift; sourceTree = "<group>"; };
 		104 /* ErrorAlertModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorAlertModifier.swift; sourceTree = "<group>"; };
 		105 /* PhotoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoItem.swift; sourceTree = "<group>"; };
@@ -61,22 +65,17 @@
 		10B /* ThumbnailStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailStripView.swift; sourceTree = "<group>"; };
 		10C /* WatermarkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkApp.swift; sourceTree = "<group>"; };
 		10D /* WatermarkViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkViewModel.swift; sourceTree = "<group>"; };
+		10E /* WatermarkApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatermarkApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		10F /* LogoPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogoPickerView.swift; sourceTree = "<group>"; };
 		110 /* LayerListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerListView.swift; sourceTree = "<group>"; };
 		111 /* WhiteFrameToggleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhiteFrameToggleView.swift; sourceTree = "<group>"; };
 		112 /* ScaleLabelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleLabelView.swift; sourceTree = "<group>"; };
-		10E /* WatermarkApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatermarkApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		20E /* WatermarkCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = WatermarkCore; path = Packages/WatermarkCore; sourceTree = SOURCE_ROOT; };
 		600 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		601 /* ShareExtensionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtensionViewModel.swift; sourceTree = "<group>"; };
 		604 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		605 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
-		610 /* PhotoEditingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoEditingViewController.swift; sourceTree = "<group>"; };
-		611 /* PhotosExtensionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotosExtensionViewModel.swift; sourceTree = "<group>"; };
-		613 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		614 /* PhotoEditExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PhotoEditExtension.entitlements; sourceTree = "<group>"; };
 		620 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		621 /* PhotoEditExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PhotoEditExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		71F /* TemplateListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateListView.swift; sourceTree = "<group>"; };
 		720 /* TemplateRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateRowView.swift; sourceTree = "<group>"; };
 		721 /* TemplatePreviewThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplatePreviewThumbnail.swift; sourceTree = "<group>"; };
@@ -84,6 +83,11 @@
 		730 /* BatchProgressOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchProgressOverlay.swift; sourceTree = "<group>"; };
 		731 /* BatchItemConfigProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchItemConfigProxy.swift; sourceTree = "<group>"; };
 		732 /* BatchItemDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchItemDetailSheet.swift; sourceTree = "<group>"; };
+		74B /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Premium/PaywallView.swift; sourceTree = "<group>"; };
+		7A0 /* EditorTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTool.swift; sourceTree = "<group>"; };
+		7A1 /* EditorToolDock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorToolDock.swift; sourceTree = "<group>"; };
+		7A2 /* ToolPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolPanelView.swift; sourceTree = "<group>"; };
+		7A3 /* ExportControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportControls.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,26 +103,19 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		406 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+				4AF4A26C2FE9816900C77DCC /* WatermarkCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		300 /* = */ = {
+		300 = {
 			isa = PBXGroup;
 			children = (
 				301 /* App */,
 				304 /* ShareExtension */,
-				305 /* PhotoEditExtension */,
-				302 /* Packages */,
+				302,
 				303 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -127,6 +124,7 @@
 			isa = PBXGroup;
 			children = (
 				10C /* WatermarkApp.swift */,
+				150 /* AppIcon.icon */,
 				311 /* ViewModels */,
 				312 /* Models */,
 				313 /* Views */,
@@ -135,7 +133,7 @@
 			path = App;
 			sourceTree = "<group>";
 		};
-		302 /* Packages */ = {
+		302 = {
 			isa = PBXGroup;
 			children = (
 				20E /* WatermarkCore */,
@@ -147,7 +145,6 @@
 			children = (
 				10E /* WatermarkApp.app */,
 				620 /* ShareExtension.appex */,
-				621 /* PhotoEditExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -161,17 +158,6 @@
 				605 /* ShareExtension.entitlements */,
 			);
 			path = ShareExtension;
-			sourceTree = "<group>";
-		};
-		305 /* PhotoEditExtension */ = {
-			isa = PBXGroup;
-			children = (
-				610 /* PhotoEditingViewController.swift */,
-				611 /* PhotosExtensionViewModel.swift */,
-				613 /* Info.plist */,
-				614 /* PhotoEditExtension.entitlements */,
-			);
-			path = PhotoEditExtension;
 			sourceTree = "<group>";
 		};
 		311 /* ViewModels */ = {
@@ -194,6 +180,7 @@
 			isa = PBXGroup;
 			children = (
 				102 /* ContentView.swift */,
+				74B /* PaywallView.swift */,
 				7A9 /* Editor */,
 				331 /* PreviewArea */,
 				332 /* Controls */,
@@ -204,17 +191,6 @@
 				337 /* Batch */,
 			);
 			path = Views;
-			sourceTree = "<group>";
-		};
-		7A9 /* Editor */ = {
-			isa = PBXGroup;
-			children = (
-				7A0 /* EditorTool.swift */,
-				7A1 /* EditorToolDock.swift */,
-				7A2 /* ToolPanelView.swift */,
-				7A3 /* ExportControls.swift */,
-			);
-			path = Editor;
 			sourceTree = "<group>";
 		};
 		331 /* PreviewArea */ = {
@@ -285,6 +261,17 @@
 			path = Batch;
 			sourceTree = "<group>";
 		};
+		7A9 /* Editor */ = {
+			isa = PBXGroup;
+			children = (
+				7A0 /* EditorTool.swift */,
+				7A1 /* EditorToolDock.swift */,
+				7A2 /* ToolPanelView.swift */,
+				7A3 /* ExportControls.swift */,
+			);
+			path = Editor;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -329,26 +316,6 @@
 			productReference = 620 /* ShareExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		411 /* PhotoEditExtension */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 71E /* Build configuration list for PBXNativeTarget "PhotoEditExtension" */;
-			buildPhases = (
-				404 /* Sources */,
-				406 /* Frameworks */,
-				408 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = PhotoEditExtension;
-			packageProductDependencies = (
-				30E /* WatermarkCore */,
-			);
-			productName = PhotoEditExtension;
-			productReference = 621 /* PhotoEditExtension.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -365,12 +332,6 @@
 					};
 					410 = {
 						CreatedOnToolsVersion = 26.0;
-						DevelopmentTeam = "";
-						ProvisioningStyle = Automatic;
-					};
-					411 = {
-						CreatedOnToolsVersion = 26.0;
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -393,42 +354,20 @@
 			targets = (
 				400 /* WatermarkApp */,
 				410 /* ShareExtension */,
-				411 /* PhotoEditExtension */,
 			);
 		};
 /* End PBXProject section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		409 /* Embed App Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				01A /* ShareExtension.appex in Embed App Extensions */,
-				01B /* PhotoEditExtension.appex in Embed App Extensions */,
-			);
-			name = "Embed App Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
 		402 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				151 /* AppIcon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		407 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		408 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -451,6 +390,7 @@
 				729 /* BatchItemDetailSheet.swift in Sources */,
 				001 /* AsyncButton.swift in Sources */,
 				002 /* ContentView.swift in Sources */,
+				74A /* PaywallView.swift in Sources */,
 				7B0 /* EditorTool.swift in Sources */,
 				7B1 /* EditorToolDock.swift in Sources */,
 				7B2 /* ToolPanelView.swift in Sources */,
@@ -471,15 +411,6 @@
 			files = (
 				013 /* ShareViewController.swift in Sources */,
 				014 /* ShareExtensionViewModel.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		404 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				017 /* PhotoEditingViewController.swift in Sources */,
-				018 /* PhotosExtensionViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -543,14 +474,15 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 829378375Z;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Watermark;
+				INFOPLIST_KEY_CFBundleDisplayName = Markepi;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -562,7 +494,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.watermark.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.osamamazhar.markepi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
@@ -574,14 +506,15 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 829378375Z;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Watermark;
+				INFOPLIST_KEY_CFBundleDisplayName = Markepi;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -593,7 +526,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.watermark.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.osamamazhar.markepi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
@@ -607,11 +540,11 @@
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 829378375Z;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Watermark;
+				INFOPLIST_KEY_CFBundleDisplayName = Markepi;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -619,7 +552,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.watermark.app.share;
+				PRODUCT_BUNDLE_IDENTIFIER = com.osamamazhar.markepi.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -633,11 +566,11 @@
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 829378375Z;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Watermark;
+				INFOPLIST_KEY_CFBundleDisplayName = Markepi;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -645,59 +578,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.watermark.app.share;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Release;
-		};
-		63D /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = PhotoEditExtension/PhotoEditExtension.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = PhotoEditExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Watermark;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.watermark.app.photoedit;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Debug;
-		};
-		63E /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = PhotoEditExtension/PhotoEditExtension.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = PhotoEditExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Watermark;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.watermark.app.photoedit;
+				PRODUCT_BUNDLE_IDENTIFIER = com.osamamazhar.markepi.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -735,23 +616,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		71E /* Build configuration list for PBXNativeTarget "PhotoEditExtension" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				63D /* Debug */,
-				63E /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 /* End XCConfigurationList section */
-
-/* Begin XCSwiftPackageProductSection */
-		30E /* WatermarkCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = WatermarkCore;
-		};
-/* End XCSwiftPackageProductSection */
 
 /* Begin XCLocalSwiftPackageReference section */
 		503 /* XCLocalSwiftPackageReference "Packages/WatermarkCore" */ = {
@@ -760,6 +625,12 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCSwiftPackageProductDependency section */
+		30E /* WatermarkCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WatermarkCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 500 /* Project object */;
 }

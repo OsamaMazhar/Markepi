@@ -2,7 +2,7 @@
 
 **Project:** Watermark  
 **Audited:** 2026-06-24  
-**Status:** Findings only — no Photo Edit Extension code has been removed
+**Status:** Implemented 2026-06-24 — static verification passed; full build/test verification pending
 
 ## Decision
 

@@ -91,18 +91,6 @@ struct SnapshotRendererTests {
         #expect(data.count > 100, "PNG data should be larger than header size")
     }
 
-    @Test("render() with inNavigationController produces valid PNG Data")
-    func rendersInNavigationController() throws {
-        let view = Text("hello")
-        let data = try SnapshotRenderer.render(
-            view,
-            size: CGSize(width: 100, height: 50),
-            scale: 1.0,
-            inNavigationController: true
-        )
-        #expect(data.count > 100, "PNG data should be larger than header size")
-    }
-
     @Test("SnapshotError.renderingFailed exists as an Error")
     func renderingFailedErrorExists() {
         let error = SnapshotRenderer.SnapshotError.renderingFailed
@@ -182,14 +170,12 @@ struct ExtensionSnapshotTests {
     /// Renders a view, compares against the committed reference (unless in record mode).
     private static func assertSnapshot(
         name: String,
-        view: some View,
-        inNavigationController: Bool = false
+        view: some View
     ) throws {
         let actual = try SnapshotRenderer.render(
             view,
             size: snapshotSize,
-            scale: snapshotScale,
-            inNavigationController: inNavigationController
+            scale: snapshotScale
         )
 
         let refURL = referencePath(name)
@@ -234,32 +220,6 @@ struct ExtensionSnapshotTests {
         vm.totalItemCount = 5
         vm.multiItemProgress = "Item 3 of 5"
         try Self.assertSnapshot(name: "share-ext-multi-item", view: ShareExtensionRootView(viewModel: vm))
-    }
-
-    // MARK: - Photos Extension Snapshots
-
-    @Test("Photos extension idle state snapshot")
-    func photosExtensionIdle() throws {
-        let vm = SnapshotTestViewModel()
-        vm.renderingState = .idle
-        vm.config.watermarks = []  // Empty — simulates no media loaded
-        try Self.assertSnapshot(
-            name: "photos-ext-idle",
-            view: PhotosExtensionRootView(viewModel: vm),
-            inNavigationController: true
-        )
-    }
-
-    @Test("Photos extension preview rendered snapshot")
-    func photosExtensionPreview() throws {
-        let vm = SnapshotTestViewModel()
-        vm.renderingState = .done
-        vm.previewImage = UIImage(systemName: "photo.fill")
-        try Self.assertSnapshot(
-            name: "photos-ext-preview",
-            view: PhotosExtensionRootView(viewModel: vm),
-            inNavigationController: true
-        )
     }
 }
 #endif
