@@ -43,4 +43,80 @@ struct ProvenanceExportTests {
             #expect(name.contains("device"))
         }
     }
+
+    // MARK: - Task 3: C2PAProvenanceClient Protocol + NoopC2PAProvenanceClient
+
+    @Suite("NoopC2PAProvenanceClient")
+    struct NoopC2PAProvenanceClientTests {
+
+        @Test("Noop client reads no source manifest (returns nil)")
+        func noopReadsNoManifest() async {
+            let client = NoopC2PAProvenanceClient()
+            let summary = await client.readSourceSummary(from: URL(fileURLWithPath: "/tmp/none"))
+            #expect(summary == nil)
+        }
+
+        @Test("Noop client honestly reports 'not signed' with a warning")
+        func noopReportsNotSigned() async throws {
+            let client = NoopC2PAProvenanceClient()
+            let identity = C2PASigningIdentity(type: .unsupported, secKey: nil)
+            let manifest = C2PAManifestRequest(
+                appVersion: "2.2.0",
+                sourceState: .unknown,
+                sourceEvidenceSummary: [],
+                visibleWatermarkApplied: false,
+                whiteFrameApplied: false,
+                privacyAction: nil,
+                userDeclaration: .none,
+                invisibleWatermarkPayloadID: nil
+            )
+            let result = try await client.signExport(
+                outputURL: URL(fileURLWithPath: "/tmp/out"),
+                source: URL(fileURLWithPath: "/tmp/src"),
+                manifest: manifest,
+                identity: identity
+            )
+            #expect(result.status == .notSigned)
+            #expect(result.identityType == .unsupported)
+            #expect(result.displayName == "Markepi device signing identity")
+            #expect(!result.warnings.isEmpty)
+        }
+
+        @Test("C2PAManifestRequest carries product name 'Markepi' (D-23)")
+        func manifestAppNameIsMarkepi() {
+            let manifest = C2PAManifestRequest(
+                appVersion: "1.0",
+                sourceState: .unknown,
+                sourceEvidenceSummary: [],
+                visibleWatermarkApplied: false,
+                whiteFrameApplied: false,
+                privacyAction: nil,
+                userDeclaration: .none,
+                invisibleWatermarkPayloadID: nil
+            )
+            #expect(manifest.appName == "Markepi")
+        }
+
+        @Test("C2PASigningResult status encodes signed/notSigned/notSupported")
+        func signingResultStatusValues() {
+            let signed = C2PASigningResult(
+                status: .signed, identityType: .secureEnclave,
+                displayName: "Markepi device signing identity"
+            )
+            let notSigned = C2PASigningResult(
+                status: .notSigned, identityType: .unsupported,
+                displayName: "Markepi device signing identity",
+                warnings: ["disabled"]
+            )
+            let notSupported = C2PASigningResult(
+                status: .notSupported, identityType: .unsupported,
+                displayName: "Markepi device signing identity"
+            )
+            #expect(signed.status == .signed)
+            #expect(notSigned.status == .notSigned)
+            #expect(notSupported.status == .notSupported)
+            #expect(signed.warnings.isEmpty)
+            #expect(notSigned.warnings == ["disabled"])
+        }
+    }
 }
