@@ -6,7 +6,7 @@
 - ✅ **v1.1 Tech Debt Hardening** — Phases 8-11 (shipped 2026-06-18)
 - ✅ **v2.0 Batch, Templates & Process** — Phases 12-14 (shipped 2026-06-19)
 - ✅ **v2.1 UI Redesign** — Phases 15-18 (shipped 2026-06-22)
-- 🚧 **v2.2 Provenance & Authorship Protection** — Phase 19 (planned)
+- 🚧 **v2.2 Provenance & Authorship Protection** — Phase 19 (in progress)
 
 ## Phases
 
@@ -37,9 +37,9 @@ Plans:
 - [x] 19-01-PLAN.md — Provenance State Model & Import Analyzer (PROV-01, PROV-02, PROV-03, VERIFY-02)
 - [x] 19-02-PLAN.md — Metadata Preservation & C2PA Manifest Integration (PROV-04, AUTH-01, AUTH-02, AUTH-03, AUTH-04, VERIFY-03, VERIFY-04)
 
-**Wave 2** *(blocked on Wave 1 completion)*
+**Wave 2**
 
-- [ ] 19-03-PLAN.md — User Controls, Disclosure UI & Export Receipt (CTRL-01, CTRL-02, CTRL-03, CTRL-04, VERIFY-01)
+- [x] 19-03-PLAN.md — User Controls, Disclosure UI & Export Receipt (CTRL-01, CTRL-02, CTRL-03, CTRL-04, VERIFY-01)
 - [ ] 19-04-PLAN.md — Invisible Watermark Evaluation Harness & Production Gate (IW-01, IW-02, IW-03, IW-04, IW-05)
 
 See `.planning/milestones/v2.2-ROADMAP.md` for full phase details.
@@ -66,7 +66,7 @@ See `.planning/milestones/v2.1-ROADMAP.md` for full phase details.
 | 16. Redesigned Controls | 2/2 | Complete   | 2026-06-21 |
 | 17. Inspector Bottom-Sheet Shell | 3/3 | Complete   | 2026-06-22 |
 | 18. Cross-Target Parity & Accessibility Polish | 3/3 | Complete   | 2026-06-22 |
-| 19. Provenance & Authorship Protection | 2/4 | In Progress|  |
+| 19. Provenance & Authorship Protection | 3/4 | In Progress|  |
 
 ---
 

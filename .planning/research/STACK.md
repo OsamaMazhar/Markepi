@@ -13,7 +13,7 @@
 | **PhotosPicker (multi-select)** | iOS 18 SDK | Batch media import | Already in use (`maxSelectionCount: 20`). Increase to `0` for unlimited batch selection. No new framework needed — PhotosPicker handles multi-select natively via `selection: Binding<[PhotosPickerItem]>`. Live Photo pair detection (`detectLivePhotoPairs`) already handles mixed photo/video batches. |
 | **Swift Concurrency `TaskGroup`** | Swift 6 | Parallel batch processing | `withThrowingTaskGroup(of:returning:body:)` processes multiple media items concurrently with built-in cancellation propagation. Throttle to 3–4 concurrent tasks to prevent memory pressure (each watermarking operation loads a full-res CIImage into GPU memory). **Already in Swift 6 stdlib — no dependency.** |
 | **`Foundation.Progress`** | iOS 18 SDK | Batch progress tracking | Parent-child `Progress` hierarchy: parent tracks `N` items, each child tracks per-item export (0.0–1.0). Parent's `fractionCompleted` auto-aggregates from children. Bridge to SwiftUI via `@Observable @MainActor` wrapper with KVO (`progress.observe(\.fractionCompleted)`). **No dependency — Foundation built-in.** |
-| **`FileManager` App Group container** | iOS 18 SDK | Template JSON persistence | Store each template as a separate `.json` file in `{AppGroupContainer}/templates/`. Uses existing App Group (`group.com.watermark.app`) already configured across all 3 targets. `Codable` serialization via `JSONEncoder`/`JSONDecoder`. No new framework. |
+| **`FileManager` App Group container** | iOS 18 SDK | Template JSON persistence | Store each template as a separate `.json` file in `{AppGroupContainer}/templates/`. Uses the existing App Group (`group.com.watermark.app`) configured for the main app and Share Extension. `Codable` serialization via `JSONEncoder`/`JSONDecoder`. No new framework. |
 | **`UserDefaults(suiteName:)`** | iOS 18 SDK | Default template reference | Single string key `"defaultTemplateID"` in existing `AppGroupConfigSync.suiteName` UserDefaults suite. Already used for `watermarkConfiguration` blob — just add one more key. No new setup needed. |
 
 ### Existing Stack (Unchanged — Confirmed Compatible)
@@ -22,7 +22,7 @@
 |------------|---------|----------------|
 | **Swift** | 6.x (Xcode 18) | Strict concurrency checking ensures batch `TaskGroup` code is data-race free |
 | **SwiftUI** | iOS 18 SDK | Batch UI (grid of thumbnails, progress overlay) uses existing `@Observable` pattern |
-| **WatermarkCore Swift Package** | — | New `TemplateStore`, `BatchProcessor`, `BatchProgressTracker` added here. All 3 targets consume. |
+| **WatermarkCore Swift Package** | — | New `TemplateStore`, `BatchProcessor`, `BatchProgressTracker` added here. Both targets consume it. |
 | **App Groups capability** | — | Template JSON files + default template ID shared via existing `group.com.watermark.app` |
 | **AVFoundation** | iOS 18 SDK | Video batch processing reuses existing `VideoProcessor` with CALayer overlay |
 | **Core Image** | iOS 18 SDK | Photo batch processing reuses existing `WatermarkEngine.process(sourceURL:config:)` |
@@ -55,7 +55,7 @@
 # 4. Add BatchProgressTracker.swift → WatermarkCore/Sources/WatermarkCore/UI/
 # 5. Update ContentView.swift: maxSelectionCount → 0 for batch mode
 # 6. Update WatermarkViewModel: add batch processing state + template methods
-# 7. Update ShareExtensionViewModel + PhotosExtensionViewModel: add template loading
+# 7. Update ShareExtensionViewModel: add template loading
 ```
 
 ## Alternatives Considered
@@ -176,7 +176,7 @@ UserDefaults(suiteName: "group.com.watermark.app"):
   "watermarkConfiguration" → Data (current config — existing, unchanged)
   "defaultTemplateID" → String (UUID of default template — NEW)
 
-All 3 targets (Main App, ShareExtension, PhotoEditExtension) read from
+Both targets (Main App and ShareExtension) read from
 the same App Group container — no additional sync mechanism needed.
 Changes in one target are immediately visible to others via FileManager.
 ```
@@ -213,13 +213,12 @@ Packages/WatermarkCore/Sources/WatermarkCore/
     BatchProgressTracker.swift   ← NEW: @Observable Progress wrapper
 ```
 
-### Integration into 3 Targets
+### Integration into 2 Targets
 
 | Target | Integration Point | What Changes |
 |--------|-------------------|--------------|
 | **Main App** | `WatermarkViewModel` | Add `batchMode: Bool`, `templates: [WatermarkTemplate]`, `TemplateStore` reference, batch `handleSelection` with TaskGroup, template save/load/delete/rename methods |
 | **ShareExtension** | `ShareExtensionViewModel` | Add template loading (read from App Group), auto-apply default template on share import |
-| **PhotoEditExtension** | `PhotosExtensionViewModel` | Add template loading, auto-apply default template on edit session start |
 
 ### No Changes to Existing Engine
 

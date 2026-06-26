@@ -2,7 +2,7 @@
 
 **Current Milestone:** v2.2 Provenance & Authorship Protection
 **Defined:** 2026-06-25
-**Status:** Draft / planned
+**Status:** Phase 19 executing
 
 For milestone archive copy, see `.planning/milestones/v2.2-REQUIREMENTS.md`.
 
@@ -24,10 +24,10 @@ For milestone archive copy, see `.planning/milestones/v2.2-REQUIREMENTS.md`.
 
 ### User Controls (CTRL)
 
-- [ ] **CTRL-01**: Users can control visible watermark/frame disclosure, rights metadata, privacy level, C2PA signing identity, and creator-protection watermark behavior.
-- [ ] **CTRL-02**: Users cannot manually enable "Verified Camera Capture", "Captured by Camera", or "No AI Used" labels unless the analyzer has positive evidence that supports the claim.
-- [ ] **CTRL-03**: Unknown or user-declared sources can still receive copyright/protection watermarks, but the manifest and UI must say Unknown or User-Declared instead of Verified.
-- [ ] **CTRL-04**: Metadata privacy controls let the user strip sensitive fields such as GPS while preserving non-sensitive rights and provenance records.
+- [x] **CTRL-01**: Users can control visible watermark/frame disclosure, rights metadata, privacy level, C2PA signing identity, and creator-protection watermark behavior.
+- [x] **CTRL-02**: Users cannot manually enable "Verified Camera Capture", "Captured by Camera", or "No AI Used" labels unless the analyzer has positive evidence that supports the claim.
+- [x] **CTRL-03**: Unknown or user-declared sources can still receive copyright/protection watermarks, but the manifest and UI must say Unknown or User-Declared instead of Verified.
+- [x] **CTRL-04**: Metadata privacy controls let the user strip sensitive fields such as GPS while preserving non-sensitive rights and provenance records.
 
 ### Invisible Creator Protection (IW)
 
@@ -39,7 +39,7 @@ For milestone archive copy, see `.planning/milestones/v2.2-REQUIREMENTS.md`.
 
 ### Verification & Receipts (VERIFY)
 
-- [ ] **VERIFY-01**: The export receipt shows source state, evidence, C2PA signing status and identity type, rights metadata, invisible watermark status, and privacy actions.
+- [x] **VERIFY-01**: The export receipt shows source state, evidence, C2PA signing status and identity type, rights metadata, invisible watermark status, and privacy actions.
 - [x] **VERIFY-02**: Tests prove unmarked images remain Unknown Provenance and cannot receive verified-camera claims.
 - [x] **VERIFY-03**: Tests prove known AI-marked samples preserve their provenance through export instead of being relabeled or stripped.
 - [x] **VERIFY-04**: The baseline works offline inside the iOS app and Share Extension; any optional network lookup is clearly labeled and disabled by default.
@@ -48,27 +48,27 @@ For milestone archive copy, see `.planning/milestones/v2.2-REQUIREMENTS.md`.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROV-01 | Phase 19 | Planned |
-| PROV-02 | Phase 19 | Planned |
-| PROV-03 | Phase 19 | Planned |
-| PROV-04 | Phase 19 | Planned |
-| AUTH-01 | Phase 19 | Planned |
-| AUTH-02 | Phase 19 | Planned |
-| AUTH-03 | Phase 19 | Planned |
-| AUTH-04 | Phase 19 | Planned |
-| CTRL-01 | Phase 19 | Planned |
-| CTRL-02 | Phase 19 | Planned |
-| CTRL-03 | Phase 19 | Planned |
-| CTRL-04 | Phase 19 | Planned |
+| PROV-01 | Phase 19 | Complete |
+| PROV-02 | Phase 19 | Complete |
+| PROV-03 | Phase 19 | Complete |
+| PROV-04 | Phase 19 | Complete |
+| AUTH-01 | Phase 19 | Complete |
+| AUTH-02 | Phase 19 | Complete |
+| AUTH-03 | Phase 19 | Complete |
+| AUTH-04 | Phase 19 | Complete |
+| CTRL-01 | Phase 19 | Complete |
+| CTRL-02 | Phase 19 | Complete |
+| CTRL-03 | Phase 19 | Complete |
+| CTRL-04 | Phase 19 | Complete |
 | IW-01 | Phase 19 | Planned |
 | IW-02 | Phase 19 | Planned |
 | IW-03 | Phase 19 | Planned |
 | IW-04 | Phase 19 | Planned |
 | IW-05 | Phase 19 | Planned |
-| VERIFY-01 | Phase 19 | Planned |
-| VERIFY-02 | Phase 19 | Planned |
-| VERIFY-03 | Phase 19 | Planned |
-| VERIFY-04 | Phase 19 | Planned |
+| VERIFY-01 | Phase 19 | Complete |
+| VERIFY-02 | Phase 19 | Complete |
+| VERIFY-03 | Phase 19 | Complete |
+| VERIFY-04 | Phase 19 | Complete |
 
 ---
-*Last updated: 2026-06-25*
+*Last updated: 2026-06-26 - Phase 19 plans 01-03 complete; invisible watermark requirements remain planned for 19-04*

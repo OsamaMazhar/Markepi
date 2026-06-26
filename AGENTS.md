@@ -3,7 +3,7 @@
 
 **Watermark**
 
-An iOS app that lets users add watermarks or white-frame metadata overlays to photos and videos, then immediately share them to social media without saving. Users can import media from the in-app picker, the iOS share sheet, or directly from the Photos app's native edit extension. Works for both photos and videos while preserving all metadata, HDR, and original image quality.
+An iOS app that lets users add watermarks or white-frame metadata overlays to photos and videos, then immediately share them to social media without saving. Users can import media from the in-app picker or the iOS share sheet. Works for both photos and videos while preserving all metadata, HDR, and original image quality.
 
 **Core Value:** Add a watermark and share it instantly — without ever cluttering the camera roll.
 
@@ -13,7 +13,7 @@ An iOS app that lets users add watermarks or white-frame metadata overlays to ph
 - **Quality**: Must preserve HDR, color profile, and all EXIF/metadata in output
 - **Performance**: Watermarking must work on-device for large video files without excessive memory pressure
 - **Privacy**: No network calls required; all processing on-device
-- **Compatibility**: Support iOS Photos edit extension and share sheet app extension
+- **Compatibility**: Support in-app import and the iOS share sheet app extension
 <!-- GSD:project-end -->
 
 <!-- GSD:stack-start source:research/STACK.md -->
@@ -24,8 +24,8 @@ An iOS app that lets users add watermarks or white-frame metadata overlays to ph
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
 | **Swift** | 6.x (Xcode 18) | Language | Required for modern SwiftUI, Swift Concurrency, and `@Observable`. Swift 6 strict concurrency checking eliminates data-race bugs in async media pipelines. |
-| **SwiftUI** | iOS 18 SDK | UI framework (main app + extension UI) | Declarative, Apple's definitive UI framework since iOS 18. Use `UIHostingController` to bridge into extension entry points where UIKit is mandatory. |
-| **UIKit** | iOS 18 SDK | Extension entry points only | `PHContentEditingController` and `ShareViewController` require UIKit `UIViewController` subclasses. Host SwiftUI inside them — do not build UIKit view hierarchies. |
+| **SwiftUI** | iOS 18 SDK | UI framework (main app + Share Extension UI) | Declarative, Apple's definitive UI framework since iOS 18. Use `UIHostingController` to bridge into the Share Extension entry point where UIKit is mandatory. |
+| **UIKit** | iOS 18 SDK | Share Extension entry point only | `ShareViewController` requires a UIKit `UIViewController` subclass. Host SwiftUI inside it — do not build a UIKit view hierarchy. |
 | **Xcode** | 18.x | IDE & toolchain | Required for iOS 18 SDK, Swift 6, and modern extension target templates. |
 ### Media Frameworks
 | Technology | Version | Purpose | Why Recommended |
@@ -35,14 +35,12 @@ An iOS app that lets users add watermarks or white-frame metadata overlays to ph
 | **Core Image** | iOS 18 SDK | GPU-accelerated image watermarking | Use `CIFilter.sourceOverCompositing` to blend watermark onto photo/video frames. Reuse a single `CIContext` across operations. Supports HDR pixel formats via `expandToHDR`. |
 | **ImageIO** | iOS 18 SDK | Metadata + HDR gain map preservation | `CGImageSource` → `CGImageDestination` pipeline preserves all EXIF, color profile, and HDR gain map auxiliary data. Use `CGImageDestinationCopyImageSource` with `kCGImageDestinationMergeMetadata`. |
 | **Core Graphics** | iOS 18 SDK | White frame + text overlay rendering | `UIGraphicsImageRenderer` for drawing the white frame border + device metadata text (e.g., "Taken by: iPhone 16 Pro"). Used for the frame prior to final watermark compositing. |
-| **Photos (PHContentEditingController)** | iOS 18 SDK | Photos app edit extension | Required protocol for the "Edit in Watermark" extension. Receives `PHContentEditingInput`, returns `PHContentEditingOutput` with rendered media. |
 ### Extension Architecture
 | Technology | Purpose | Why Recommended |
 |------------|---------|-----------------|
 | **Share Extension target** | Receive media via iOS share sheet | `NSExtensionPrincipalClass` points to a `UIViewController` subclass hosting SwiftUI. Uses `NSItemProvider` to load incoming photo/video data. |
-| **Photo Editing Extension target** | Edit from within Photos app | Implements `PHContentEditingController`. Hosts same SwiftUI watermarking UI as main app. |
-| **App Groups capability** | Shared container between app + extensions | `group.com.[bundle].watermark` for sharing processed output between extension and main app. Also enables `UserDefaults(suiteName:)` for coordination. |
-| **Swift Package (shared)** | Shared processing logic | Single Swift Package consumed by main app, share extension, and photo extension targets. Contains all watermarking, metadata, and rendering logic. Eliminates code duplication. |
+| **App Groups capability** | Shared container between app + Share Extension | `group.com.[bundle].watermark` for sharing configuration between the extension and main app. Also enables `UserDefaults(suiteName:)` for coordination. |
+| **Swift Package (shared)** | Shared processing logic | Single Swift Package consumed by the main app and Share Extension. Contains all watermarking, metadata, and rendering logic. Eliminates code duplication. |
 ### Supporting Libraries
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
@@ -61,9 +59,8 @@ An iOS app that lets users add watermarks or white-frame metadata overlays to ph
 # 1. Create iOS App target (SwiftUI)
 # 2. Create Swift Package: File > New > Package > "WatermarkEngine"
 # 3. Add Share Extension target: File > New > Target > Share Extension
-# 4. Add Photo Editing Extension target: File > New > Target > Photo Editing Extension
-# 5. Link WatermarkEngine package to all 3 targets
-# 6. Enable App Groups capability on all targets: group.com.[bundle].watermark
+# 4. Link WatermarkEngine package to both targets
+# 5. Enable App Groups capability on both targets: group.com.[bundle].watermark
 ## Alternatives Considered
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
@@ -99,11 +96,6 @@ An iOS app that lets users add watermarks or white-frame metadata overlays to ph
 - Load as `Data` (for photos) or `URL` (for videos) using async `loadItem`
 - Process in background `Task`, save result to App Group shared container
 - Call `completeRequest(returningItems:completionHandler:)` when done
-- `PHContentEditingController.startContentEditing(with:placeholderImage:)` receives `PHContentEditingInput`
-- Load full-resolution asset from `input.fullSizeImageURL` or `input.audiovisualAsset`
-- Apply watermark within shared WatermarkEngine Swift Package
-- Write to `PHContentEditingOutput.renderedContentURL`
-- Call `finishContentEditing` completion with output
 ## Version Compatibility
 | Framework | Minimum iOS | Notes |
 |-----------|-------------|-------|
@@ -113,10 +105,9 @@ An iOS app that lets users add watermarks or white-frame metadata overlays to ph
 | `CGImageDestinationCopyImageSource` | iOS 16 | Simplest metadata-preserving copy |
 | `expandToHDR` (CIImage) | iOS 17 | HDR-aware image loading for Core Image pipeline |
 | `Transferable` protocol | iOS 16 | Used by PhotosPickerItem for async data loading |
-| `PHContentEditingController` | iOS 8+ | Stable, no version-specific concerns |
 | App Intents (if added later) | iOS 17 basic / iOS 18 full | iOS 18 required for full Apple Intelligence integration |
 ## Sources
-- Apple Developer Documentation — PhotosPicker, PHContentEditingController, AVFoundation, Core Image, ImageIO
+- Apple Developer Documentation — PhotosPicker, AVFoundation, Core Image, ImageIO
 - Apple Developer — "Supporting HDR images in your app" (WWDC24 session) — HDR gain map preservation via CGImageDestination
 - Apple Developer — "What's new in SwiftUI" (WWDC24) — @Observable migration, modern SwiftUI patterns
 - Apple Developer — "What's new in Photos" (WWDC24) — PhotosPicker enhancements
@@ -205,7 +196,7 @@ After all plans in an execution wave complete (all SUMMARY.md files written) and
 bash scripts/build-gate.sh
 ```
 
-This gate replaces file-existence-only self-checks as the source of truth for "build PASSED" in the execute workflow. It runs `xcodebuild` across all 3 targets (WatermarkApp, ShareExtension, PhotoEditExtension) via the single WatermarkApp scheme.
+This gate replaces file-existence-only self-checks as the source of truth for "build PASSED" in the execute workflow. It runs `xcodebuild` across both targets (WatermarkApp and ShareExtension) via the single WatermarkApp scheme.
 
 ### Exit Codes and Resolution
 
