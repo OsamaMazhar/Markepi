@@ -134,13 +134,24 @@ struct ContentView: View {
                 }
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.isImportingMedia)
+            // The base layer INSIDE the NavigationStack. The nav stack carries its
+            // own opaque container background (system white in light mode) that sits
+            // BETWEEN the content and anything painted outside the stack — so a
+            // `.background` on the NavigationStack, or painting the window/hosting
+            // UIView layers, could not reach it. During a device rotation the
+            // content's black canvas lags one layout frame; for that frame the
+            // container's white showed as a flash "on the right and under" the
+            // photo. Painting the base black here covers the container through that
+            // lag frame. (Steady state is unaffected — the branches' own black
+            // canvases sit on top of this.)
+            .background(
+                (viewModel.currentPhoto != nil ? Color.black : MarkepiColors.canvasBackground)
+                    .ignoresSafeArea()
+            )
         }
-        // Paint the UIKit layers behind SwiftUI (window + hosting-controller view)
-        // with the on-screen backdrop, so neither flashes system-white during a
-        // device rotation. A SwiftUI `.background` can't do this — UIKit snapshots
-        // the UIView layer beneath SwiftUI's drawing during the rotation. Black
-        // while editing (the canvas is always black), adaptive otherwise. See
-        // WindowBackgroundColor for the two distinct white sources it covers.
+        // Window + hosting-view UIView layers, for the triangular corner gaps
+        // exposed during rotation (a separate white source from the container
+        // above). See WindowBackgroundColor.
         .background(
             WindowBackgroundColor(color: viewModel.currentPhoto != nil ? .black : .systemBackground)
         )
