@@ -19,6 +19,10 @@ struct ContentView: View {
     @State private var showResetOverridesConfirmation: Bool = false
     @State private var showBatchResultAlert: Bool = false
 
+    /// Photo pending removal confirmation from the thumbnail strip's Edit Batch
+    /// mode. Drives a `.confirmationDialog(item:)` — set when a red ✕ is tapped.
+    @State private var photoPendingRemoval: PhotoItem? = nil
+
     // Editor tool-dock state. Starts on Text so controls are visible on launch.
     @State private var activeTool: EditorTool? = .text
 
@@ -32,11 +36,44 @@ struct ContentView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    // Landscape Share↔dock alignment needs no measurement: in landscape the
+    // Share button lives in the same vertical rail stack as the tool dock (see
+    // `landscapeRightRail`), so they share one horizontal center by construction.
+
+    /// Side-rail (landscape, iPhone + iPad) vs. bottom-dock (portrait) split.
+    /// In landscape the tool dock runs vertically down the right edge so the
+    /// photo keeps the full height; in portrait it stays a bottom dock. The
+    /// split is driven by the window's *aspect ratio*, not device identity:
+    /// iPad reports `.regular` width in both orientations, so size class alone
+    /// can't tell portrait from landscape. A minimum height keeps the vertical
+    /// dock usable in very short windows — below it the portrait bottom-dock
+    /// layout is used instead.
+    ///
+    /// Computed from a *live* size (the `GeometryReader`'s `geometry.size`),
+    /// never from lagged `@State`: deciding the branch from async state made the
+    /// layout flip-flop on rotation (it would briefly render the portrait
+    /// bottom-dock inside a landscape window, or get stuck there when a sheet
+    /// swallowed the geometry update).
+    private func isLandscape(_ size: CGSize) -> Bool {
+        size.width > size.height && size.height >= 320
+    }
+
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
-                mainLayout(geometry)
-                    .toolbar { toolbarContent }
+                let landscape = isLandscape(geometry.size)
+                let _ = print("🧭 GEO size=\(geometry.size) w>h=\(geometry.size.width > geometry.size.height) h>=320=\(geometry.size.height >= 320) landscape=\(landscape)")
+                // In PORTRAIT the system toolbar drives the chrome (real Liquid
+                // Glass). In LANDSCAPE-while-editing the chrome moves into two
+                // custom rails — Back + Settings/Add/Files on the left, Share +
+                // tool dock on the right — so the system nav bar is emptied AND
+                // hidden. Hiding it also reclaims the top safe-area inset it
+                // reserved, which had pushed the photo up (no top gap, a gap at
+                // the bottom); with it gone the photo centers symmetrically.
+                let landscapeEditing = landscape && viewModel.currentPhoto != nil
+                mainLayout(geometry, landscape: landscape)
+                    .toolbar { toolbarContent(landscapeEditing: landscapeEditing) }
+                    .toolbar(landscapeEditing ? .hidden : .automatic, for: .navigationBar)
                     .toolbarBackground(.hidden, for: .navigationBar)
                     .photosPicker(
                         isPresented: Binding(
@@ -50,6 +87,10 @@ struct ContentView: View {
                         maxSelectionCount: 20,
                         matching: .any(of: [.images, .videos])
                     )
+                    // On large displays (iPad) the system photo picker defaults to
+                    // a small centered sheet; force it to the large detent so it
+                    // fills the available height. (On iPhone this is a no-op.)
+                    .presentationDetents([.large])
                     .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.image, .movie, .audiovisualContent]) { result in
                         switch result {
                         case .success(let url):
@@ -73,7 +114,8 @@ struct ContentView: View {
                 viewModel: viewModel,
                 showBatchCancelConfirmation: $showBatchCancelConfirmation,
                 showResetOverridesConfirmation: $showResetOverridesConfirmation,
-                showBatchResultAlert: $showBatchResultAlert
+                showBatchResultAlert: $showBatchResultAlert,
+                photoPendingRemoval: $photoPendingRemoval
             ))
             .modifier(SheetModifiers(
                 viewModel: viewModel,
@@ -93,26 +135,36 @@ struct ContentView: View {
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.isImportingMedia)
         }
+        // Paint the UIKit layers behind SwiftUI (window + hosting-controller view)
+        // with the on-screen backdrop, so neither flashes system-white during a
+        // device rotation. A SwiftUI `.background` can't do this — UIKit snapshots
+        // the UIView layer beneath SwiftUI's drawing during the rotation. Black
+        // while editing (the canvas is always black), adaptive otherwise. See
+        // WindowBackgroundColor for the two distinct white sources it covers.
+        .background(
+            WindowBackgroundColor(color: viewModel.currentPhoto != nil ? .black : .systemBackground)
+        )
     }
 
     // MARK: - Main Layout (editor canvas + tool dock)
 
-    private func mainLayout(_ geometry: GeometryProxy) -> some View {
-        // Empty state when no photo loaded AND not rendering — prevents flashing
-        // the empty state during batch processing while photo data reloads.
-        return Group {
+    private func mainLayout(_ geometry: GeometryProxy, landscape: Bool) -> some View {
+        Group {
             if viewModel.currentPhoto == nil && viewModel.renderingState != .rendering {
                 firstPage
+            } else if landscape {
+                landscapeLayout(geometry)
             } else {
-                // The preview is the main content; it respects the safe area on
-                // top (so it stays below the status bar / toolbar) and SwiftUI's
-                // `safeAreaInset` automatically keeps it clear of the bottom
-                // chrome (batch strip, scrubber, panel, dock) — no manual height
-                // math, and the content rises into the free space above.
                 PreviewView(viewModel: viewModel)
-                    .background(canvasBackground.ignoresSafeArea())
+                    .background(MarkepiColors.photoCanvasBackground.ignoresSafeArea())
                     .safeAreaInset(edge: .bottom, spacing: 0) {
-                        bottomControls(geometry)
+                        VStack(spacing: 0) {
+                            mediaControls
+                            editorControls(geometry)
+                        }
+                        // Breathing room so the photo never sits flush against
+                        // the panel's top edge.
+                        .padding(.top, MarkepiSpacing.md)
                     }
                     .overlay {
                         batchOverlays
@@ -134,10 +186,11 @@ struct ContentView: View {
         }
     }
 
-    /// Neutral dark canvas behind the photo so letterboxing reads as an
-    /// intentional editing surface rather than empty white space.
-    private var canvasBackground: some View {
-        Color.black
+    /// Backdrop behind the photo so the letterboxing reads as an intentional
+    /// editing surface — white in light mode, black in dark mode (shares the
+    /// canvas token so onboarding and editor stay in sync).
+    private var canvasBackground: Color {
+        MarkepiColors.canvasBackground
     }
 
     // MARK: - First Page (no media loaded)
@@ -199,65 +252,71 @@ struct ContentView: View {
 
     // MARK: - Toolbar
 
+    /// The system navigation toolbar. Used as-is in portrait and on the first
+    /// page. In landscape-while-editing every item moves to the custom rails
+    /// (see `landscapeLeftChrome` and `landscapeRightRail`), so the whole bar is
+    /// emptied here and hidden by the caller.
     @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            if viewModel.currentPhoto != nil {
-                // Editing: back to the start screen. Routes through the discard
-                // confirmation so in-progress edits aren't lost by accident.
-                Button {
-                    viewModel.requestCancel()
-                } label: {
-                    Image(systemName: "chevron.backward")
-                }
-                .accessibilityLabel("Back to start")
-            } else {
-                // First page: upgrade to Premium.
-                Button {
-                    showPaywall = true
-                } label: {
-                    Image(systemName: "crown.fill")
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .tint(.yellow)
-                .accessibilityLabel("Upgrade to Premium")
-            }
-        }
-        ToolbarItemGroup(placement: .topBarTrailing) {
-            Button {
-                showSettings = true
-            } label: {
-                Image(systemName: "gearshape")
-            }
-            .accessibilityLabel("Settings")
-
-            // Add / import / reset / export only matter once media is loaded;
-            // on the first page the empty-state CTAs handle adding media.
-            if viewModel.currentPhoto != nil {
-                Button {
-                    viewModel.showPicker = true
-                } label: {
-                    Image(systemName: "photo.badge.plus")
-                }
-                .accessibilityLabel("Add photos")
-
-                Button {
-                    showFileImporter = true
-                } label: {
-                    Image(systemName: "folder.badge.plus")
-                }
-                .accessibilityLabel("Import from Files")
-
-                if viewModel.hasBatchOverrides {
+    private func toolbarContent(landscapeEditing: Bool) -> some ToolbarContent {
+        if !landscapeEditing {
+            ToolbarItem(placement: .topBarLeading) {
+                if viewModel.currentPhoto != nil {
+                    // Editing: back to the start screen. Routes through the discard
+                    // confirmation so in-progress edits aren't lost by accident.
                     Button {
-                        showResetOverridesConfirmation = true
+                        viewModel.requestCancel()
                     } label: {
-                        Image(systemName: "arrow.counterclockwise")
+                        Image(systemName: "chevron.backward")
                     }
-                    .accessibilityLabel("Reset all overrides")
+                    .accessibilityLabel("Back to start")
+                } else {
+                    // First page: upgrade to Premium.
+                    Button {
+                        showPaywall = true
+                    } label: {
+                        Image(systemName: "crown.fill")
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    .tint(.yellow)
+                    .accessibilityLabel("Upgrade to Premium")
                 }
+            }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .accessibilityLabel("Settings")
 
-                ExportToolbarButton(viewModel: viewModel)
+                // Add / import / reset / export only matter once media is loaded;
+                // on the first page the empty-state CTAs handle adding media.
+                if viewModel.currentPhoto != nil {
+                    Button {
+                        viewModel.showPicker = true
+                    } label: {
+                        Image(systemName: "photo.badge.plus")
+                    }
+                    .accessibilityLabel("Add photos")
+
+                    Button {
+                        showFileImporter = true
+                    } label: {
+                        Image(systemName: "folder.badge.plus")
+                    }
+                    .accessibilityLabel("Import from Files")
+
+                    if viewModel.hasBatchOverrides {
+                        Button {
+                            showResetOverridesConfirmation = true
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                        }
+                        .accessibilityLabel("Reset all overrides")
+                    }
+
+                    ExportToolbarButton(viewModel: viewModel)
+                }
             }
         }
     }
@@ -282,17 +341,223 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Bottom Controls (z=2)
+    // MARK: - Landscape Layout: Canvas Column
 
-    private func bottomControls(_ geometry: GeometryProxy) -> some View {
-        // Panel grows taller at large Dynamic Type so controls stay reachable.
-        let panelMaxHeight: CGFloat = dynamicTypeSize >= .xxLarge
-            ? geometry.size.height * 0.62
-            : geometry.size.height * 0.50
+    private func canvasColumn(_ geometry: GeometryProxy) -> some View {
+        VStack(spacing: 0) {
+            PreviewView(viewModel: viewModel)
+                .background(MarkepiColors.photoCanvasBackground)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-        return VStack(spacing: 12) {
-            // Batch thumbnail strip sits at the TOP of the chrome stack so it is
-            // always visible alongside (never hidden behind) the tool panel.
+            mediaControls
+        }
+    }
+
+    // MARK: - Landscape Layout: Canvas + Vertical Tool Dock
+
+    /// Landscape editor. The chrome (Back / Settings / Add / Files / Share) is
+    /// the *same system navigation toolbar* used in portrait — see
+    /// `toolbarContent` — so the buttons are identical across orientations (real
+    /// Liquid Glass, the grouped pill, the prominent blue Export). The only
+    /// orientation-specific change is the tool dock: it runs vertically down the
+    /// right edge here, instead of as a bottom dock, so the photo keeps the full
+    /// height. Opening a tool slides its panel in as a real column to the left of
+    /// the dock, flexing the photo narrower; the split animates on `activeTool`.
+    private func landscapeLayout(_ geometry: GeometryProxy) -> some View {
+        HStack(spacing: 0) {
+            // Left chrome as a real column (not an overlay) so the photo sits to
+            // its RIGHT instead of underneath it. Top-aligned — Back on top, then
+            // the Settings/Add/Files pill — with its own leading padding to clear
+            // the rounded corner, mirroring the right rail's trailing inset.
+            landscapeLeftChrome
+                .padding(.leading, MarkepiSpacing.md)
+                .padding(.top, MarkepiSpacing.sm)
+                // Fixed-width column (leading-aligned) so the left rail reserves
+                // the SAME width as the right dock column — that symmetry is what
+                // centers the photo column between them when the panel is closed.
+                .frame(width: Self.sideRailColumnWidth, alignment: .leading)
+                .frame(maxHeight: .infinity, alignment: .top)
+
+            canvasColumn(geometry)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            landscapeRightRail(geometry)
+                .frame(maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Extend the whole split into the top/bottom safe areas (applied to the
+        // container, NOT a single child — doing it per-child distorted the HStack
+        // width distribution and made the photo bleed up but not down). Both
+        // columns now span the full height and center their content, so the photo
+        // and the open panel share one vertical center (aligned + symmetric) and
+        // the photo uses the full height under the floating toolbar.
+        //
+        // Extend into the TRAILING safe area so the tool rail hugs the right edge,
+        // but DELIBERATELY respect the LEADING inset: in landscape the Dynamic
+        // Island / notch lives on the leading side, and the left chrome column
+        // (Back + Settings/Add/Files) must clear it rather than render underneath.
+        // The black canvas background below ignores all safe areas, so the area
+        // behind the leading inset is still filled — no gap shows.
+        .ignoresSafeArea(.container, edges: [.vertical, .trailing])
+        // Cover the whole screen, safe areas included, with the black canvas so
+        // no system background is exposed — a light "white box" used to flash on
+        // the right during the portrait→landscape rotation because the canvas
+        // didn't extend into the safe area.
+        .background(MarkepiColors.photoCanvasBackground.ignoresSafeArea())
+        .overlay {
+            batchOverlays
+        }
+        // Animate the split so the photo slides left and resizes when a tool
+        // panel opens or closes, rather than snapping.
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: activeTool)
+    }
+
+    /// Landscape-only left chrome: the Back button stacked above the
+    /// Settings/Add/Files (+ reset) group, mirroring the right rail. Uses the
+    /// project's `markepiGlass` (same pill as the tool dock). In portrait these
+    /// live in the system toolbar instead (see `toolbarContent`).
+    private var landscapeLeftChrome: some View {
+        VStack(spacing: MarkepiSpacing.md) {
+            // Back: framed to the same width as the group pill below so the round
+            // glass button isn't narrower than the pill (they read as one rail).
+            chromeButton(systemImage: "chevron.backward", label: "Back to start") {
+                viewModel.requestCancel()
+            }
+            .frame(width: Self.chromeRailWidth, height: Self.chromeRailWidth)
+            .chromeGlass(in: Circle(), isEnabled: !reduceTransparency)
+
+            VStack(spacing: 2) {
+                chromeButton(systemImage: "gearshape", label: "Settings") {
+                    showSettings = true
+                }
+                chromeButton(systemImage: "photo.badge.plus", label: "Add photos") {
+                    viewModel.showPicker = true
+                }
+                chromeButton(systemImage: "folder.badge.plus", label: "Import from Files") {
+                    showFileImporter = true
+                }
+                if viewModel.hasBatchOverrides {
+                    chromeButton(systemImage: "arrow.counterclockwise", label: "Reset all overrides") {
+                        showResetOverridesConfirmation = true
+                    }
+                }
+            }
+            .padding(.vertical, 6)
+            .frame(width: Self.chromeRailWidth)
+            .chromeGlass(in: Capsule(), isEnabled: !reduceTransparency)
+        }
+    }
+
+    /// SF Symbol point size for the landscape chrome glyphs (Back, Settings,
+    /// Add, Files, Share). Sized to match the portrait system toolbar's glyphs,
+    /// which render larger than a plain 17pt symbol.
+    private static let chromeIconSize: CGFloat = 20
+
+    /// Outer width of the left-rail chrome (Back circle + the Settings/Add/Files
+    /// pill). One value so the round Back button and the pill are the same width.
+    private static let chromeRailWidth: CGFloat = 56
+
+    /// Reserved width for each side-rail column (left chrome, right tool dock)
+    /// when the panel is closed. Both columns share this width, so the photo
+    /// column between them is screen-centered — symmetric between the left
+    /// buttons and the right dock. Holds the widest rail content (the ~60pt
+    /// vertical dock) plus the `md` edge inset that clears the rounded corner.
+    private static let sideRailColumnWidth: CGFloat = 80
+
+    /// A single glass-rail chrome icon button, sized to match the tool dock's
+    /// touch targets so the left rail and the dock align visually.
+    private func chromeButton(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: Self.chromeIconSize, weight: .regular))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color.primary)
+        .accessibilityLabel(label)
+    }
+
+    /// Right-edge rail: the active tool's panel (a real column, so opening it
+    /// widens the rail and shrinks the photo) plus the vertical tool dock pinned
+    /// to the trailing edge and vertically centered. All chrome lives in the
+    /// shared top toolbar, not here.
+    private func landscapeRightRail(_ geometry: GeometryProxy) -> some View {
+        // Wider gutter between the open panel and the tool dock so the panel
+        // isn't crammed against the right rail. The canvas column is greedy
+        // (`maxWidth: .infinity`), so widening this gap also pulls the whole
+        // rail left, shrinking the (letterboxed) gap on the photo side — i.e.
+        // the panel sits with more even breathing room on both sides.
+        HStack(spacing: MarkepiSpacing.xl) {
+            if let tool = activeTool, !isBusy {
+                ToolPanelView(
+                    tool: tool,
+                    viewModel: viewModel,
+                    onClose: closeActiveTool,
+                    maxHeight: max(200, geometry.size.height - 32)
+                )
+                .frame(width: landscapePanelWidth(geometry, for: tool))
+                // Breathing room from the photo's edge — applied to the panel
+                // (only present when open) rather than the whole rail, so the
+                // closed-state dock column stays exactly `sideRailColumnWidth`
+                // and the photo stays centered.
+                .padding(.leading, MarkepiSpacing.md)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+
+            // Share sits directly above the vertical dock in one centered stack,
+            // so the dock and the Share button share a single horizontal center
+            // by construction — no measurement, no offset.
+            VStack(spacing: MarkepiSpacing.md) {
+                // Round prominent-glass Share button (circular by construction in
+                // glassCircle mode), sized by its square label so it isn't oversized
+                // and the glyph stays centered. The icon font matches the left-rail
+                // chrome glyphs.
+                ExportToolbarButton(viewModel: viewModel, glassCircle: true)
+                    .font(.system(size: Self.chromeIconSize, weight: .regular))
+
+                EditorToolDock(activeTool: $activeTool, axis: .vertical)
+            }
+            // Trailing inset clears the rounded corner (mirrors the left chrome's
+            // leading inset). The fixed-width, trailing-aligned column matches the
+            // left chrome's width, so the photo column between the two rails is
+            // screen-centered when the panel is closed.
+            .padding(.trailing, MarkepiSpacing.md)
+            .frame(width: Self.sideRailColumnWidth, alignment: .trailing)
+            .frame(maxHeight: .infinity, alignment: .center)
+        }
+        .padding(.vertical, MarkepiSpacing.sm)
+    }
+
+    /// Panel column width for the landscape rail. A content-rich panel (text,
+    /// signature controls, export) gets a comfortable width; a *sparse* panel —
+    /// one showing nothing but an "Add …" button (logo/signature before anything
+    /// is configured) — shrinks so it doesn't stretch a single button across the
+    /// full width. Capped on iPad so the photo is never squeezed out, floored so
+    /// rows don't collapse on the narrowest landscape windows.
+    private func landscapePanelWidth(_ geometry: GeometryProxy, for tool: EditorTool) -> CGFloat {
+        let full = min(420, max(320, geometry.size.width * 0.42))
+        return isLandscapePanelSparse(tool) ? min(full, 280) : full
+    }
+
+    /// True when the tool's panel currently shows only its empty-state "Add …"
+    /// button (no layer configured yet), so the panel can render compact.
+    private func isLandscapePanelSparse(_ tool: EditorTool) -> Bool {
+        switch tool {
+        case .logo:
+            return !viewModel.config.watermarks.contains { if case .image = $0 { return true }; return false }
+        case .signature:
+            return !viewModel.config.watermarks.contains { if case .signature = $0 { return true }; return false }
+        default:
+            return false
+        }
+    }
+
+    // MARK: - Shared Media Controls
+
+    @ViewBuilder
+    private var mediaControls: some View {
+        VStack(spacing: MarkepiSpacing.md) {
             if viewModel.hasMultiplePhotos {
                 ThumbnailStripView(
                     photos: viewModel.photos,
@@ -303,42 +568,79 @@ struct ContentView: View {
                     },
                     onReorder: { reordered in
                         viewModel.photos = reordered
+                    },
+                    allowsRemoval: !isBusy,
+                    onRequestRemoval: { photo in
+                        photoPendingRemoval = photo
                     }
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MarkepiSpacing.md)
             }
 
-            // Frame scrubber: drag through the video timeline to preview the
-            // watermarked output at any frame (AVAssetImageGenerator-backed).
             if viewModel.isCurrentVideo && !isBusy {
                 VideoScrubBar(fraction: $viewModel.videoPreviewFraction)
             }
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isBusy)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.hasMultiplePhotos)
+    }
 
+    // MARK: - Narrow Layout: Editor Controls
+
+    /// Aspect ratio (width ÷ height) of the photo currently being previewed;
+    /// falls back to 1 when no preview is loaded yet. Drives the display-aware
+    /// panel cap so the layout adapts to the actual photo, not a fixed fraction.
+    private var previewAspectRatio: CGFloat {
+        guard let size = viewModel.previewImage?.size, size.height > 0 else { return 1 }
+        return size.width / size.height
+    }
+
+    /// Collapses the active tool's panel (shared by the portrait bottom dock and
+    /// the landscape side rail).
+    private func closeActiveTool() {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82)) {
+            activeTool = nil
+        }
+    }
+
+    private func editorControls(_ geometry: GeometryProxy) -> some View {
+        // The panel sizes to its own content (capped) via ToolPanelView. The cap
+        // isn't a magic fraction of the screen — it's whatever height is left
+        // after the photo and the dock. The photo is width-constrained in the
+        // tall portrait region, so its drawn height is (display width ÷ aspect):
+        // a tall portrait photo therefore reserves more height and gets a short
+        // panel, while a wide landscape photo leaves the panel room to grow. A
+        // floor keeps the panel usable (and a touch taller at large Dynamic Type)
+        // when an extreme-aspect photo would otherwise crowd it out.
+        let photoHeight = geometry.size.width / max(previewAspectRatio, 0.1)
+        let dockReserve: CGFloat = 96   // tool dock + surrounding spacing
+        let minPanelHeight: CGFloat = dynamicTypeSize >= .xxLarge ? 260 : 200
+        let panelCap = max(minPanelHeight, geometry.size.height - photoHeight - dockReserve)
+
+        return VStack(spacing: MarkepiSpacing.sm) {
             RenderProgressBanner(viewModel: viewModel)
 
             if let tool = activeTool, !isBusy {
                 ToolPanelView(
                     tool: tool,
                     viewModel: viewModel,
-                    onClose: {
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82)) {
-                            activeTool = nil
-                        }
-                    }
+                    onClose: closeActiveTool,
+                    maxHeight: panelCap
                 )
-                .frame(maxHeight: panelMaxHeight)
-                .padding(.horizontal, 12)
+                // On wide bottom-dock containers (iPad portrait), pad the panel
+                // toward a ~560pt centered column instead of stretching it
+                // edge-to-edge; on iPhone the math clamps to the normal inset.
+                .padding(.horizontal, max(MarkepiSpacing.md, (geometry.size.width - 560) / 2))
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             EditorToolDock(activeTool: $activeTool)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MarkepiSpacing.lg)
         }
-        .padding(.bottom, 8)
+        // Sit the dock right above the home-indicator safe area with no extra
+        // gutter — the previous bottom padding left a visible empty band between
+        // the dock and the display's bottom edge.
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: activeTool)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isBusy)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.hasMultiplePhotos)
     }
 }
 
@@ -397,6 +699,7 @@ private struct BatchAlertModifiers: ViewModifier {
     @Binding var showBatchCancelConfirmation: Bool
     @Binding var showResetOverridesConfirmation: Bool
     @Binding var showBatchResultAlert: Bool
+    @Binding var photoPendingRemoval: PhotoItem?
 
     func body(content: Content) -> some View {
         content
@@ -415,6 +718,26 @@ private struct BatchAlertModifiers: ViewModifier {
                 Button("Keep Adjustments", role: .cancel) {}
             } message: {
                 Text("All per-item adjustments will be lost. Items will use the shared watermark configuration.")
+            }
+            .confirmationDialog(
+                "Remove from Batch?",
+                isPresented: Binding(
+                    get: { photoPendingRemoval != nil },
+                    set: { if !$0 { photoPendingRemoval = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Remove", role: .destructive) {
+                    if let photo = photoPendingRemoval {
+                        viewModel.removePhoto(id: photo.id)
+                    }
+                    photoPendingRemoval = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    photoPendingRemoval = nil
+                }
+            } message: {
+                Text(removalMessage)
             }
             .alert("Batch Complete", isPresented: $showBatchResultAlert) {
                 Button("OK") {
@@ -464,6 +787,20 @@ private struct BatchAlertModifiers: ViewModifier {
             signableImageCount: viewModel.batchSignableImageCount,
             videoCount: viewModel.batchVideoCount
         )
+    }
+
+    /// Media-type-aware body for the "Remove from Batch?" confirmation.
+    private var removalMessage: String {
+        guard let photo = photoPendingRemoval else {
+            return "This item will be removed from the batch. This can't be undone."
+        }
+        let noun: String
+        switch photo.mediaType {
+        case .video: noun = "video"
+        case .livePhoto: noun = "Live Photo"
+        default: noun = "photo"
+        }
+        return "This \(noun) will be removed from the batch. This can't be undone."
     }
 }
 
@@ -565,6 +902,7 @@ private struct SheetModifiers: ViewModifier {
 struct SettingsView: View {
     @Bindable var viewModel: WatermarkViewModel
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("appearancePreference") private var appearancePreference: String = AppearancePreference.system.rawValue
 
     var body: some View {
         NavigationStack {
@@ -579,6 +917,16 @@ struct SettingsView: View {
                     Toggle("Open Photo Picker on Launch", isOn: $viewModel.openPickerOnLaunch)
                 } footer: {
                     Text("When on, the photo picker opens automatically each time you launch the app. When off, you start on the home screen.")
+                }
+
+                Section {
+                    Picker("Appearance", selection: $appearancePreference) {
+                        ForEach(AppearancePreference.allCases) { mode in
+                            Text(mode.displayName).tag(mode.rawValue)
+                        }
+                    }
+                } footer: {
+                    Text("Choose a light, dark, or system-following appearance for the editor.")
                 }
 
                 Section {
@@ -603,6 +951,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .frame(maxWidth: 640)
             .navigationTitle("Settings")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -625,6 +974,101 @@ struct SettingsView: View {
     private static let privacyURL = URL(string: "https://orbitaar.com/markepi/privacy")!
 }
 
+// MARK: - Window Background
+
+/// Paints EVERY host UIKit layer behind the SwiftUI content with the backdrop
+/// color, so no system-white shows during a device rotation. A SwiftUI
+/// `.background` can't fix this and neither does setting one UIView: during
+/// rotation UIKit snapshots the whole UIView stack *beneath* SwiftUI's drawing,
+/// and the white flash is whichever opaque layer is exposed — the window (corner
+/// gaps), `rootViewController.view`, or the `_UIHostingView` sitting on top of
+/// it. `AncestorPaintingView` walks the full chain up to the window and paints
+/// each, so none can flash its default `systemBackground` (white in light mode).
+private struct WindowBackgroundColor: UIViewRepresentable {
+    let color: UIColor
+
+    func makeUIView(context: Context) -> AncestorPaintingView {
+        let view = AncestorPaintingView()
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        view.paintColor = color
+        return view
+    }
+
+    func updateUIView(_ uiView: AncestorPaintingView, context: Context) {
+        uiView.paintColor = color
+        uiView.paintAncestors()
+    }
+}
+
+/// Walks every UIKit layer from this view up to the `UIWindow` and paints each
+/// one's `backgroundColor`. One layer isn't enough: during a device rotation
+/// UIKit snapshots the UIView stack *beneath* SwiftUI's drawing, and the white
+/// flash is whichever opaque layer is exposed — `rootViewController.view`, the
+/// `_UIHostingView` on top of it, or the window itself. Setting just the window
+/// (gaps) or just the root view (covered by `_UIHostingView`) left the white
+/// shape; a SwiftUI `.background` can't touch any of them. Re-applied from
+/// `layoutSubviews` because rotation re-lays-out without changing the
+/// representable's inputs (so `updateUIView` may not fire).
+private final class AncestorPaintingView: UIView {
+    var paintColor: UIColor = .clear
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        paintAncestors()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        paintAncestors()
+    }
+
+    func paintAncestors() {
+        guard let window = self.window else { return }
+        window.backgroundColor = paintColor
+        var ancestor = self.superview
+        while let current = ancestor, current !== window {
+            current.backgroundColor = paintColor
+            ancestor = current.superview
+        }
+    }
+}
+
+// MARK: - Chrome Glass (device-live Liquid Glass)
+
+private extension View {
+    /// Real iOS-26 Liquid Glass on a physical device, material fallback on the
+    /// simulator — used by the landscape custom chrome rails so they match the
+    /// system toolbar's real glass on device.
+    ///
+    /// SwiftUI's `glassEffect` crashes (`EXC_BAD_ACCESS` in
+    /// `swift_getOpaqueTypeMetadata`) on simulator runtimes whose Swift ABI
+    /// doesn't match the build SDK — and we have no simulator matching the 26.2
+    /// SDK, so it crashes on all of them. Because *merely compiling the call*
+    /// into the render path triggers it, `#if targetEnvironment(simulator)` keeps
+    /// the call OUT of simulator builds entirely (not just an unused runtime
+    /// branch). On device the call is safe and renders the same glass the OS
+    /// gives the toolbar. This is intentionally separate from the app-wide
+    /// `markepiGlass` (compile-flag-gated, off everywhere) so the chrome can be
+    /// device-live without changing the dock or panels. Pure SwiftUI, no UIKit.
+    @ViewBuilder
+    func chromeGlass<S: Shape>(in shape: S, isEnabled: Bool) -> some View {
+        if isEnabled {
+            #if targetEnvironment(simulator)
+            background(.bar, in: shape)
+            #else
+            if #available(iOS 26, macOS 26, *) {
+                glassEffect(.regular, in: shape)
+            } else {
+                background(.bar, in: shape)
+            }
+            #endif
+        } else {
+            self
+        }
+    }
+}
+
 // MARK: - Loading Overlay
 
 /// A branded, animated full-screen loading overlay — a rotating accent arc
@@ -633,12 +1077,13 @@ struct SettingsView: View {
 struct LoadingOverlay: View {
     let message: String
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var spin = false
-    @State private var pulse = false
+    @State private var isActive = false
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.55).ignoresSafeArea()
+            Color.clear
+                .background(.ultraThinMaterial)
+                .ignoresSafeArea()
 
             VStack(spacing: 18) {
                 ZStack {
@@ -647,13 +1092,21 @@ struct LoadingOverlay: View {
                     Circle()
                         .trim(from: 0, to: 0.28)
                         .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                        .rotationEffect(.degrees(spin ? 360 : 0))
+                        .rotationEffect(.degrees(isActive ? 360 : 0))
+                        .animation(
+                            reduceMotion ? nil : .linear(duration: 0.9).repeatForever(autoreverses: false),
+                            value: isActive
+                        )
                     Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 24, weight: .semibold))
+                        .markepiTypography(.glyph)
                         .foregroundStyle(.white)
-                        .scaleEffect(pulse ? 1.08 : 0.9)
+                        .scaleEffect(isActive ? 1.08 : 0.92)
+                        .animation(
+                            reduceMotion ? nil : .easeInOut(duration: 0.75).repeatForever(autoreverses: true),
+                            value: isActive
+                        )
                 }
-                .frame(width: 64, height: 64)
+                .frame(width: MarkepiSizing.loadingGlyphSize, height: MarkepiSizing.loadingGlyphSize)
 
                 Text(message)
                     .font(.subheadline.weight(.medium))
@@ -661,15 +1114,12 @@ struct LoadingOverlay: View {
                     .multilineTextAlignment(.center)
             }
             .padding(28)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MarkepiRadius.xxxl, style: .continuous))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(message)
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) { pulse = true }
-        }
+        .onAppear { isActive = true }
+        .onDisappear { isActive = false }
     }
 }
 
@@ -694,15 +1144,15 @@ private struct VideoScrubBar: View {
                 .font(.caption.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
-                .frame(width: 40, alignment: .trailing)
+                .frame(width: MarkepiSizing.videoScrubBarPercentWidth, alignment: .trailing)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: MarkepiRadius.xxl, style: .continuous)
                 .fill(.regularMaterial)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MarkepiRadius.xxl, style: .continuous))
         .padding(.horizontal, 12)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Preview frame position")
