@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Provenance & Authorship Protection
-status: executing
-stopped_at: Completed 19-03-PLAN.md plus Phase 19 review fixes
-last_updated: "2026-06-26T13:30:00+02:00"
-last_activity: 2026-06-26
+status: verifying
+stopped_at: context exhaustion at 76% (2026-06-30)
+last_updated: "2026-07-03T18:43:49Z"
+last_activity: "2026-07-05 - Completed quick task 260705-h1c: Make onboarding feature icons neutral instead of blue"
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 4
   completed_plans: 3
-  percent: 75
+  percent: 0
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 Phase: 19 (provenance-authorship-protection) — EXECUTING
 Plan: 4 of 4
 Status: Ready to execute 19-04 after review-fix verification
-Last activity: 2026-06-26
+Last activity: 2026-07-05 - Completed quick task 260705-h1c: Make onboarding feature icons neutral instead of blue
 
 ### v2.2 Phase Map
 
@@ -90,6 +90,17 @@ Last activity: 2026-06-26
 | 260624-tag | Implement the Photo Edit Extension removal audit | 2026-06-25 | working tree | [260624-tag-implement-the-photo-edit-extension-remov](./quick/260624-tag-implement-the-photo-edit-extension-remov/) |
 | 260624-t4x | Save the Photo Edit Extension removal audit findings in a Markdown file | 2026-06-24 | 4f0b038 | [260624-t4x-save-the-photo-edit-extension-removal-au](./quick/260624-t4x-save-the-photo-edit-extension-removal-au/) |
 | 260626-fix | Fix Phase 19 provenance/authorship review issues | 2026-06-26 | working tree | [260626-fix-phase-19-review-issues](./quick/260626-fix-phase-19-review-issues/) |
+| 260626-t1a | Fix thumbnail remove badge placement so red delete circles sit professionally on each thumbnail's top-left corner | 2026-06-26 | working tree | [260626-t1a-fix-thumbnail-remove-badge-placement-so-](./quick/260626-t1a-fix-thumbnail-remove-badge-placement-so-/) |
+| 260702-lop | Add logo opacity options | 2026-07-02 | working tree | [260702-lop-logo-opacity-options](./quick/260702-lop-logo-opacity-options/) |
+| 260702-jtr | Fix logo opacity slider jitter | 2026-07-02 | working tree | [260702-jtr-fix-logo-opacity-slider-jitter](./quick/260702-jtr-fix-logo-opacity-slider-jitter/) |
+| 260702-qos | Move C2PA Rust work off user-initiated QoS | 2026-07-02 | working tree | [260702-qos-c2pa-rust-priority-inversion](./quick/260702-qos-c2pa-rust-priority-inversion/) |
+| 260703-sms | Fix signature ink color so signatures always draw in black, including dark mode | 2026-07-03 | working tree | [260703-sms-fix-signature-ink-color-so-signatures-al](./quick/260703-sms-fix-signature-ink-color-so-signatures-al/) |
+| 260705-2d3 | Remove app-created release candidate logs without changing app logic | 2026-07-04 | working tree | [260705-2d3-remove-app-created-release-candidate-log](./quick/260705-2d3-remove-app-created-release-candidate-log/) |
+| 260705-2ou | Fix distribution blockers: app icon alpha channel and C2PAC dSYM upload warning | 2026-07-04 | working tree | [260705-2ou-fix-distribution-blockers-app-icon-alpha](./quick/260705-2ou-fix-distribution-blockers-app-icon-alpha/) |
+| 260705-dmv | Fix C2PAC framework minimum OS metadata for App Store upload | 2026-07-05 | working tree | [260705-dmv-fix-c2pac-framework-minimum-os-metadata-](./quick/260705-dmv-fix-c2pac-framework-minimum-os-metadata-/) |
+| 260705-eh2 | Save Markepi custom license agreement plain text | 2026-07-05 | working tree | [260705-eh2-save-markepi-custom-license-agreement-pl](./quick/260705-eh2-save-markepi-custom-license-agreement-pl/) |
+| 260705-eu0 | Update onboarding legal links to orbitaar Markepi URLs | 2026-07-05 | working tree | [260705-eu0-update-onboarding-legal-links-to-orbitaa](./quick/260705-eu0-update-onboarding-legal-links-to-orbitaa/) |
+| 260705-h1c | Make onboarding feature icons neutral instead of blue | 2026-07-05 | working tree | [260705-h1c-onboarding-feature-icons-neutral](./quick/260705-h1c-onboarding-feature-icons-neutral/) |
 
 ## Deferred Items
 
@@ -104,8 +115,8 @@ Last activity: 2026-06-26
 
 ## Session Continuity
 
-Last session: 2026-06-26T13:30:00+02:00
-Stopped at: Completed 19-03-PLAN.md plus Phase 19 review fixes
+Last session: 2026-06-30T20:00:37.170Z
+Stopped at: context exhaustion at 76% (2026-06-30)
 Resume file: None
 
 ## Operator Next Steps

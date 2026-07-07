@@ -2,7 +2,6 @@ import CoreImage
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
-import WatermarkCore
 
 /// Logo/image watermark picker with Photos library and Files app support.
 ///
@@ -128,42 +127,112 @@ public struct LogoPickerView<ViewModel: WatermarkConfigurable & Observable>: Vie
     /// trash to remove. The active instance is highlighted.
     private func logoRow(index: Int, ordinal: Int) -> some View {
         let isActive = viewModel.activeLayerIndex == index
-        return HStack(spacing: 12) {
-            Image(systemName: "photo")
-                .foregroundStyle(isActive ? Color.accentColor : .secondary)
-                .frame(width: 24)
+        return VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: "photo")
+                    .foregroundStyle(isActive ? Color.accentColor : .secondary)
+                    .frame(width: 24)
 
-            Text("Logo \(ordinal)")
-                .markepiTypography(.controlLabel)
+                Text("Logo \(ordinal)")
+                    .markepiTypography(.controlLabel)
+
+                if isActive {
+                    Text("Editing")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.16), in: Capsule())
+                }
+
+                Spacer()
+
+                Button(role: .destructive) {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        viewModel.removeLayer(at: index)
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundStyle(.red)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove Logo \(ordinal)")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+            .onTapGesture { viewModel.activeLayerIndex = index }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(isActive ? [.isSelected, .isButton] : .isButton)
+            .accessibilityHint("Double tap to select this logo for position and size edits")
 
             if isActive {
-                Text("Editing")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(Color.accentColor.opacity(0.16), in: Capsule())
+                Divider()
+                    .padding(.leading, 52)
+                logoOpacityControl(index: index)
             }
+        }
+    }
 
-            Spacer()
-
-            Button(role: .destructive) {
-                withAnimation(.easeOut(duration: 0.25)) {
-                    viewModel.removeLayer(at: index)
+    private func logoOpacityControl(index: Int) -> some View {
+        let binding = logoOpacityBinding(index)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Opacity")
+                    .markepiTypography(.controlLabel)
+                Spacer()
+                Text("\(Int((binding.wrappedValue * 100).rounded()))%")
+                    .markepiTypography(.value)
+                    .monospacedDigit()
+            }
+            Slider(value: binding, in: 0...1, step: 0.01) { isEditing in
+                if isEditing {
+                    viewModel.beginInteractiveConfigChange()
+                } else {
+                    viewModel.endInteractiveConfigChange()
                 }
-            } label: {
-                Image(systemName: "trash")
-                    .foregroundStyle(.red)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Remove Logo \(ordinal)")
+                .accessibilityLabel("Logo opacity")
+                .accessibilityValue("\(Int((binding.wrappedValue * 100).rounded())) percent")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .contentShape(Rectangle())
-        .onTapGesture { viewModel.activeLayerIndex = index }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isActive ? [.isSelected, .isButton] : .isButton)
-        .accessibilityHint("Double tap to select this logo for position and size edits")
+        .background(Color.accentColor.opacity(0.08))
+    }
+
+    private func logoOpacityBinding(_ index: Int) -> Binding<Double> {
+        Binding(
+            get: {
+                guard let input = logoInput(at: index) else { return 0.8 }
+                return Double(input.opacity)
+            },
+            set: { updateLogoOpacity(at: index, opacity: CGFloat($0)) }
+        )
+    }
+
+    private func logoInput(at index: Int) -> ImageWatermarkInput? {
+        guard viewModel.config.watermarks.indices.contains(index),
+              case let .image(input, _, _, _, _) = viewModel.config.watermarks[index] else { return nil }
+        return input
+    }
+
+    private func updateLogoOpacity(at index: Int, opacity: CGFloat) {
+        guard viewModel.config.watermarks.indices.contains(index),
+              case let .image(input, position, scale, layerOpacity, isVisible) = viewModel.config.watermarks[index]
+        else { return }
+
+        let clamped = max(0.0, min(1.0, opacity))
+        guard abs(input.opacity - clamped) >= 0.0005 else { return }
+
+        viewModel.config.watermarks[index] = .image(
+            input.withOpacity(clamped),
+            position: position,
+            scale: scale,
+            opacity: layerOpacity,
+            isVisible: isVisible
+        )
+        if viewModel.activeLayerIndex != index {
+            viewModel.activeLayerIndex = index
+        }
     }
 }

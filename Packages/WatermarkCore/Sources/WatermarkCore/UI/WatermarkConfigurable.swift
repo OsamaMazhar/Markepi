@@ -1,7 +1,6 @@
 import CoreImage
 import Foundation
 import SwiftUI
-import WatermarkCore
 
 /// Protocol abstracting the watermark configuration and layer management
 /// interface shared by both `WatermarkViewModel` (main app) and
@@ -49,8 +48,11 @@ public protocol WatermarkConfigurable: AnyObject {
     func removeLayer(at index: Int)
     func updateLayerPosition(at index: Int, position: WatermarkPosition)
     func updateLayerScale(at index: Int, scale: CGFloat)
+    func updateLayerRotation(at index: Int, degrees: CGFloat)
     func setLayerOpacity(at index: Int, opacity: CGFloat)
     func setLayerVisibility(at index: Int, isVisible: Bool)
+    func beginInteractiveConfigChange()
+    func endInteractiveConfigChange()
     func moveLayer(from source: Int, to destination: Int)
     func updateSignature(at index: Int, inkColor: CGColor?, strokeWidth: CGFloat?)
     func toggleWhiteFrame()
@@ -150,6 +152,16 @@ extension WatermarkConfigurable {
         }
     }
 
+    /// Sets the clockwise rotation (in degrees) of the image/logo layer at
+    /// `index`. No-op for non-image layers — only logos are rotatable. The
+    /// degree value is normalized to [0, 360) by `ImageWatermarkInput`.
+    public func updateLayerRotation(at index: Int, degrees: CGFloat) {
+        guard config.watermarks.indices.contains(index),
+              case let .image(input, position, scale, opacity, isVisible) = config.watermarks[index] else { return }
+        let updated = input.withRotationDegrees(degrees)
+        config.watermarks[index] = .image(updated, position: position, scale: scale, opacity: opacity, isVisible: isVisible)
+    }
+
     /// Sets the per-layer compositing opacity (0–1) of the layer at `index`.
     public func setLayerOpacity(at index: Int, opacity: CGFloat) {
         guard config.watermarks.indices.contains(index) else { return }
@@ -161,6 +173,13 @@ extension WatermarkConfigurable {
         guard config.watermarks.indices.contains(index) else { return }
         config.watermarks[index] = config.watermarks[index].withVisibility(isVisible)
     }
+
+    /// Called by high-frequency controls such as sliders before/after a drag.
+    /// View models can defer expensive persistence while still applying live
+    /// model changes for preview. Default no-op keeps simple conformers cheap.
+    public func beginInteractiveConfigChange() {}
+
+    public func endInteractiveConfigChange() {}
 
     /// Reorders the layer stack, keeping `activeLayerIndex` pointed at the moved
     /// layer. Index 0 is the bottom of the stack; the last index is the top.

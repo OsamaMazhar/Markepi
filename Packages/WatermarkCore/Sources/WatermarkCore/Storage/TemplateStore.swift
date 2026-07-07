@@ -67,7 +67,9 @@ public final class TemplateStore {
     /// the migrated data.
     private func loadTemplates() {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
+            #if DEBUG
             os_log(.error, "[TemplateStore] Failed to open App Group suite '%@'", suiteName)
+            #endif
             return
         }
 
@@ -77,7 +79,9 @@ public final class TemplateStore {
         }
 
         guard var decoded = try? JSONDecoder().decode([Template].self, from: data) else {
+            #if DEBUG
             os_log(.error, "[TemplateStore] Failed to decode templates from UserDefaults")
+            #endif
             templates = []
             return
         }
@@ -328,7 +332,9 @@ public final class TemplateStore {
     /// - Throws: `TemplateStoreError.tooLarge` if the encoded array exceeds 500 KB
     private func persist() throws {
         guard let data = try? JSONEncoder().encode(templates) else {
+            #if DEBUG
             os_log(.error, "[TemplateStore] Failed to encode templates")
+            #endif
             return
         }
 
@@ -338,7 +344,9 @@ public final class TemplateStore {
         }
 
         guard let defaults = UserDefaults(suiteName: suiteName) else {
+            #if DEBUG
             os_log(.error, "[TemplateStore] Failed to open App Group suite '%@'", suiteName)
+            #endif
             return
         }
         defaults.set(data, forKey: templatesKey)
@@ -349,7 +357,9 @@ public final class TemplateStore {
     private func saveToDefaults(_ templates: [Template]) {
         guard let defaults = UserDefaults(suiteName: suiteName),
               let data = try? JSONEncoder().encode(templates) else {
+            #if DEBUG
             os_log(.error, "[TemplateStore] Failed to save templates to defaults")
+            #endif
             return
         }
         defaults.set(data, forKey: templatesKey)

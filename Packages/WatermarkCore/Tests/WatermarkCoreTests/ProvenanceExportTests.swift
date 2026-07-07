@@ -428,6 +428,30 @@ struct ProvenanceExportTests {
                 return C2PASigningResult(
                     status: .signed,
                     identityType: identity.type,
+                    displayName: identity.displayName,
+                    verification: C2PAVerificationResult(signatureIsIntact: true, items: [])
+                )
+            }
+
+            func verifyExport(at url: URL) async -> C2PAVerificationResult? {
+                nil
+            }
+        }
+
+        struct UnverifiedSignedC2PAClient: C2PAProvenanceClient {
+            func readSourceSummary(from url: URL) async -> SourceProvenanceAnalyzer.C2PASummary? {
+                nil
+            }
+
+            func signExport(
+                outputURL: URL,
+                source: URL,
+                manifest: C2PAManifestRequest,
+                identity: C2PASigningIdentity
+            ) async throws -> C2PASigningResult {
+                C2PASigningResult(
+                    status: .signed,
+                    identityType: identity.type,
                     displayName: identity.displayName
                 )
             }
@@ -562,6 +586,48 @@ struct ProvenanceExportTests {
             #expect(receipt.signingResult?.status == .signed)
             let creators = await probe.creators
             #expect(creators == ["Jane Doe"])
+        }
+
+        @Test("Image export fails when C2PA signing cannot prove intact read-back verification")
+        func c2paSigningRequiresIntactReadbackVerification() async throws {
+            let (cgImage, _) = TestImageFactory.solidColorImage(
+                color: CGColor(red: 0.1, green: 0.6, blue: 0.8, alpha: 1),
+                size: CGSize(width: 32, height: 32)
+            )
+            let tmp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("prov-unverified-signing-\(UUID().uuidString).jpg")
+            let destData = NSMutableData()
+            let dest = try #require(CGImageDestinationCreateWithData(
+                destData, "public.jpeg" as CFString, 1, nil
+            ))
+            CGImageDestinationAddImage(dest, cgImage, nil)
+            #expect(CGImageDestinationFinalize(dest))
+            try (destData as Data).write(to: tmp)
+            defer { try? FileManager.default.removeItem(at: tmp) }
+
+            var rights = RightsMetadata()
+            rights.creator = "Jane Doe"
+            let provenance = ProvenanceExportOptions(
+                rights: rights,
+                privacyProfile: .preserveAll,
+                includeC2PA: true,
+                userDeclaration: .none,
+                appVersion: "2.2.0-test",
+                c2paClient: UnverifiedSignedC2PAClient()
+            )
+
+            do {
+                _ = try await WatermarkEngine.shared.process(
+                    sourceURL: tmp,
+                    config: WatermarkConfiguration(),
+                    provenance: provenance
+                )
+                Issue.record("Expected export to fail when C2PA signing lacks intact read-back verification.")
+            } catch PipelineError.c2paSignatureVerificationFailed {
+                // Expected: requested C2PA image signing must not silently pass unsigned/unverified output.
+            } catch {
+                Issue.record("Unexpected error: \(error)")
+            }
         }
 
         @Test("Photo export WITHOUT provenance returns nil receipt (backward compat)")

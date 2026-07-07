@@ -1,6 +1,5 @@
 import CoreImage
 import SwiftUI
-import WatermarkCore
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -9,9 +8,10 @@ import AppKit
 
 /// Text watermark input view — editable text field bound to the first watermark layer.
 ///
-/// Uses `Menu`-based font and color pickers (not `ColorPicker` or sheet-based
-/// `FontPickerView`) because those system components crash in the Photos
-/// editing extension's `UIHostingController` hosting context.
+/// The font selector uses the sheet-based `FontPickerView` so each typeface
+/// previews in its OWN font (a `Menu` routes labels through UIKit and strips the
+/// custom face, flattening every name to San Francisco). The color selector
+/// stays `Menu`-based for a compact preset list.
 public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observable>: View {
     @Bindable var viewModel: ViewModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -53,29 +53,12 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
                 Divider()
                     .padding(.leading, 52)
 
-                // Font picker — Menu-based for compact extension-safe presentation.
+                // Font picker — sheet-based so each typeface previews in its own font.
                 HStack {
                     Text("Font")
                         .markepiTypography(.controlLabel)
                     Spacer()
-                    Menu {
-                        Button("System (San Francisco)") {
-                            updateText(fontNameChange: .some(nil), createIfMissing: false)
-                        }
-                        ForEach(FontCatalog.all) { font in
-                            Button(font.displayName) {
-                                updateText(fontNameChange: .some(font.postScriptName), createIfMissing: false)
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(currentFontDisplayName)
-                                .markepiTypography(.value)
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    FontPickerView(selectedFontID: fontIDBinding)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -178,12 +161,19 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
         return current == color
     }
 
-    private var currentFontDisplayName: String {
-        guard let fontName = currentTextInput?.fontName,
-              let font = FontCatalog.font(byPostScriptName: fontName) else {
-            return "System"
-        }
-        return font.displayName
+    /// Bridges `FontPickerView`'s font-ID selection to the layer's stored
+    /// PostScript name, updating the active text layer (never a hardcoded index).
+    private var fontIDBinding: Binding<String?> {
+        Binding(
+            get: {
+                guard let fontName = currentTextInput?.fontName else { return nil }
+                return FontCatalog.font(byPostScriptName: fontName)?.id
+            },
+            set: { newFontID in
+                let postScriptName = newFontID.flatMap { FontCatalog.font(byID: $0)?.postScriptName }
+                updateText(fontNameChange: .some(postScriptName), createIfMissing: false)
+            }
+        )
     }
 
     // MARK: - Text Layer Selector

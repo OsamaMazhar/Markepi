@@ -4,7 +4,6 @@ import SwiftUI
 import PencilKit
 import UIKit
 #endif
-import WatermarkCore
 
 /// Full-screen signature capture view with a PencilKit canvas wrapped
 /// in UIViewRepresentable for finger/Apple Pencil drawing.
@@ -19,7 +18,6 @@ import WatermarkCore
 public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable>: View {
     @Bindable var viewModel: ViewModel
     @State private var drawing = PKDrawing()
-    @State private var inkColor: Color = .black
     @State private var showCaptureSheet = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -109,13 +107,21 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
                         .frame(width: 24)
                     Text("Signature")
                         .markepiTypography(.controlLabel)
-                    Spacer()
+                        // Never let the label break mid-word into "Sig-na-ture"
+                        // when the row is tight (narrow landscape panel); keep it
+                        // one line and let the Spacer absorb the slack instead.
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                    Spacer(minLength: 8)
                     Button {
                         startEditingSignature()
                     } label: {
                         Label("Edit", systemImage: "pencil")
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                     .buttonStyle(.markepiPrimary())
+                    .fixedSize(horizontal: true, vertical: false)
 
                     Button {
                         withAnimation(.easeOut(duration: 0.25)) {
@@ -123,8 +129,11 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
                         }
                     } label: {
                         Text("Remove")
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                     .buttonStyle(.markepiDestructive())
+                    .fixedSize(horizontal: true, vertical: false)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -199,7 +208,6 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
 
     private func startNewSignature() {
         drawing = PKDrawing()
-        inkColor = .black
         showCaptureSheet = true
     }
 
@@ -212,9 +220,6 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
         } else {
             drawing = PKDrawing()
         }
-        if let cg = signatureInput?.inkColor {
-            inkColor = Color(cgColor: cg)
-        }
         showCaptureSheet = true
     }
 
@@ -224,12 +229,19 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
         NavigationStack {
             SignatureCanvasView(
                 drawing: $drawing,
-                inkColor: UIColor(inkColor),
+                // Always draw in black on a white "paper" canvas so the
+                // signature is visible while drawing. The rendered watermark
+                // color is independent of this: SignatureRenderer re-tints the
+                // stroke *alpha* with the layer's `inkColor`, so the drawing
+                // color here never reaches the output. (Previously this used
+                // the same color as the saved inkColor — coupling the two made
+                // a white default render as invisible white-on-light strokes.)
+                inkColor: .black,
                 // Capture at a fixed reference width so geometry is consistent;
                 // display thickness is a live, post-capture render multiplier.
                 strokeWidth: SignatureRenderer.referenceStrokeWidth
             )
-            .background(Color(uiColor: .systemBackground))
+            .background(Color.white)
             .navigationTitle("Draw Signature")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -242,12 +254,14 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
                         let strokeData = drawing.dataRepresentation()
-                        // Preserve the current thickness when editing; default
-                        // to the reference width for a brand-new signature.
-                        let width = signatureInput?.strokeWidth ?? SignatureRenderer.referenceStrokeWidth
+                        // Preserve the current thickness and ink color when
+                        // editing; default a brand-new signature to fixed
+                        // black ink, independent of the current appearance.
+                        let width = signatureInput?.strokeWidth ?? 5
+                        let inkColor = signatureInput?.inkColor ?? CGColor(gray: 0, alpha: 1)
                         viewModel.addSignatureLayer(
                             strokeData: strokeData,
-                            inkColor: Self.cgColor(from: inkColor),
+                            inkColor: inkColor,
                             strokeWidth: width
                         )
                         drawing = PKDrawing()
@@ -275,11 +289,6 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
                         Text("Clear")
                     }
                     .disabled(drawing.strokes.isEmpty)
-
-                    Spacer()
-
-                    ColorPicker("", selection: $inkColor, supportsOpacity: false)
-                        .labelsHidden()
                 }
             }
         }
@@ -312,6 +321,7 @@ struct SignatureCanvasView: UIViewRepresentable {
         canvas.tool = PKInkingTool(.pen, color: inkColor, width: strokeWidth)
         canvas.backgroundColor = .clear
         canvas.isOpaque = false
+        canvas.overrideUserInterfaceStyle = .light
         canvas.delegate = context.coordinator
         return canvas
     }

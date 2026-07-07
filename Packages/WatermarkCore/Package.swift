@@ -24,7 +24,8 @@ let package = Package(
             ],
             path: "Sources/WatermarkCore",
             resources: [
-                .process("Resources/Fonts")
+                .process("Resources/Fonts"),
+                .process("Resources/Media.xcassets")
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v6)

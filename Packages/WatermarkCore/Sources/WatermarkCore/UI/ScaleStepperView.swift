@@ -1,5 +1,4 @@
 import SwiftUI
-import WatermarkCore
 
 /// Scale stepper control for adjusting watermark size.
 ///

@@ -114,10 +114,10 @@ public struct BatchItemDetailSheet: View {
         HStack(spacing: 14) {
             thumbnailView
                 .frame(width: 60, height: 60)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: MarkepiRadius.lg, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MarkepiRadius.lg, style: .continuous)
+                        .strokeBorder(MarkepiColors.controlStroke, lineWidth: 0.5)
                 }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -137,10 +137,10 @@ public struct BatchItemDetailSheet: View {
         }
         .padding(16)
         .markepiGlass(
-            shape: RoundedRectangle(cornerRadius: 16, style: .continuous),
+            shape: RoundedRectangle(cornerRadius: MarkepiRadius.xl, style: .continuous),
             isEnabled: !reduceTransparency
         )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MarkepiRadius.xl, style: .continuous))
         .padding(.horizontal, 16)
         .accessibilityElement(children: .combine)
     }
@@ -152,7 +152,7 @@ public struct BatchItemDetailSheet: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         } else {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: MarkepiRadius.lg, style: .continuous)
                 .fill(Color(.systemGray5))
                 .overlay {
                     Image(systemName: "photo")

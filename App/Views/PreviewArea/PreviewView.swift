@@ -51,7 +51,7 @@ struct PreviewView: View {
                         }
                     }
                     .overlay {
-                        if viewModel.isGeneratingPreview {
+                        if viewModel.isGeneratingPreview && viewModel.previewImage == nil {
                             Color.black.opacity(0.4)
                             ProgressView()
                                 .tint(.white)

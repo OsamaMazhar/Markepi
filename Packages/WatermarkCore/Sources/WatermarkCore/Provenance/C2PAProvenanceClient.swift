@@ -103,9 +103,10 @@ public struct C2PAManifestRequest: Sendable {
 
 /// Result of a C2PA signing attempt — carried on the export receipt.
 ///
-/// `status` is the honest outcome: `.signed` only when a manifest was actually
-/// attached, `.notSigned` when signing is disabled (noop), `.notSupported`
-/// when the format/path cannot carry C2PA (e.g. some video containers).
+/// `status` is the honest outcome: `.signed` only when a manifest was attached
+/// and read back with an intact claim signature, `.notSigned` when signing is
+/// disabled (noop), `.notSupported` when the format/path cannot carry C2PA
+/// (e.g. some video containers).
 ///
 /// After signing, `verification` is populated by reading the manifest back and
 /// parsing its `validation_status` entries so the receipt can report whether the
@@ -223,12 +224,9 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
     }
 
     public func readSourceSummary(from url: URL) async -> SourceProvenanceAnalyzer.C2PASummary? {
-        do {
+        try? await runC2PAWork {
             let manifestJSON = try C2PA.readFile(at: url)
             return parseManifestSummary(manifestJSON)
-        } catch {
-            // No manifest or unreadable — report none honestly.
-            return nil
         }
     }
 
@@ -238,92 +236,126 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
         manifest: C2PAManifestRequest,
         identity: C2PASigningIdentity
     ) async throws -> C2PASigningResult {
-        guard let secKey = identity.secKey else {
-            return C2PASigningResult(
-                status: .notSigned,
-                identityType: identity.type,
-                displayName: identity.displayName,
-                warnings: ["Markepi could not create or load a local device signing key. Try signing again on your iPhone in Markepi."]
-            )
-        }
-
-        // Generate or fetch the cached self-signed cert chain for this key.
-        let certPEM = try certChain(for: secKey, identity: identity)
-
-        // Build the manifest JSON from the request.
-        let manifestJSON = buildManifestJSON(manifest)
-
-        // Callback-based signer: uses SecKeyCreateSignature so SE keys work.
-        let signer = try Signer(
-            algorithm: .es256,
-            certificateChainPEM: certPEM,
-            tsa: nil
-        ) { dataToSign in
-            var error: Unmanaged<CFError>?
-            guard let signature = SecKeyCreateSignature(
-                secKey,
-                .ecdsaSignatureMessageX962SHA256,
-                dataToSign as CFData,
-                &error
-            ) else {
-                throw (error?.takeRetainedValue() as Error?) ?? C2PASignError.signingFailed
-            }
-            return signature as Data
-        }
-
-        let builder = try Builder(manifestJSON: manifestJSON)
-        var warnings: [String] = []
-        do {
-            try addSourceIngredient(source, to: builder)
-        } catch {
-            warnings.append("Source ingredient could not be attached to the Content Credentials manifest.")
-        }
-
-        let signedURL = signedTemporaryURL(for: outputURL)
-        do {
-            let format = c2paFormat(for: outputURL)
-            do {
-                // Sign the already-rendered export, not the original source.
-                // Builder.sign reads from `source` and writes a complete signed
-                // file to `destination`, so using the original input here would
-                // replace the user's edited/watermarked pixels.
-                let renderedStream = try Stream(readFrom: outputURL)
-                let signedStream = try Stream(writeTo: signedURL)
-                _ = try builder.sign(
-                    format: format,
-                    source: renderedStream,
-                    destination: signedStream,
-                    signer: signer
+        try await runC2PAWork {
+            guard let secKey = identity.secKey else {
+                return C2PASigningResult(
+                    status: .notSigned,
+                    identityType: identity.type,
+                    displayName: identity.displayName,
+                    warnings: ["Markepi could not create or load a local device signing key. Try signing again on your iPhone in Markepi."]
                 )
             }
-            try replaceOutput(at: outputURL, with: signedURL)
-        } catch {
-            try? FileManager.default.removeItem(at: signedURL)
-            throw error
+
+            // Generate or fetch the cached self-signed cert chain for this key.
+            let certPEM = try certChain(for: secKey, identity: identity)
+
+            // Build the manifest JSON from the request.
+            let manifestJSON = buildManifestJSON(manifest)
+
+            // Callback-based signer: uses SecKeyCreateSignature so SE keys work.
+            let signer = try Signer(
+                algorithm: .es256,
+                certificateChainPEM: certPEM,
+                tsa: nil
+            ) { dataToSign in
+                var error: Unmanaged<CFError>?
+                guard let signature = SecKeyCreateSignature(
+                    secKey,
+                    .ecdsaSignatureMessageX962SHA256,
+                    dataToSign as CFData,
+                    &error
+                ) else {
+                    throw (error?.takeRetainedValue() as Error?) ?? C2PASignError.signingFailed
+                }
+                return signature as Data
+            }
+
+            let builder = try Builder(manifestJSON: manifestJSON)
+            var warnings: [String] = []
+            do {
+                try addSourceIngredient(source, to: builder)
+            } catch {
+                warnings.append("Source ingredient could not be attached to the Content Credentials manifest.")
+            }
+
+            let signedURL = signedTemporaryURL(for: outputURL)
+            let verification: C2PAVerificationResult
+            do {
+                let format = c2paFormat(for: outputURL)
+                do {
+                    // Sign the already-rendered export, not the original source.
+                    // Builder.sign reads from `source` and writes a complete signed
+                    // file to `destination`, so using the original input here would
+                    // replace the user's edited/watermarked pixels.
+                    let renderedStream = try Stream(readFrom: outputURL)
+                    let signedStream = try Stream(writeTo: signedURL)
+                    _ = try builder.sign(
+                        format: format,
+                        source: renderedStream,
+                        destination: signedStream,
+                        signer: signer
+                    )
+                }
+                verification = try verifiedSignedExport(at: signedURL)
+                try replaceOutput(at: outputURL, with: signedURL)
+            } catch {
+                try? FileManager.default.removeItem(at: signedURL)
+                throw error
+            }
+
+            return C2PASigningResult(
+                status: .signed,
+                identityType: identity.type,
+                displayName: identity.displayName,
+                warnings: warnings,
+                verification: verification
+            )
         }
-
-        // Read back the manifest and verify signature integrity.
-        let verification = await verifyExport(at: outputURL)
-
-        return C2PASigningResult(
-            status: .signed,
-            identityType: identity.type,
-            displayName: identity.displayName,
-            warnings: warnings,
-            verification: verification
-        )
     }
 
     public func verifyExport(at url: URL) async -> C2PAVerificationResult? {
-        do {
+        try? await runC2PAWork {
             let json = try C2PA.readFile(at: url)
             return parseVerification(from: json)
-        } catch {
-            return nil
         }
     }
 
     // MARK: - Private
+
+    /// `c2pa-swift` calls into Rust code that can park/wait internally. Run the
+    /// synchronous concrete library calls on an explicit utility-QoS queue so
+    /// app UI/export tasks do not perform Rust thread parking at user-initiated
+    /// priority.
+    private func runC2PAWork<T: Sendable>(
+        _ operation: @escaping @Sendable () throws -> T
+    ) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            Self.c2paWorkQueue.async {
+                do {
+                    continuation.resume(returning: try operation())
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private static let c2paWorkQueue = DispatchQueue(
+        label: "com.osamamazhar.markepi.c2pa-work",
+        qos: .utility,
+        attributes: .concurrent
+    )
+
+    private func verifiedSignedExport(at url: URL) throws -> C2PAVerificationResult {
+        let json = try C2PA.readFile(at: url)
+        guard let verification = parseVerification(from: json) else {
+            throw C2PASignError.readbackVerificationFailed
+        }
+        guard verification.signatureIsIntact else {
+            throw C2PASignError.signatureNotIntact(verification.items)
+        }
+        return verification
+    }
 
     private func certChain(for secKey: SecKey, identity: C2PASigningIdentity) throws -> String {
         let publicKey = SecKeyCopyPublicKey(secKey)!
@@ -491,7 +523,10 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
         else { return nil }
 
         let statusItems = validationStatusItems(in: root)
+            + validationResultStatusItems(in: root, buckets: ["failure", "informational"])
+        let successItems = validationResultStatusItems(in: root, buckets: ["success"])
         var items: [C2PAVerificationItem] = []
+        var seenItems = Set<String>()
 
         // Look for signature-related validation codes.
         var signatureIsIntact = false
@@ -504,19 +539,17 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
             let code = item["code"] as? String ?? ""
             let explanation = item["explanation"] as? String ?? ""
             if !code.isEmpty {
-                items.append(C2PAVerificationItem(code: code, explanation: explanation))
+                let itemID = "\(code)|\(explanation)"
+                if seenItems.insert(itemID).inserted {
+                    items.append(C2PAVerificationItem(code: code, explanation: explanation))
+                }
             }
             if sigCodes.contains(code) { signatureIsIntact = true }
         }
 
-        // Also check validation_results.activeManifest.success for sig validation.
-        if let results = root["validation_results"] as? [String: Any],
-           let active = results["activeManifest"] as? [String: Any],
-           let successes = active["success"] as? [[String: Any]] {
-            for s in successes {
-                let code = s["code"] as? String ?? ""
-                if sigCodes.contains(code) { signatureIsIntact = true }
-            }
+        for item in successItems {
+            let code = item["code"] as? String ?? ""
+            if sigCodes.contains(code) { signatureIsIntact = true }
         }
 
         return C2PAVerificationResult(signatureIsIntact: signatureIsIntact, items: items)
@@ -591,9 +624,53 @@ public struct C2PASwiftProvenanceClient: C2PAProvenanceClient {
         }
         return []
     }
+
+    private func validationResultStatusItems(in root: [String: Any], buckets: [String]) -> [[String: Any]] {
+        guard let results = root["validation_results"] as? [String: Any] else { return [] }
+        var items: [[String: Any]] = []
+
+        func append(from statusCodes: [String: Any]) {
+            for bucket in buckets {
+                items += statusCodes[bucket] as? [[String: Any]] ?? []
+            }
+        }
+
+        if let active = results["activeManifest"] as? [String: Any] {
+            append(from: active)
+        }
+
+        if let deltas = results["ingredientDeltas"] as? [[String: Any]] {
+            for delta in deltas {
+                if let validationDeltas = delta["validationDeltas"] as? [String: Any] {
+                    append(from: validationDeltas)
+                }
+            }
+        }
+
+        return items
+    }
 }
 
-private enum C2PASignError: Error { case signingFailed }
+private enum C2PASignError: Error, LocalizedError, Sendable {
+    case signingFailed
+    case readbackVerificationFailed
+    case signatureNotIntact([C2PAVerificationItem])
+
+    var errorDescription: String? {
+        switch self {
+        case .signingFailed:
+            return "Content Credentials signing failed."
+        case .readbackVerificationFailed:
+            return "Content Credentials signing failed because Markepi could not verify the signed image after export."
+        case .signatureNotIntact(let items):
+            let codes = items.map(\.code).filter { !$0.isEmpty }.joined(separator: ", ")
+            if codes.isEmpty {
+                return "Content Credentials signing failed because the exported image signature could not be verified."
+            }
+            return "Content Credentials signing failed verification: \(codes)."
+        }
+    }
+}
 
 /// Thread-safe cert cache so the Sendable `C2PASwiftProvenanceClient` can cache
 /// generated cert chains across exports without NSCache's non-Sendable limitation.

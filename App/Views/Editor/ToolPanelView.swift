@@ -12,77 +12,56 @@ struct ToolPanelView: View {
     @Bindable var viewModel: WatermarkViewModel
     var onClose: () -> Void
 
+    /// Tallest the panel grows before its contents scroll. Lets short panels
+    /// (e.g. logo/signature before a layer exists) size to their content
+    /// instead of stretching to fill the dock or side rail.
+    var maxHeight: CGFloat = 420
+
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Output-format state (mirrors the previous ControlsView behaviour).
     @State private var showHDRLossWarning = false
 
-    /// Live downward drag offset for the swipe-to-dismiss gesture.
-    @State private var dragOffset: CGFloat = 0
+    /// Measured height of the scroll content, used to shrink the panel to fit
+    /// its content (capped by `maxHeight`). Zero until the first layout pass.
+    @State private var contentHeight: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            // Grab handle + title row: swiping down here dismisses the panel.
-            // Attaching the gesture only to this region keeps it from fighting
-            // the inner ScrollView and the sliders/steppers in the content.
-            VStack(spacing: 0) {
-                grabber
-                header
-            }
-            .contentShape(Rectangle())
-            .gesture(dismissDrag)
+            header
 
             ScrollView {
                 VStack(spacing: 16) {
                     content
                 }
                 .padding(.vertical, 16)
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: PanelContentHeightKey.self, value: proxy.size.height)
+                    }
+                }
             }
+            // Size to the content so a short panel (logo/signature with no
+            // layer yet) stays compact; only grow up to `maxHeight`, beyond
+            // which the scroll view takes over. ScrollView is otherwise greedy
+            // and would stretch every panel to fill the dock or side rail.
+            .frame(maxHeight: contentHeight == 0 ? maxHeight : min(contentHeight, maxHeight))
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
             .scrollDismissesKeyboard(.interactively)
         }
         .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
+            RoundedRectangle(cornerRadius: MarkepiRadius.xxxxl, style: .continuous)
                 .fill(.regularMaterial)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MarkepiRadius.xxxxl, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: MarkepiRadius.xxxxl, style: .continuous)
+                .strokeBorder(MarkepiColors.panelStroke, lineWidth: 0.5)
         }
         .shadow(color: .black.opacity(0.18), radius: 20, y: 8)
-        .offset(y: dragOffset)
         .task(id: tool) { syncActiveLayer() }
-    }
-
-    /// Centered grab handle hinting that the panel can be swiped down to close.
-    private var grabber: some View {
-        Capsule()
-            .fill(Color.secondary.opacity(0.4))
-            .frame(width: 40, height: 5)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 8)
-            .padding(.bottom, 2)
-            .accessibilityHidden(true)
-    }
-
-    /// Swipe-down-to-dismiss. Follows the finger downward and closes once the
-    /// drag (or its predicted end) passes a comfortable threshold.
-    private var dismissDrag: some Gesture {
-        DragGesture(minimumDistance: 8)
-            .onChanged { value in
-                dragOffset = max(0, value.translation.height)
-            }
-            .onEnded { value in
-                let shouldClose = value.translation.height > 80
-                    || value.predictedEndTranslation.height > 200
-                withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.85)) {
-                    dragOffset = 0
-                }
-                if shouldClose { onClose() }
-            }
+        .onPreferenceChange(PanelContentHeightKey.self) { contentHeight = $0 }
     }
 
     /// Points `activeLayerIndex` at the layer this tool edits, so the shared
@@ -151,6 +130,8 @@ struct ToolPanelView: View {
                     positionRow
                     Divider().padding(.leading, 16)
                     ScaleStepperView(viewModel: viewModel)
+                    Divider().padding(.leading, 16)
+                    RotationControlView(viewModel: viewModel)
                 }
             }
         case .signature:
@@ -367,10 +348,23 @@ struct EditorCard<Content: View>: View {
             content()
         }
         .markepiGlass(
-            shape: RoundedRectangle(cornerRadius: 12, style: .continuous),
+            shape: RoundedRectangle(cornerRadius: MarkepiRadius.lg, style: .continuous),
             isEnabled: !reduceTransparency
         )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MarkepiRadius.lg, style: .continuous))
         .padding(.horizontal, 16)
+    }
+}
+
+// MARK: - Panel content-height measurement
+
+/// Reports the natural height of the tool panel's scroll content so the panel
+/// can fit its content (short for a single button, tall for a full controls
+/// list) instead of always stretching to its `maxHeight`.
+private struct PanelContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

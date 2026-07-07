@@ -139,10 +139,13 @@ public actor BatchProcessor {
                     try? await Task.sleep(for: .milliseconds(500))
 
                 case .photo, .livePhoto, .unknown:
+                    // Batch items are real exports: existing source Content
+                    // Credentials are preserved via the ingredient chain.
                     result = try await engine.process(
                         sourceURL: item.sourceURL,
                         config: config,
-                        provenance: provenance
+                        provenance: provenance,
+                        preserveSourceCredentials: true
                     )
                 }
 

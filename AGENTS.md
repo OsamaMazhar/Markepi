@@ -120,7 +120,22 @@ An iOS app that lets users add watermarks or white-frame metadata overlays to ph
 <!-- GSD:conventions-start source:CONVENTIONS.md -->
 ## Conventions
 
-Conventions not yet established. Will populate as patterns emerge during development.
+### Design System (shared package)
+- **Token home:** `Packages/WatermarkCore/Sources/WatermarkCore/DesignSystem/` — shared with the Share Extension.
+- **Colors:** `MarkepiColors` uses `UIColor` dynamic providers (no asset catalog needed). Two buckets: canvas (never flips: `canvasBackground = .black`, `canvasOverlayText = .white`) and chrome (flips via `traits.userInterfaceStyle`).
+- **Spacing / Radius / Sizing:** Semantic enums (`MarkepiSpacing`, `MarkepiRadius`, `MarkepiSizing`) in the shared package. Use these for recurring values; one-shot isolated literals can stay inline.
+- **Typography:** `MarkepiTypography` enum with semantic cases (`sectionHeader`, `controlLabel`, `value`, `metadata`, `pillLabel`, `largeTitle`, `glyph`). Apply via `.markepiTypography(.case)` — no raw `.font(.system(size:))` on text.
+
+### Appearance Preference
+- `AppearancePreference` enum (`.system`, `.light`, `.dark`) with `colorScheme: ColorScheme?` mapping.
+- Stored via `@AppStorage("appearancePreference")` at the app root (`WatermarkApp.swift`).
+- Consumed with `.preferredColorScheme(appearance.colorScheme)`.
+
+### Landscape Side-Rail Layout
+- Landscape trigger: `width > height && height >= 320` — driven by aspect ratio, not device identity, so it applies to iPhone **and** iPad landscape alike.
+- Size read via `onGeometryChange(for: CGSize.self)` — prefer over `GeometryReader`.
+- Portrait (phone + iPad): bottom-dock chrome. Landscape (phone + iPad): `HStack` with canvas column (left) + right-edge rail. The rail collapses to a vertical tool dock when no panel is open (photo fills the rest) and grows a tool-panel column beside the dock when a tool is active.
+- Never persist layout state — drive everything from live container size.
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->

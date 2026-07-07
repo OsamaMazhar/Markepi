@@ -1,8 +1,5 @@
 import Foundation
 import ImageIO
-#if canImport(UIKit)
-import UIKit
-#endif
 
 /// Extracts device model information from EXIF metadata and formats
 /// attribution text for the white frame overlay.
@@ -48,12 +45,35 @@ public struct DeviceMetadataProvider {
             return lensModel
         }
 
-        // 3. Fallback to current device model
-        #if canImport(UIKit)
-        return UIDevice.current.model  // "iPhone", "iPad"
-        #else
-        return "Unknown"  // macOS testing fallback
-        #endif
+        // 3. Fallback to the current device's generic model name.
+        //
+        // Derived from the hardware identifier via `uname` rather than
+        // `UIDevice.current.model`: this method runs off the main actor during
+        // rendering, and `UIDevice` is main-actor isolated. The hardware
+        // identifier is thread-safe and gives us the same "iPhone"/"iPad"
+        // granularity the white-frame attribution needs.
+        return Self.hardwareModelName()
+    }
+
+    /// The generic device family ("iPhone" / "iPad" / "iPod touch") derived from
+    /// the hardware identifier, or "Unknown" off-device (e.g. macOS tests).
+    /// Thread-safe and free of any main-actor-isolated UIKit access.
+    private static func hardwareModelName() -> String {
+        let identifier: String
+        if let simulated = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] {
+            identifier = simulated
+        } else {
+            var sysinfo = utsname()
+            uname(&sysinfo)
+            identifier = withUnsafeBytes(of: &sysinfo.machine) { raw in
+                String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
+            }
+        }
+
+        if identifier.hasPrefix("iPad") { return "iPad" }
+        if identifier.hasPrefix("iPod") { return "iPod touch" }
+        if identifier.hasPrefix("iPhone") { return "iPhone" }
+        return "Unknown"
     }
 
     /// Formats the attribution text for the white frame overlay.

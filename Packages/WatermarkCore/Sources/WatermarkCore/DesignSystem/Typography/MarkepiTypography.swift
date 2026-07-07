@@ -27,6 +27,12 @@ public enum MarkepiTypography: CaseIterable {
     /// Pill bar segment labels (e.g., "Watermark", "Style", "Output")
     case pillLabel
 
+    /// Large hero or title text (e.g., empty-state icons, crown icons)
+    case largeTitle
+
+    /// Medium-large SF Symbol glyphs (e.g., loading overlay icon)
+    case glyph
+
     // MARK: - Font
 
     /// Returns the system font for this typography style.
@@ -46,6 +52,10 @@ public enum MarkepiTypography: CaseIterable {
             return .caption
         case .pillLabel:
             return .headline.weight(.medium)
+        case .largeTitle:
+            return .largeTitle
+        case .glyph:
+            return .title2.weight(.semibold)
         }
     }
 
@@ -66,6 +76,10 @@ public enum MarkepiTypography: CaseIterable {
         case .metadata:
             return .secondary
         case .pillLabel:
+            return .primary
+        case .largeTitle:
+            return .primary
+        case .glyph:
             return .primary
         }
     }

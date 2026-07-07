@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		151 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 150 /* AppIcon.icon */; };
 		001 /* AsyncButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101 /* AsyncButton.swift */; };
 		002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102 /* ContentView.swift */; };
 		004 /* ErrorAlertModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104 /* ErrorAlertModifier.swift */; };
@@ -20,7 +19,9 @@
 		012 /* ScaleLabelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112 /* ScaleLabelView.swift */; };
 		013 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 600 /* ShareViewController.swift */; };
 		014 /* ShareExtensionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 601 /* ShareExtensionViewModel.swift */; };
-		01A /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 620 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		01A /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 620 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		4AEE8FD92FF5AB270058060A /* Markepi.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 4AEE8FD82FF5AB270058060A /* Markepi.storekit */; };
+		4AEE8FDA2FF5AB270058060A /* Markepi.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 4AEE8FD82FF5AB270058060A /* Markepi.storekit */; };
 		4AF4A26C2FE9816900C77DCC /* WatermarkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 30E /* WatermarkCore */; };
 		723 /* TemplateListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F /* TemplateListView.swift */; };
 		724 /* TemplateRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 720 /* TemplateRowView.swift */; };
@@ -29,48 +30,43 @@
 		727 /* BatchProgressOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 730 /* BatchProgressOverlay.swift */; };
 		728 /* BatchItemConfigProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 731 /* BatchItemConfigProxy.swift */; };
 		729 /* BatchItemDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 732 /* BatchItemDetailSheet.swift */; };
-		74A /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74B /* PaywallView.swift */; };
+		733 /* LaunchAnimationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 734 /* LaunchAnimationView.swift */; };
+		74A /* Premium/PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74B /* Premium/PaywallView.swift */; };
 		7B0 /* EditorTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A0 /* EditorTool.swift */; };
 		7B1 /* EditorToolDock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1 /* EditorToolDock.swift */; };
 		7B2 /* ToolPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2 /* ToolPanelView.swift */; };
 		7B3 /* ExportControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3 /* ExportControls.swift */; };
+		B01 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		409 /* Embed App Extensions */ = {
+		409 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				01A /* ShareExtension.appex in Embed App Extensions */,
+				01A /* ShareExtension.appex in Embed Foundation Extensions */,
 			);
-			name = "Embed App Extensions";
+			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		100 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		150 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		101 /* AsyncButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncButton.swift; sourceTree = "<group>"; };
 		102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		103 /* ControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlsView.swift; sourceTree = "<group>"; };
 		104 /* ErrorAlertModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorAlertModifier.swift; sourceTree = "<group>"; };
 		105 /* PhotoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoItem.swift; sourceTree = "<group>"; };
-		106 /* PositionGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PositionGridView.swift; sourceTree = "<group>"; };
 		107 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
-		108 /* ScaleStepperView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleStepperView.swift; sourceTree = "<group>"; };
-		10A /* TextWatermarkInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextWatermarkInputView.swift; sourceTree = "<group>"; };
 		10B /* ThumbnailStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailStripView.swift; sourceTree = "<group>"; };
 		10C /* WatermarkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkApp.swift; sourceTree = "<group>"; };
 		10D /* WatermarkViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkViewModel.swift; sourceTree = "<group>"; };
 		10E /* WatermarkApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WatermarkApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		10F /* LogoPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogoPickerView.swift; sourceTree = "<group>"; };
-		110 /* LayerListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerListView.swift; sourceTree = "<group>"; };
-		111 /* WhiteFrameToggleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhiteFrameToggleView.swift; sourceTree = "<group>"; };
 		112 /* ScaleLabelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleLabelView.swift; sourceTree = "<group>"; };
 		20E /* WatermarkCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = WatermarkCore; path = Packages/WatermarkCore; sourceTree = SOURCE_ROOT; };
+		4AEE8FD82FF5AB270058060A /* Markepi.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Markepi.storekit; sourceTree = "<group>"; };
 		600 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		601 /* ShareExtensionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtensionViewModel.swift; sourceTree = "<group>"; };
 		604 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -83,11 +79,13 @@
 		730 /* BatchProgressOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchProgressOverlay.swift; sourceTree = "<group>"; };
 		731 /* BatchItemConfigProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchItemConfigProxy.swift; sourceTree = "<group>"; };
 		732 /* BatchItemDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchItemDetailSheet.swift; sourceTree = "<group>"; };
-		74B /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Premium/PaywallView.swift; sourceTree = "<group>"; };
+		734 /* LaunchAnimationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAnimationView.swift; sourceTree = "<group>"; };
+		74B /* Premium/PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Premium/PaywallView.swift; sourceTree = "<group>"; };
 		7A0 /* EditorTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTool.swift; sourceTree = "<group>"; };
 		7A1 /* EditorToolDock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorToolDock.swift; sourceTree = "<group>"; };
 		7A2 /* ToolPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolPanelView.swift; sourceTree = "<group>"; };
 		7A3 /* ExportControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportControls.swift; sourceTree = "<group>"; };
+		B00 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -113,6 +111,7 @@
 		300 = {
 			isa = PBXGroup;
 			children = (
+				4AEE8FD82FF5AB270058060A /* Markepi.storekit */,
 				301 /* App */,
 				304 /* ShareExtension */,
 				302,
@@ -124,7 +123,7 @@
 			isa = PBXGroup;
 			children = (
 				10C /* WatermarkApp.swift */,
-				150 /* AppIcon.icon */,
+				B00 /* Assets.xcassets */,
 				311 /* ViewModels */,
 				312 /* Models */,
 				313 /* Views */,
@@ -180,11 +179,9 @@
 			isa = PBXGroup;
 			children = (
 				102 /* ContentView.swift */,
-				74B /* PaywallView.swift */,
+				74B /* Premium/PaywallView.swift */,
 				7A9 /* Editor */,
 				331 /* PreviewArea */,
-				332 /* Controls */,
-				333 /* Share */,
 				334 /* Navigation */,
 				335 /* Common */,
 				336 /* Templates */,
@@ -202,27 +199,6 @@
 			path = PreviewArea;
 			sourceTree = "<group>";
 		};
-		332 /* Controls */ = {
-			isa = PBXGroup;
-			children = (
-				103 /* ControlsView.swift */,
-				10A /* TextWatermarkInputView.swift */,
-				106 /* PositionGridView.swift */,
-				108 /* ScaleStepperView.swift */,
-				10F /* LogoPickerView.swift */,
-				110 /* LayerListView.swift */,
-				111 /* WhiteFrameToggleView.swift */,
-			);
-			path = Controls;
-			sourceTree = "<group>";
-		};
-		333 /* Share */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Share;
-			sourceTree = "<group>";
-		};
 		334 /* Navigation */ = {
 			isa = PBXGroup;
 			children = (
@@ -236,6 +212,7 @@
 			children = (
 				101 /* AsyncButton.swift */,
 				104 /* ErrorAlertModifier.swift */,
+				734 /* LaunchAnimationView.swift */,
 			);
 			path = Common;
 			sourceTree = "<group>";
@@ -282,7 +259,8 @@
 				401 /* Sources */,
 				200 /* Frameworks */,
 				402 /* Resources */,
-				409 /* Embed App Extensions */,
+				409 /* Embed Foundation Extensions */,
+				C2D0001 /* Prepare C2PAC for Archive */,
 			);
 			buildRules = (
 			);
@@ -324,11 +302,16 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2600;
-				LastUpgradeCheck = 2600;
+				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 					400 = {
 						CreatedOnToolsVersion = 26.0;
 						LastSwiftMigration = 2600;
+						SystemCapabilities = {
+							com.apple.InAppPurchase = {
+								enabled = 1;
+							};
+						};
 					};
 					410 = {
 						CreatedOnToolsVersion = 26.0;
@@ -363,7 +346,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				151 /* AppIcon.icon in Resources */,
+				4AEE8FD92FF5AB270058060A /* Markepi.storekit in Resources */,
+				B01 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -371,10 +355,34 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4AEE8FDA2FF5AB270058060A /* Markepi.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		C2D0001 /* Prepare C2PAC for Archive */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)/C2PAC.framework/C2PAC",
+			);
+			name = "Prepare C2PAC for Archive";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DWARF_DSYM_FOLDER_PATH)/C2PAC.framework.dSYM",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"${ACTION}\" != \"install\" ]; then\n    exit 0\nfi\n\nC2PAC_BINARY=\"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/C2PAC.framework/C2PAC\"\nif [ ! -f \"${C2PAC_BINARY}\" ]; then\n    C2PAC_BINARY=\"$(find \"${TARGET_BUILD_DIR}\" -path \"*/C2PAC.framework/C2PAC\" -type f -print -quit)\"\nfi\n\nif [ -z \"${C2PAC_BINARY}\" ] || [ ! -f \"${C2PAC_BINARY}\" ]; then\n    echo \"warning: C2PAC.framework binary not found; skipping C2PAC archive preparation\"\n    exit 0\nfi\n\nC2PAC_FRAMEWORK_DIR=\"$(dirname \"${C2PAC_BINARY}\")\"\nC2PAC_INFO_PLIST=\"${C2PAC_FRAMEWORK_DIR}/Info.plist\"\nC2PAC_MINIMUM_OS=\"${IPHONEOS_DEPLOYMENT_TARGET:-18.0}\"\n\nif [ -f \"${C2PAC_INFO_PLIST}\" ]; then\n    /usr/libexec/PlistBuddy -c \"Set :MinimumOSVersion ${C2PAC_MINIMUM_OS}\" \"${C2PAC_INFO_PLIST}\" 2>/dev/null || \\\n    /usr/libexec/PlistBuddy -c \"Add :MinimumOSVersion string ${C2PAC_MINIMUM_OS}\" \"${C2PAC_INFO_PLIST}\"\nfi\n\nif [ \"${CODE_SIGNING_ALLOWED:-NO}\" = \"YES\" ] && [ -n \"${EXPANDED_CODE_SIGN_IDENTITY:-}\" ] && [ \"${EXPANDED_CODE_SIGN_IDENTITY}\" != \"-\" ]; then\n    /usr/bin/codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" --preserve-metadata=identifier,entitlements,flags --timestamp=none \"${C2PAC_FRAMEWORK_DIR}\"\nfi\n\nC2PAC_DSYM=\"${DWARF_DSYM_FOLDER_PATH}/C2PAC.framework.dSYM\"\nDSYMUTIL_LOG=\"${DERIVED_FILE_DIR}/C2PAC-dsymutil.log\"\nmkdir -p \"${DWARF_DSYM_FOLDER_PATH}\"\nmkdir -p \"${DERIVED_FILE_DIR}\"\nif ! xcrun dsymutil \"${C2PAC_BINARY}\" -o \"${C2PAC_DSYM}\" 2>\"${DSYMUTIL_LOG}\"; then\n    cat \"${DSYMUTIL_LOG}\"\n    exit 1\nfi\n\nif [ -n \"${ARCHIVE_PATH:-}\" ] && [ -d \"${ARCHIVE_PATH}\" ]; then\n    mkdir -p \"${ARCHIVE_PATH}/dSYMs\"\n    ditto \"${C2PAC_DSYM}\" \"${ARCHIVE_PATH}/dSYMs/C2PAC.framework.dSYM\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		401 /* Sources */ = {
@@ -389,8 +397,9 @@
 				728 /* BatchItemConfigProxy.swift in Sources */,
 				729 /* BatchItemDetailSheet.swift in Sources */,
 				001 /* AsyncButton.swift in Sources */,
+				733 /* LaunchAnimationView.swift in Sources */,
 				002 /* ContentView.swift in Sources */,
-				74A /* PaywallView.swift in Sources */,
+				74A /* Premium/PaywallView.swift in Sources */,
 				7B0 /* EditorTool.swift in Sources */,
 				7B1 /* EditorToolDock.swift in Sources */,
 				7B2 /* ToolPanelView.swift in Sources */,
@@ -426,20 +435,47 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 829378375Z;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
 					"$(inherited)",
 				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -455,14 +491,41 @@
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 829378375Z;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
@@ -476,13 +539,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 829378375Z;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Markepi;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -493,7 +556,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.osamamazhar.markepi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -508,13 +571,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 829378375Z;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Markepi;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -525,7 +588,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.osamamazhar.markepi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -539,8 +602,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 829378375Z;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -551,7 +613,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.osamamazhar.markepi.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -565,8 +627,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 829378375Z;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -577,7 +638,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.osamamazhar.markepi.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

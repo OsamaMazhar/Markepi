@@ -94,8 +94,10 @@ public struct VideoProcessor {
         // Verify audio track insertion (Pitfall 3 guard)
         let compositionAudioCount = composition.tracks(withMediaType: .audio).count
         if compositionAudioCount != audioTracks.count {
+            #if DEBUG
             os_log(.error, "WatermarkCore VideoProcessor: Audio track count mismatch — source=%{public}d, composition=%{public}d",
                    audioTracks.count, compositionAudioCount)
+            #endif
         }
 
         // Step 3: Determine video size accounting for portrait orientation
@@ -118,21 +120,29 @@ public struct VideoProcessor {
             videoSize: videoSize
         )
 
-        // Step 4: Build CALayer hierarchy via VideoLayerBuilder (D-01, D-02)
-        let (parentLayer, videoLayer) = try VideoLayerBuilder.buildLayers(
-            config: config,
-            videoSize: videoSize,
-            metadata: videoMetadata
-        )
-
-        // Step 5: Detect HDR and configure AVVideoComposition (D-09, D-10)
-        // Detect HDR by inspecting format descriptions for HDR transfer functions
+        // Detect HDR by inspecting format descriptions for HDR transfer functions.
+        // Done BEFORE building layers so watermark overlays are rasterized at the
+        // video's bit depth: 16-bit half-float (.RGBAh) only for HDR, 8-bit
+        // (.RGBA8) for SDR. Handing half-float overlay layers to
+        // AVVideoCompositionCoreAnimationTool for an SDR export drives the VT
+        // compression session down an unsupported-pixel-format path
+        // (VT-CS err -12900) that aborts inside CoreMedia's XPC layer.
         let formatDescsForHDR = try await videoTrack.load(.formatDescriptions)
         let isHDR = formatDescsForHDR.contains { desc in
             let extensions = CMFormatDescriptionGetExtensions(desc) as NSDictionary?
             let transfer = extensions?[kCVImageBufferTransferFunctionKey] as? String
             return transfer?.contains("HLG") == true || transfer?.contains("2084") == true
         }
+
+        // Step 4: Build CALayer hierarchy via VideoLayerBuilder (D-01, D-02)
+        let (parentLayer, videoLayer) = try VideoLayerBuilder.buildLayers(
+            config: config,
+            videoSize: videoSize,
+            metadata: videoMetadata,
+            isHDR: isHDR
+        )
+
+        // Step 5: Configure AVVideoComposition (D-09, D-10)
         var hdrPreservationAttempted = false
 
         let videoComposition = AVMutableVideoComposition()
@@ -195,18 +205,6 @@ public struct VideoProcessor {
                AVAssetExportPreset1920x1080, AVAssetExportPreset1280x720,
                AVAssetExportPreset960x540, AVAssetExportPreset640x480, AVAssetExportPresetMediumQuality]
 
-        // DIAGNOSTIC
-        let isExportable = (try? await composition.load(.isExportable)) ?? false
-        let vCount = composition.tracks(withMediaType: .video).count
-        let aCount = composition.tracks(withMediaType: .audio).count
-        let allPresets = AVAssetExportSession.allExportPresets()
-        os_log(.error, "WatermarkCore DIAG: isExportable=%d vTracks=%d aTracks=%d renderSize=%{public}@ allPresets=%{public}@",
-               isExportable, vCount, aCount, "\(videoSize)", allPresets.description)
-        for candidate in [AVAssetExportPresetPassthrough] + preferredPresets {
-            let s = AVAssetExportSession(asset: composition, presetName: candidate)
-            os_log(.error, "WatermarkCore DIAG: preset %{public}@ -> %{public}@", candidate, s == nil ? "nil" : "ok")
-        }
-
         var resolvedSession: AVAssetExportSession?
         for candidate in preferredPresets {
             if let session = AVAssetExportSession(asset: composition, presetName: candidate) {
@@ -215,7 +213,9 @@ public struct VideoProcessor {
             }
         }
         guard let exportSession = resolvedSession else {
+            #if DEBUG
             os_log(.error, "WatermarkCore VideoProcessor: no export preset produced a session for the composition")
+            #endif
             throw PipelineError.videoExportSessionCreationFailed
         }
 
@@ -248,30 +248,29 @@ public struct VideoProcessor {
         // bytes we actually write.
         let outputURL = try TempFileManager.createTempFile(uti: outputFileType.rawValue as CFString)
         exportSession.outputURL = outputURL
+        #if DEBUG
         os_log(.default,
                "WatermarkCore VideoProcessor: exporting as %{public}@ → %{public}@ (renderSize=%{public}@, hdr=%d)",
                outputFileType.rawValue, outputURL.lastPathComponent, "\(videoSize)", isHDR)
+        #endif
 
         if let onProgress = onProgress {
-            nonisolated(unsafe) let callback = onProgress
+            let callback = onProgress
             let startTime = Date()
 
             // Create states sequence before spawning concurrent work
             let states = exportSession.states(updateInterval: 0.1)
             let statesTask = Task {
-                do {
-                    for try await state in states {
-                        if case .exporting(let progress) = state {
-                            let fraction = progress.fractionCompleted
-                            let elapsed = Date().timeIntervalSince(startTime)
-                            let eta: TimeInterval? = fraction > 0.01
-                                ? elapsed / max(fraction, 0.01) - elapsed
-                                : nil
-                            callback(fraction, eta)
-                        }
+                // States sequence ends when export completes, fails, or is cancelled
+                for await state in states {
+                    if case .exporting(let progress) = state {
+                        let fraction = progress.fractionCompleted
+                        let elapsed = Date().timeIntervalSince(startTime)
+                        let eta: TimeInterval? = fraction > 0.01
+                            ? elapsed / max(fraction, 0.01) - elapsed
+                            : nil
+                        callback(fraction, eta)
                     }
-                } catch {
-                    // States sequence ends when export completes, fails, or is cancelled
                 }
             }
 
@@ -280,7 +279,9 @@ public struct VideoProcessor {
                 try await exportSession.export(to: outputURL, as: outputFileType)
             } catch {
                 statesTask.cancel()
+                #if DEBUG
                 logVideoError("export(to:as:)", error)
+                #endif
                 throw PipelineError.videoExportFailed(error)
             }
 
@@ -291,7 +292,9 @@ public struct VideoProcessor {
             do {
                 try await exportSession.export(to: outputURL, as: outputFileType)
             } catch {
+                #if DEBUG
                 logVideoError("export(to:as:)", error)
+                #endif
                 throw PipelineError.videoExportFailed(error)
             }
         }
@@ -308,7 +311,9 @@ public struct VideoProcessor {
                 wasHDR: isHDR
             )
         } catch {
+            #if DEBUG
             logVideoError("post-export validation (non-fatal)", error)
+            #endif
             validationResult = ExportValidator.ExportValidationResult(
                 hdrPreserved: false,
                 audioTrackCountMatch: true,
@@ -317,17 +322,23 @@ public struct VideoProcessor {
         }
 
         // Log validation warnings
+        #if DEBUG
         for warning in validationResult.warnings {
             os_log(.default, "WatermarkCore ExportValidator: %{public}@", warning)
         }
+        #endif
 
         // D-10: Log HDR fallback warning
         if isHDR && hdrPreservationAttempted && !validationResult.hdrPreserved {
+            #if DEBUG
             os_log(.default, "WatermarkCore VideoProcessor: HDR was flattened to SDR during watermark compositing")
+            #endif
         }
 
         if !validationResult.audioTrackCountMatch {
+            #if DEBUG
             os_log(.default, "WatermarkCore VideoProcessor: Audio track count mismatch in output")
+            #endif
         }
 
         // Plan 19-02 Task 6: video C2PA signing is format-limited in this build.
@@ -376,7 +387,9 @@ public struct VideoProcessor {
            provenance.includeC2PA,
            !provenance.rights.creator.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let warning = "Video Content Credentials not available for this format"
+            #if DEBUG
             os_log(.default, "WatermarkCore VideoProcessor: %{public}@", warning)
+            #endif
             finalValidation = ExportValidator.ExportValidationResult(
                 hdrPreserved: validationResult.hdrPreserved,
                 audioTrackCountMatch: validationResult.audioTrackCountMatch,
@@ -622,6 +635,7 @@ public struct VideoProcessor {
     /// Logs the full NSError detail for a failed video stage so "Cannot Open"
     /// style failures can be traced to a domain/code (e.g. AVFoundationErrorDomain
     /// -11829 = AVErrorFileFormatNotRecognized).
+    #if DEBUG
     private static func logVideoError(_ stage: String, _ error: Error) {
         let ns = error as NSError
         os_log(.error,
@@ -632,6 +646,7 @@ public struct VideoProcessor {
                ns.code,
                (ns.userInfo[NSUnderlyingErrorKey] as? NSError)?.description ?? "none")
     }
+    #endif
 
     // MARK: - HDR Color Property Extraction
 

@@ -26,7 +26,7 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
     /// Loads saved config on init. Saves on every mutation via `didSet`.
     var config: WatermarkConfiguration {
         didSet {
-            AppGroupConfigSync.save(config)
+            persistConfigChange()
             if config.sourceDeclaration != analyzedDeclaration {
                 analyzeCurrentSource()
             }
@@ -210,8 +210,38 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
     /// Shared engine instance for photo processing.
     private let engine = WatermarkEngine.shared
 
+    /// Enforces the free daily export limit from inside the extension. Premium
+    /// status is read from the App Group cache (kept fresh by the app's
+    /// `StoreManager`); the quota counters are shared with the app so both
+    /// surfaces draw down the same daily budget.
+    private let exportGate = ExportGate()
+
     /// Tracks the in-progress video export task for cancellation support.
     private var videoExportTask: Task<Void, Never>?
+
+    /// Defers App Group writes during high-frequency slider drags. The extension
+    /// still updates the model immediately so the preview can refresh.
+    private var interactiveConfigChangeDepth = 0
+    private var hasDeferredConfigSave = false
+
+    private func persistConfigChange() {
+        if interactiveConfigChangeDepth > 0 {
+            hasDeferredConfigSave = true
+        } else {
+            AppGroupConfigSync.save(config)
+        }
+    }
+
+    func beginInteractiveConfigChange() {
+        interactiveConfigChangeDepth += 1
+    }
+
+    func endInteractiveConfigChange() {
+        interactiveConfigChangeDepth = max(0, interactiveConfigChangeDepth - 1)
+        guard interactiveConfigChangeDepth == 0, hasDeferredConfigSave else { return }
+        hasDeferredConfigSave = false
+        AppGroupConfigSync.save(config)
+    }
 
     // MARK: - Init
 
@@ -308,13 +338,13 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
             } else if let directData = item as? Data {
                 data = directData
             } else {
-                await setError("Could not read the shared photo.")
+                setError("Could not read the shared photo.")
                 return
             }
 
             // T-03-01: Validate file size (extension memory ceiling ~120MB)
             guard data.count <= 500_000_000 else {
-                await setError("This photo is too large to process.")
+                setError("This photo is too large to process.")
                 return
             }
 
@@ -341,7 +371,7 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
                 config = defaultTemplate.config
             }
         } catch {
-            await setError("Failed to load photo: \(error.localizedDescription)")
+            setError("Failed to load photo: \(error.localizedDescription)")
         }
     }
 
@@ -392,7 +422,7 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
                 config = defaultTemplate.config
             }
         } catch {
-            await setError("Failed to load video: \(error.localizedDescription)")
+            setError("Failed to load video: \(error.localizedDescription)")
         }
     }
 
@@ -531,6 +561,8 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
                     fullResResult = result
                     lastExportReceipt = result.provenanceReceipt
                     renderingState = .done
+                    // Count this completed video export against the shared quota.
+                    exportGate.record(videos: 1)
                     // Check HDR/audio warnings
                     if let validation = result.videoValidation {
                         if !validation.hdrPreserved {
@@ -573,7 +605,7 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
     /// frame extraction + CIImage watermark compositing. Photo uses
     /// `engine.process()` for full photo pipeline preview.
     func generatePreview() async {
-        guard !isGeneratingPreview, sourceURL != nil else { return }
+        guard sourceURL != nil else { return }
 
         if isVideo {
             await generateVideoPreview()
@@ -581,15 +613,23 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
         }
 
         guard let sourceURL = sourceURL else { return }
-        isGeneratingPreview = true
-        defer { isGeneratingPreview = false }
+        let shouldShowProgress = previewImage == nil
+        if shouldShowProgress {
+            isGeneratingPreview = true
+        }
+        defer {
+            if shouldShowProgress {
+                isGeneratingPreview = false
+            }
+        }
 
-        // Debounce: wait 350ms to avoid rapid re-renders during config changes
-        try? await Task.sleep(for: .milliseconds(350))
+        let debounce = shouldShowProgress ? Duration.milliseconds(250) : .milliseconds(90)
+        try? await Task.sleep(for: debounce)
         guard !Task.isCancelled else { return }
+        let previewConfig = config
 
         // Best-effort preview — errors are silently ignored
-        let result = try? await engine.process(sourceURL: sourceURL, config: config)
+        let result = try? await engine.process(sourceURL: sourceURL, config: previewConfig)
         if let url = result?.url,
            let data = try? Data(contentsOf: url),
            let uiImage = UIImage(data: data) {
@@ -604,6 +644,15 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
     /// Branches by media type: video uses `renderAndShareVideo()` which delegates
     /// to `engine.processVideo()`. Photo uses `engine.process()`.
     func renderAndPrepareShare() async {
+        // Enforce the free daily limit before rendering. Free users past the
+        // limit are pointed back to the app to upgrade (the extension has no
+        // paywall of its own).
+        guard exportGate.canExport(photos: isVideo ? 0 : 1, videos: isVideo ? 1 : 0) else {
+            errorMessage = "You’ve reached today’s free limit (3 photos or 1 video). Open Markepi to go unlimited."
+            showError = true
+            return
+        }
+
         if isVideo {
             await renderAndShareVideo()
             return
@@ -614,9 +663,18 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
 
         do {
             let prov = exportProvenance(for: config)
-            let result = try await engine.process(sourceURL: sourceURL, config: config, provenance: prov)
+            // Real export: existing source Content Credentials are preserved
+            // via the C2PA ingredient chain even without a signing opt-in.
+            let result = try await engine.process(
+                sourceURL: sourceURL,
+                config: config,
+                provenance: prov,
+                preserveSourceCredentials: true
+            )
             fullResResult = result
             renderingState = .done
+            // Count this completed photo export against the shared daily quota.
+            exportGate.record(photos: 1)
             if let url = result.url,
                let data = try? Data(contentsOf: url),
                let uiImage = UIImage(data: data) {
@@ -776,12 +834,25 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
         var parts: [String] = ["\(sourceURL?.lastPathComponent ?? "nil")"]
         for layer in config.watermarks {
             switch layer {
-            case .text(let input, let pos, let scl, _, _):
-                parts.append("t:\(input.text)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
-            case .image(let input, let pos, let scl, _, _):
-                parts.append("im:\(input.pngData.hashValue)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
-            case .signature(let input, let pos, let scl, _, _):
-                parts.append("sig:\(input.strokeData.hashValue)-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))")
+            case .text(let input, let pos, let scl, let op, let vis):
+                parts.append(
+                    "t:\(input.text)-to:\(String(format: "%.2f", input.opacity))"
+                    + "-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))"
+                    + "-lo:\(String(format: "%.2f", op))-v:\(vis ? 1 : 0)"
+                )
+            case .image(let input, let pos, let scl, let op, let vis):
+                parts.append(
+                    "im:\(input.pngData.hashValue)-io:\(String(format: "%.2f", input.opacity))"
+                    + "-pos:\(pos.rawValue)-s:\(String(format: "%.3f", scl))"
+                    + "-rot:\(String(format: "%.1f", input.rotationDegrees))"
+                    + "-lo:\(String(format: "%.2f", op))-v:\(vis ? 1 : 0)"
+                )
+            case .signature(let input, let pos, let scl, let op, let vis):
+                parts.append(
+                    "sig:\(input.strokeData.hashValue)-pos:\(pos.rawValue)"
+                    + "-s:\(String(format: "%.3f", scl))-lo:\(String(format: "%.2f", op))"
+                    + "-v:\(vis ? 1 : 0)"
+                )
             }
         }
         parts.append("wf:\(config.whiteFrame?.isEnabled == true ? "1" : "0")")

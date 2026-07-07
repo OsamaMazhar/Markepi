@@ -5,7 +5,9 @@ import ImageIO
 import os.log
 import UniformTypeIdentifiers
 
+#if DEBUG
 private let engineLog = Logger(subsystem: "com.watermark.core", category: "Engine")
+#endif
 
 /// Actor-isolated photo watermarking engine (Pattern 3).
 ///
@@ -79,11 +81,20 @@ public actor WatermarkEngine {
     ///   - merges IPTC rights metadata into the outgoing metadata dict,
     ///   - signs the output with the injected C2PA client when requested,
     ///   - returns an `ExportReceipt` on the `ProcessingResult`.
+    /// When `preserveSourceCredentials` is true (real exports — not previews)
+    /// and the SOURCE file already carries a C2PA manifest, the export always
+    /// gets a new device-signed manifest embedding the source's manifest +
+    /// signature as its `parentOf` ingredient — even when the user did not opt
+    /// into Content Credentials signing. A C2PA signature is bound to the exact
+    /// source bytes, so it cannot be byte-copied onto watermarked pixels
+    /// (verifiers would report tampering); the ingredient chain is the
+    /// C2PA-standard way existing credentials survive an edit.
     public func process(
         sourceURL: URL,
         config: WatermarkConfiguration,
         metadataOverride: [String: Any]? = nil,
-        provenance: ProvenanceExportOptions? = nil
+        provenance: ProvenanceExportOptions? = nil,
+        preserveSourceCredentials: Bool = false
     ) async throws -> ProcessingResult {
         // 1. Load (validates size, extracts metadata + HDR + CIImage)
         let loaded = try ImageLoader.load(from: sourceURL)
@@ -126,15 +137,34 @@ public actor WatermarkEngine {
             }
             return CIContextProvider.workingColorSpace
         }()
+
+        // Destination + alpha decision are resolved BEFORE the render so they can
+        // pick the render bit-depth (below); both are reused for the write step.
+        let destinationUTI = config.outputFormat.uti ?? loaded.sourceUTI
+        let preserveAlpha = loaded.sourceHasAlpha
+            && Self.outputFormatSupportsAlpha(destinationUTI)
+
+        // Render bit-depth. `.RGBAh` (half-float) keeps precision for the
+        // lossless-alpha formats (PNG/TIFF) whose CGImage is handed straight to
+        // ImageIO. But when the image will be flattened (preserveAlpha == false →
+        // `ImageWriter.flattenToOpaque` redraws it through a CoreGraphics 8-bit
+        // context), a half-float source renders BLACK on the iOS Simulator —
+        // CoreGraphics there cannot sample `kCGBitmapFloatComponents` images. 8-bit
+        // is correct for that path and loses no HDR: the base is SDR and HDR rides
+        // on the re-attached gain map, not the base bit-depth.
+        let renderFormat: CIFormat = preserveAlpha ? .RGBAh : .RGBA8
+
+        #if DEBUG
         let srcSample = samplePixel(loaded.ciImage)
         let compSample = samplePixel(composited)
         engineLog.debug(
-            "render: uti=\(loaded.sourceUTI, privacy: .public) size=\(Int(composited.extent.width))x\(Int(composited.extent.height)) srcCSModel=\(loaded.colorSpace?.model.rawValue ?? -99) inCIImageCSModel=\(composited.colorSpace?.model.rawValue ?? -99) outCSModel=\(outputColorSpace.model.rawValue) whiteFrame=\(config.whiteFrame?.isEnabled == true) srcRGB=\(srcSample) compRGB=\(compSample)"
+            "render: uti=\(loaded.sourceUTI, privacy: .public) size=\(Int(composited.extent.width))x\(Int(composited.extent.height)) srcCSModel=\(loaded.colorSpace?.model.rawValue ?? -99) inCIImageCSModel=\(composited.colorSpace?.model.rawValue ?? -99) outCSModel=\(outputColorSpace.model.rawValue) renderFmt=\(renderFormat == CIFormat.RGBAh ? "RGBAh" : "RGBA8", privacy: .public) whiteFrame=\(config.whiteFrame?.isEnabled == true) srcRGB=\(srcSample) compRGB=\(compSample)"
         )
+        #endif
         guard let cgImage = context.createCGImage(
             composited,
             from: composited.extent,
-            format: .RGBAh,
+            format: renderFormat,
             colorSpace: outputColorSpace
         ) else {
             throw PipelineError.renderFailed
@@ -145,8 +175,17 @@ public actor WatermarkEngine {
         // analyze the source, apply the privacy profile, and merge IPTC rights
         // into the outgoing metadata dict BEFORE ImageWriter.write. C2PA signing
         // happens AFTER write (the manifest attaches to the already-written file).
-        let destinationUTI = config.outputFormat.uti ?? loaded.sourceUTI
+        // `destinationUTI` and `preserveAlpha` were resolved before the render
+        // (they pick the render bit-depth). `preserveAlpha` drives whether
+        // ImageWriter keeps the 4th channel or flattens it onto the RGB pixels —
+        // opaque sources stay lossless (alpha was 1.0 everywhere) and JPEG/HEIC
+        // export without ImageIO's "AlphaPremulLast on opaque image" warning.
         let outputURL = try TempFileManager.createTempFile(uti: destinationUTI as CFString)
+        #if DEBUG
+        engineLog.debug(
+            "alpha: sourceHasAlpha=\(loaded.sourceHasAlpha, privacy: .public) formatSupportsAlpha=\(Self.outputFormatSupportsAlpha(destinationUTI), privacy: .public) preserveAlpha=\(preserveAlpha, privacy: .public)"
+        )
+        #endif
 
         var outgoing: [String: Any] = loaded.metadata
         var report: SourceProvenanceReport?
@@ -154,53 +193,83 @@ public actor WatermarkEngine {
         var receiptPrivacyProfile: MetadataPrivacyProfile = .preserveAll
         var receiptPrivacyActions: [String] = []
 
+        // Source C2PA summary — read once, shared by the provenance analysis
+        // and the source-credential preservation path below.
+        var sourceC2PASummary: SourceProvenanceAnalyzer.C2PASummary?
+
         if let prov = provenance {
             receiptRights = prov.rights
             receiptPrivacyProfile = prov.privacyProfile
             receiptPrivacyActions = privacyActions(for: prov.privacyProfile)
             // (a) Analyze source provenance — reads C2PA summary via the client.
-            let c2paSummary = await prov.c2paClient.readSourceSummary(from: sourceURL)
+            sourceC2PASummary = await prov.c2paClient.readSourceSummary(from: sourceURL)
             report = SourceProvenanceAnalyzer().analyze(
                 metadata: loaded.metadata,
                 userDeclaration: prov.userDeclaration,
-                c2paSummary: c2paSummary
+                c2paSummary: sourceC2PASummary
             )
             // (c) Apply privacy profile (GPS strip, serial removal) — D-10.
             outgoing = MetadataPreservationPolicy().apply(prov.privacyProfile, to: outgoing)
             // (d) Merge IPTC rights metadata — AUTH-03, D-07.
             outgoing = IPTCRightsMetadataWriter().merged(into: outgoing, rights: prov.rights)
+        } else if preserveSourceCredentials {
+            // No provenance options, but this is a real export: still check the
+            // source for existing Content Credentials so they aren't dropped.
+            sourceC2PASummary = await Self.preservationC2PAClient.readSourceSummary(from: sourceURL)
         }
+
+        // Re-align the HDR gain map to the exported base BEFORE writing. The base
+        // pixels were rotated upright and the orientation tag reset to 1, but the
+        // gain map was extracted in the source's stored orientation — so re-attach
+        // it verbatim only when nothing moved. Otherwise rotate it to match and,
+        // when a white frame is applied, zero the gain under the border band so
+        // the opaque SDR-white frame doesn't glow with residual HDR boost.
+        let alignedGainMap = GainMapProcessor.aligned(
+            auxData: loaded.gainMapAuxData,
+            type: loaded.gainMapType ?? .appleHDR,
+            sourceOrientation: loaded.sourceOrientation,
+            frameEnabled: config.whiteFrame?.isEnabled == true,
+            frameWidthRatio: config.whiteFrame?.frameWidthRatio ?? 0
+        )
 
         try ImageWriter.write(
             cgImage: cgImage,
             metadata: outgoing,
-            gainMapAuxData: loaded.gainMapAuxData,
+            gainMapAuxData: alignedGainMap,
             dngMetadata: loaded.dngMetadata,
             destinationUTI: destinationUTI,
             quality: config.outputQuality,
+            preserveAlpha: preserveAlpha,
             to: outputURL
         )
 
         // (e) C2PA signing — AFTER ImageWriter.write. The manifest attaches to
         // the already-written file. Noop client reports 'not signed' honestly.
+        //
+        // Two triggers:
+        //   1. Explicit — the user opted into Content Credentials signing
+        //      (prov.includeC2PA). Failures throw: the user asked to sign.
+        //   2. Preservation — the SOURCE already carries a C2PA manifest and
+        //      this is a real export. The manifest cannot be byte-copied onto
+        //      the watermarked pixels (its signature binds to the source
+        //      bytes), so the export gets a new device-signed manifest whose
+        //      `parentOf` ingredient embeds the source's manifest + signature.
+        //      Best-effort: a preservation failure must not block the export,
+        //      but the receipt (when one exists) reports it honestly.
         var receipt: ExportReceipt?
-        if let prov = provenance, prov.includeC2PA, let report {
+        var signing: C2PASigningResult?
+        let explicitSigning = provenance?.includeC2PA == true && report != nil
+        let creator = (provenance?.rights.creator ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let wantsPreservation = preserveSourceCredentials && sourceC2PASummary != nil
+
+        if explicitSigning || wantsPreservation {
+            let client = provenance?.c2paClient ?? Self.preservationC2PAClient
             let identity = C2PASigningIdentityStore().currentIdentity()
-            let creator = prov.rights.creator.trimmingCharacters(in: .whitespacesAndNewlines)
-            let manifest = C2PAManifestRequest(
-                appVersion: prov.appVersion,
-                sourceState: report.state,
-                sourceEvidenceSummary: report.evidence.map(\.summary),
-                visibleWatermarkApplied: !config.watermarks.isEmpty,
-                whiteFrameApplied: config.whiteFrame?.isEnabled == true,
-                privacyAction: prov.privacyProfile == .preserveAll
-                    ? nil : "Sensitive metadata removed",
-                userDeclaration: prov.userDeclaration,
-                invisibleWatermarkPayloadID: nil,
-                creator: creator.isEmpty ? nil : creator
-            )
-            let signing: C2PASigningResult
-            if creator.isEmpty {
+
+            if explicitSigning, creator.isEmpty, !wantsPreservation {
+                // Explicit signing is gated on a creator name (D-26, 19-03 UI)
+                // and there are no source credentials that must be carried over.
                 signing = C2PASigningResult(
                     status: .notSigned,
                     identityType: identity.type,
@@ -208,23 +277,61 @@ public actor WatermarkEngine {
                     warnings: ["Add a creator name before signing with Content Credentials."]
                 )
             } else {
-                signing = try await prov.c2paClient.signExport(
-                    outputURL: outputURL,
-                    source: sourceURL,
-                    manifest: manifest,
-                    identity: identity
+                // The sealed author assertion is only attached when the user
+                // explicitly opted into signing AND provided a creator name.
+                // A preservation-only manifest records lineage, never authorship.
+                let signedCreator = (explicitSigning && !creator.isEmpty) ? creator : nil
+                let manifest = C2PAManifestRequest(
+                    appVersion: provenance?.appVersion ?? Self.hostAppVersion,
+                    sourceState: report?.state ?? .unknown,
+                    sourceEvidenceSummary: report?.evidence.map(\.summary) ?? [],
+                    visibleWatermarkApplied: !config.watermarks.isEmpty,
+                    whiteFrameApplied: config.whiteFrame?.isEnabled == true,
+                    privacyAction: (provenance?.privacyProfile ?? .preserveAll) == .preserveAll
+                        ? nil : "Sensitive metadata removed",
+                    userDeclaration: provenance?.userDeclaration ?? .none,
+                    invisibleWatermarkPayloadID: nil,
+                    creator: signedCreator
                 )
+                do {
+                    var result = try await client.signExport(
+                        outputURL: outputURL,
+                        source: sourceURL,
+                        manifest: manifest,
+                        identity: identity
+                    )
+                    if result.status == .signed,
+                       result.verification?.signatureIsIntact != true {
+                        throw PipelineError.c2paSignatureVerificationFailed
+                    }
+                    if explicitSigning, creator.isEmpty, result.status == .signed {
+                        result = C2PASigningResult(
+                            status: result.status,
+                            identityType: result.identityType,
+                            displayName: result.displayName,
+                            warnings: result.warnings + [
+                                "No creator name was set, so the Content Credentials were signed without an author name."
+                            ],
+                            verification: result.verification
+                        )
+                    }
+                    signing = result
+                } catch {
+                    if explicitSigning { throw error }
+                    signing = C2PASigningResult(
+                        status: .notSigned,
+                        identityType: identity.type,
+                        displayName: identity.displayName,
+                        warnings: ["The source photo's Content Credentials could not be carried into this export."]
+                    )
+                }
             }
+        }
+
+        if let report {
             receipt = ExportReceipt(
                 report: report,
                 signingResult: signing,
-                rightsMetadata: receiptRights,
-                privacyProfile: receiptPrivacyProfile,
-                privacyActions: receiptPrivacyActions
-            )
-        } else if let report {
-            receipt = ExportReceipt(
-                report: report,
                 rightsMetadata: receiptRights,
                 privacyProfile: receiptPrivacyProfile,
                 privacyActions: receiptPrivacyActions
@@ -338,6 +445,29 @@ public actor WatermarkEngine {
         return "\(bytes[0]),\(bytes[1]),\(bytes[2])"
     }
 
+    /// Client used by the source-credential preservation path when the caller
+    /// supplied no provenance options (Content Credentials toggle off). Real
+    /// client when c2pa-swift is linked, Noop otherwise.
+    private static let preservationC2PAClient = ProvenanceExportOptions.defaultClient()
+
+    /// Host app version for preservation manifests signed without provenance
+    /// options (which normally carry the app version).
+    private static let hostAppVersion: String =
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
+
+    /// Returns true iff a destination format can encode an alpha/transparency
+    /// channel. JPEG and HEIC/HEIF cannot (always opaque); PNG/TIFF/WebP and
+    /// most others can. Used to decide whether to preserve the source alpha or
+    /// flatten it onto the RGB pixels on export.
+    private static func outputFormatSupportsAlpha(_ uti: String) -> Bool {
+        switch uti {
+        case "public.jpeg", "public.heic", "public.heif":
+            return false
+        default:
+            return true
+        }
+    }
+
     private func privacyActions(for profile: MetadataPrivacyProfile) -> [String] {
         switch profile {
         case .preserveAll:
@@ -378,7 +508,7 @@ public actor WatermarkEngine {
         // Safety net: normalize orientation before positioning (Pitfall 3)
         let normalized = OrientationNormalizer.normalize(base)
 
-        var composited = normalized
+        let composited = normalized
 
         var layers: [(CIImage, CGPoint)] = []
         let extent = composited.extent
@@ -443,9 +573,17 @@ public actor WatermarkEngine {
                     baseWidth: extent.width
                 )
             }
-            let scaled = watermarkImage.transformed(
+            var scaled = watermarkImage.transformed(
                 by: CGAffineTransform(scaleX: factor, y: factor)
             )
+
+            // Logo rotation — applied AFTER scaling so the scale factor keys off
+            // the upright width (rotation must not change the apparent size), and
+            // BEFORE positioning so PositionCalculator sees the rotated bounding
+            // box. Only image layers carry a rotation.
+            if case .image(let imageConfig, _, _, _, _) = watermark {
+                scaled = ImageWatermarkRenderer.rotated(scaled, degrees: imageConfig.rotationDegrees)
+            }
 
             // MULT-02: Per-layer opacity via CIFilter.colorMatrix
             let opacityAdjusted: CIImage

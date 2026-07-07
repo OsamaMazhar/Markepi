@@ -35,10 +35,19 @@ public struct ProvenanceExportOptions: Sendable {
         self.includeC2PA = includeC2PA
         self.userDeclaration = userDeclaration
         self.appVersion = appVersion
+        self.c2paClient = c2paClient ?? Self.defaultClient()
+    }
+
+    /// The production C2PA client for this build: the real
+    /// `C2PASwiftProvenanceClient` when c2pa-swift is linked, otherwise the
+    /// honest `NoopC2PAProvenanceClient`. Also used by the engine's
+    /// source-credential preservation path, which must be able to sign even
+    /// when the caller supplied no provenance options at all.
+    public static func defaultClient() -> any C2PAProvenanceClient {
         #if canImport(C2PA)
-        self.c2paClient = c2paClient ?? C2PASwiftProvenanceClient()
+        C2PASwiftProvenanceClient()
         #else
-        self.c2paClient = c2paClient ?? NoopC2PAProvenanceClient()
+        NoopC2PAProvenanceClient()
         #endif
     }
 }

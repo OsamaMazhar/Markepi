@@ -9,7 +9,9 @@ import PhotosUI
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
-import UserNotifications
+// @preconcurrency: UserNotifications' request/settings types are not Sendable;
+// this downgrades the Sendable-crossing diagnostics when they hop actors.
+@preconcurrency import UserNotifications
 import WatermarkCore
 
 @Observable @MainActor
@@ -27,7 +29,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
     var showImportChoice: Bool = false
     var config = WatermarkViewModel.makeDefaultConfig() {
         didSet {
-            AppGroupConfigSync.save(config)
+            persistConfigChange()
             if config.includeC2PAManifest != oldValue.includeC2PAManifest {
                 resetBatchC2PASigningNotice()
             }
@@ -108,10 +110,36 @@ final class WatermarkViewModel: WatermarkConfigurable {
 
     var activeLayerIndex: Int = 0
 
+    // MARK: - Premium / Export Gating
+
+    /// Drives the paywall sheet (`ContentView`). Set by the crown button and by
+    /// the export gate when a free user hits the daily limit.
+    var showPaywall: Bool = false
+
+    /// Combines premium entitlement (App Group cache, kept fresh by
+    /// `StoreManager`) with the free daily quota. The single authority on
+    /// whether an export is allowed and what to count when one completes.
+    private let exportGate = ExportGate()
+
+    /// Checks the gate for an export of the given size. Returns `true` when the
+    /// export may proceed; otherwise raises the paywall and returns `false`.
+    private func allowExportOrPaywall(photos: Int, videos: Int) -> Bool {
+        if exportGate.canExport(photos: photos, videos: videos) { return true }
+        showPaywall = true
+        return false
+    }
+
     // MARK: - Batch Processing (Phase 13)
 
     /// Shared actor instance for batch watermark processing.
     var batchProcessor: BatchProcessor = BatchProcessor()
+
+    /// Slider drags can mutate config dozens of times per second. Persisting
+    /// the full Codable config (including logo PNG data) on every tick causes
+    /// visible hitches, so defer that disk/UserDefaults write until the drag
+    /// ends while still applying model changes immediately for preview.
+    private var interactiveConfigChangeDepth = 0
+    private var hasDeferredConfigSave = false
 
     /// Populated after batch completes; nil on cancel/cleanup.
     var batchResults: BatchProcessingResult? = nil
@@ -138,6 +166,25 @@ final class WatermarkViewModel: WatermarkConfigurable {
     /// Tracks the in-progress video export task for cancellation support.
     private var videoExportTask: Task<Void, Never>?
 
+    private func persistConfigChange() {
+        if interactiveConfigChangeDepth > 0 {
+            hasDeferredConfigSave = true
+        } else {
+            AppGroupConfigSync.save(config)
+        }
+    }
+
+    func beginInteractiveConfigChange() {
+        interactiveConfigChangeDepth += 1
+    }
+
+    func endInteractiveConfigChange() {
+        interactiveConfigChangeDepth = max(0, interactiveConfigChangeDepth - 1)
+        guard interactiveConfigChangeDepth == 0, hasDeferredConfigSave else { return }
+        hasDeferredConfigSave = false
+        AppGroupConfigSync.save(config)
+    }
+
     // MARK: - Init
 
     /// True once the default template has been applied for this editing session.
@@ -155,7 +202,12 @@ final class WatermarkViewModel: WatermarkConfigurable {
         // Only restore the previous session's watermark when the user has opted
         // in (Settings → Remember Last Settings). By default each launch starts
         // from a clean slate so old signatures/borders don't reappear.
-        if rememberLastSettings, let saved = AppGroupConfigSync.load() {
+        if rememberLastSettings, var saved = AppGroupConfigSync.load() {
+            // C2PA signing is a deliberate, per-session action and must never be
+            // restored from a previous session. Each launch starts unsigned so
+            // the "Sign with Content Credentials" button turns blue again and the
+            // user has to re-enable and sign before exporting.
+            saved.includeC2PAManifest = false
             config = saved
         }
         checkPendingIntent()
@@ -307,6 +359,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
             case .image(let input, let pos, let scl, let op, let vis):
                 parts.append(
                     "im:\(input.pngData.count)x\(input.pngData.hashValue)|io:\(String(format: "%.3f", input.opacity))"
+                    + "|rot:\(String(format: "%.1f", input.rotationDegrees))"
                     + "|pos:\(pos.rawValue)|s:\(String(format: "%.4f", scl))"
                     + "|lo:\(String(format: "%.3f", op))|v:\(vis ? 1 : 0)"
                 )
@@ -398,6 +451,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
         guard !items.isEmpty else { return }
         Task {
             isImportingMedia = true
+            await Task.yield()
             defer { isImportingMedia = false }
             var loaded: [PhotoItem] = []
             var failedCount = 0
@@ -633,11 +687,20 @@ final class WatermarkViewModel: WatermarkConfigurable {
     func generatePreview() async {
         guard let photo = currentPhoto else { return }
         let sourceURL = photo.sourceURL
-        isGeneratingPreview = true
-        defer { isGeneratingPreview = false }
+        let shouldShowProgress = previewImage == nil
+        if shouldShowProgress {
+            isGeneratingPreview = true
+        }
+        defer {
+            if shouldShowProgress {
+                isGeneratingPreview = false
+            }
+        }
 
-        try? await Task.sleep(for: .milliseconds(350))
+        let debounce = shouldShowProgress ? Duration.milliseconds(250) : .milliseconds(90)
+        try? await Task.sleep(for: debounce)
         guard !Task.isCancelled else { return }
+        let previewConfig = config
 
         // The image pipeline can't decode a movie file. For videos, preview a
         // watermarked still extracted from the video; Live Photos already point
@@ -663,7 +726,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
             guard !Task.isCancelled else { return }
 
             let result = try await engine.process(
-                sourceURL: imageURL, config: config, metadataOverride: metadataOverride
+                sourceURL: imageURL, config: previewConfig, metadataOverride: metadataOverride
             )
             // The .task may have been cancelled (e.g. config changed) while the
             // engine was running; don't clobber state for a stale render.
@@ -732,6 +795,11 @@ final class WatermarkViewModel: WatermarkConfigurable {
         // Batch mode: when multiple photos are selected, trigger batch processing
         // and return — the single-item rendering path is skipped entirely.
         if hasMultiplePhotos {
+            // Gate the whole batch against the free daily allowance: a batch
+            // that would exceed either bucket raises the paywall instead of
+            // exporting a partial set.
+            guard allowExportOrPaywall(photos: batchSignableImageCount,
+                                       videos: batchVideoCount) else { return }
             if needsBatchC2PASigningNotice {
                 showBatchC2PASigningNotice = true
                 return
@@ -745,15 +813,18 @@ final class WatermarkViewModel: WatermarkConfigurable {
         // D-13: Branch by media type
         switch photo.mediaType {
         case .video:
+            guard allowExportOrPaywall(photos: 0, videos: 1) else { return }
             await renderAndShareVideo()
             return
 
         case .livePhoto:
+            // A Live Photo exports as a still image; it counts as one photo.
+            guard allowExportOrPaywall(photos: 1, videos: 0) else { return }
             await renderAndShareLivePhoto()
             return
 
         case .photo, .unknown:
-            break
+            guard allowExportOrPaywall(photos: 1, videos: 0) else { return }
         }
 
         // Photo rendering path
@@ -762,9 +833,20 @@ final class WatermarkViewModel: WatermarkConfigurable {
 
         do {
             let prov = exportProvenance(for: config)
-            let result = try await engine.process(sourceURL: sourceURL, config: config, provenance: prov)
+            // Real export: any Content Credentials already on the source are
+            // preserved into the output via the C2PA ingredient chain, even
+            // when the user didn't opt into signing.
+            let result = try await engine.process(
+                sourceURL: sourceURL,
+                config: config,
+                provenance: prov,
+                preserveSourceCredentials: true
+            )
             fullResResult = result
             renderingState = .done
+            // Count this completed photo export against the free daily quota
+            // (no-op for premium users).
+            exportGate.record(photos: 1)
             if let url = result.url,
                let data = try? Data(contentsOf: url),
                let uiImage = UIImage(data: data) {
@@ -824,6 +906,9 @@ final class WatermarkViewModel: WatermarkConfigurable {
                     fullResResult = result
                     lastExportReceipt = result.provenanceReceipt
                     renderingState = .done
+                    // Count this completed video export against the free daily
+                    // quota (no-op for premium users).
+                    exportGate.record(videos: 1)
                     // D-14: Schedule notification for background completion
                     scheduleCompletionNotification(success: true)
                     // Auto-open the share sheet when the export finishes in the
@@ -886,6 +971,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
             fullResResult = result
             lastExportReceipt = result.provenanceReceipt
             renderingState = .done
+            // Live Photo exports count as one photo against the free quota.
+            exportGate.record(photos: 1)
             if let url = result.url,
                let data = try? Data(contentsOf: url),
                let uiImage = UIImage(data: data) {
@@ -902,11 +989,14 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 let stillResult = try await engine.process(
                     sourceURL: stillURL,
                     config: config,
-                    provenance: exportProvenance(for: config)
+                    provenance: exportProvenance(for: config),
+                    preserveSourceCredentials: true
                 )
                 fullResResult = stillResult
                 lastExportReceipt = stillResult.provenanceReceipt
                 renderingState = .done
+                // Still-only fallback still produced a shareable photo.
+                exportGate.record(photos: 1)
                 errorMessage = "Live Photo animation could not be preserved. The still image has been watermarked."
                 showError = true
                 if let url = stillResult.url,
@@ -929,12 +1019,19 @@ final class WatermarkViewModel: WatermarkConfigurable {
 
     /// Schedules a local notification for video export completion/failure (D-14).
     private func scheduleCompletionNotification(success: Bool) {
-        let center = UNUserNotificationCenter.current()
+        // Snapshot main-actor state before the background work so the detached
+        // Task never reaches back into actor-isolated properties.
+        let completedURL = success ? fullResResult?.url : nil
 
-        // Never PROMPT for notifications — only post if the user has already
-        // granted them (e.g. via Settings). Requesting at export time produced a
-        // confusing "would like to send you notifications" alert mid-task.
-        center.getNotificationSettings { settings in
+        Task {
+            // `UNUserNotificationCenter.current()` is created inside the Task so
+            // the non-Sendable center is never captured across the boundary.
+            let center = UNUserNotificationCenter.current()
+
+            // Never PROMPT for notifications — only post if the user has already
+            // granted them (e.g. via Settings). Requesting at export time produced
+            // a confusing "would like to send you notifications" alert mid-task.
+            let settings = await center.notificationSettings()
             guard settings.authorizationStatus == .authorized else { return }
 
             let content = UNMutableNotificationContent()
@@ -948,23 +1045,24 @@ final class WatermarkViewModel: WatermarkConfigurable {
             content.sound = .default
 
             // Store output URL in App Group UserDefaults for notification tap deep-link
-            if success, let url = self.fullResResult?.url {
+            if let completedURL {
                 UserDefaults(suiteName: AppGroupConfigSync.suiteName)?
-                    .set(url.absoluteString, forKey: "completedExportURL")
+                    .set(completedURL.absoluteString, forKey: "completedExportURL")
             }
 
-            let identifier = "com.watermark.app.video-export-\(UUID().uuidString)"
             let request = UNNotificationRequest(
-                identifier: identifier,
+                identifier: "com.watermark.app.video-export-\(UUID().uuidString)",
                 content: content,
                 trigger: nil
             )
 
-            center.add(request) { error in
-                if let error = error {
-                    os_log(.error, "Failed to schedule notification: %{public}@",
-                           error.localizedDescription)
-                }
+            do {
+                try await center.add(request)
+            } catch {
+                #if DEBUG
+                os_log(.error, "Failed to schedule notification: %{public}@",
+                       error.localizedDescription)
+                #endif
             }
         }
     }
@@ -1107,6 +1205,14 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 await MainActor.run {
                     self.batchResults = result
                     self.renderingState = .done
+                    // Count only the items that actually succeeded, split by
+                    // media type, against the free daily quota.
+                    let failedIDs = Set(result.failures.keys)
+                    let succeeded = items.filter { !failedIDs.contains($0.id) }
+                    self.exportGate.record(
+                        photos: succeeded.filter { $0.mediaType != .video }.count,
+                        videos: succeeded.filter { $0.mediaType == .video }.count
+                    )
                     self.scheduleBatchCompletionNotification(
                         successCount: result.successCount,
                         failureCount: result.failureCount
@@ -1148,21 +1254,85 @@ final class WatermarkViewModel: WatermarkConfigurable {
         perItemOverrides.removeAll()
     }
 
+    // MARK: - Remove from Batch
+
+    /// Removes a single photo/video from the loaded batch by id. Cleans up its
+    /// backing temp files (source + Live Photo video component), drops any
+    /// per-item override it carried, invalidates outputs that no longer match
+    /// the batch, and re-points `currentIndex` at a sensible surviving item.
+    ///
+    /// Operating by `UUID` (not index) keeps this safe regardless of reordering
+    /// or any concurrent mutation of `photos`.
+    func removePhoto(id: UUID) {
+        guard let index = photos.firstIndex(where: { $0.id == id }) else { return }
+        let item = photos[index]
+
+        // 1. Free the temp files the item was holding before pulling it from
+        //    the array, so a failed removal can't strand an orphan reference.
+        cleanupPhotoTempFiles([item])
+
+        // 2. Drop the item and any per-item watermark override it carried.
+        photos.remove(at: index)
+        perItemOverrides.removeValue(forKey: id)
+
+        // 3. A previous render/batch result referenced the old set of items, so
+        //    it can no longer be trusted — clear it and return to idle.
+        fullResResult = nil
+        batchResults = nil
+        renderingState = .idle
+        resetBatchC2PASigningNotice()
+
+        // 4. Repoint the selection so the editor stays on a sensible item. The
+        //    C2PA signing notice can need re-showing for the new batch shape.
+        let selectedIndexChanged: Bool
+        if photos.isEmpty {
+            // Last item removed — drop to the empty start screen. Don't force
+            // the picker open; the user just deliberately cleared the batch.
+            currentIndex = 0
+            originalSourceImage = nil
+            sourceProvenanceReport = nil
+            analyzedDeclaration = .none
+            selectedIndexChanged = false
+        } else if index < currentIndex {
+            // Removed something before the selection: same photo stays put.
+            currentIndex -= 1
+            selectedIndexChanged = false
+        } else if index == currentIndex {
+            // Removed the selection itself: clamp to the new tail so a neighbor
+            // slides into view.
+            currentIndex = min(currentIndex, photos.count - 1)
+            selectedIndexChanged = true
+        } else {
+            // Removed something after the selection: unaffected.
+            selectedIndexChanged = false
+        }
+
+        if selectedIndexChanged {
+            Task { await loadSourceForComparison() }
+            analyzeCurrentSource()
+        }
+    }
+
     // MARK: - Batch Completion Notification
 
     /// Schedules a local notification for batch processing completion.
     /// Stores result count in App Group UserDefaults for notification tap handling.
     private func scheduleBatchCompletionNotification(successCount: Int, failureCount: Int) {
-        let center = UNUserNotificationCenter.current()
+        // Snapshot main-actor state before the background work.
+        let totalCount = photos.count
 
-        // Only post if notifications are already authorized — never prompt.
-        center.getNotificationSettings { settings in
+        Task {
+            // Created inside the Task so the non-Sendable center isn't captured.
+            let center = UNUserNotificationCenter.current()
+
+            // Only post if notifications are already authorized — never prompt.
+            let settings = await center.notificationSettings()
             guard settings.authorizationStatus == .authorized else { return }
 
             let content = UNMutableNotificationContent()
             content.title = "Batch Complete"
             if failureCount == 0 {
-                content.body = "\(successCount) of \(self.photos.count) items watermarked"
+                content.body = "\(successCount) of \(totalCount) items watermarked"
             } else {
                 content.body = "\(successCount) watermarked, \(failureCount) failed"
             }
@@ -1172,18 +1342,19 @@ final class WatermarkViewModel: WatermarkConfigurable {
             UserDefaults(suiteName: AppGroupConfigSync.suiteName)?
                 .set(successCount, forKey: "batchCompletedResultCount")
 
-            let identifier = "com.watermark.app.batch-complete-\(UUID().uuidString)"
             let request = UNNotificationRequest(
-                identifier: identifier,
+                identifier: "com.watermark.app.batch-complete-\(UUID().uuidString)",
                 content: content,
                 trigger: nil
             )
 
-            center.add(request) { error in
-                if let error = error {
-                    os_log(.error, "Failed to schedule batch notification: %{public}@",
-                           error.localizedDescription)
-                }
+            do {
+                try await center.add(request)
+            } catch {
+                #if DEBUG
+                os_log(.error, "Failed to schedule batch notification: %{public}@",
+                       error.localizedDescription)
+                #endif
             }
         }
     }
@@ -1242,7 +1413,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
             )
             activeLayerIndex = existing
         } else {
-            config.watermarks.append(.signature(input, position: .bottomRight, scale: 0.15, opacity: 1.0, isVisible: true))
+            config.watermarks.append(.signature(input, position: .bottomLeft, scale: 0.15, opacity: 1.0, isVisible: true))
             activeLayerIndex = config.watermarks.count - 1
         }
     }
@@ -1285,7 +1456,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
             return
         }
 
-        guard let uti = UTType(filenameExtension: url.pathExtension)?.identifier else { return }
+        guard UTType(filenameExtension: url.pathExtension) != nil else { return }
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("import_\(UUID().uuidString)")
             .appendingPathExtension(url.pathExtension)
@@ -1328,7 +1499,9 @@ final class WatermarkViewModel: WatermarkConfigurable {
     func importPendingShares() {
         guard !isImportingShares else { return }
         let pending = SharedInboxStore.pendingURLs()
+        #if DEBUG
         os_log("[Markepi] importPendingShares: %d pending item(s)", pending.count)
+        #endif
         guard !pending.isEmpty else { return }
         isImportingShares = true
         // Stop the empty-state launch picker from popping over the incoming media.
@@ -1506,7 +1679,6 @@ final class WatermarkViewModel: WatermarkConfigurable {
         guard let defaults = UserDefaults(suiteName: AppGroupConfigSync.suiteName) else { return }
         guard let mediaURLString = defaults.string(forKey: "pendingIntentMediaURL") else { return }
 
-        let mediaType = defaults.string(forKey: "pendingIntentMediaType") ?? "photo"
         let configJSON = defaults.string(forKey: "pendingIntentConfigJSON")
 
         if let json = configJSON, let jsonData = json.data(using: .utf8) {

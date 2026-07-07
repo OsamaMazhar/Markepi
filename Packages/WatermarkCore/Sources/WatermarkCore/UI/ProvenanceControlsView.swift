@@ -54,12 +54,15 @@ public struct ProvenanceControlsView<ViewModel: WatermarkConfigurable & Observab
                 rightsSection
                 Divider()
 
-                sectionTitle("Content Credentials")
-                contentCredentialsSection
-                Divider()
-
+                // "How it was made" and "Keep metadata" are sealed into the
+                // Content Credentials at signing time, so they must be decided
+                // *before* the Sign button below.
                 sectionTitle("Source & privacy")
                 metadataControlsSection
+                Divider()
+
+                sectionTitle("Content Credentials")
+                contentCredentialsSection
             }
         }
         .padding(16)
@@ -89,6 +92,11 @@ public struct ProvenanceControlsView<ViewModel: WatermarkConfigurable & Observab
                     viewModel.acknowledgeBatchC2PAImageOnlyNotice()
                 }
                 showSigningInfo = false
+                // Resign the creator-name TextField before signing/export begins.
+                // Leaving it first responder tears the remote text-input session
+                // down mid-flight, which spams `RTIInputSystemClient … requires a
+                // valid sessionID` and can trip an XPC misuse abort.
+                focusedField = nil
                 Task { await viewModel.renderAndPrepareShare() }
             } onCancel: {
                 showSigningInfo = false

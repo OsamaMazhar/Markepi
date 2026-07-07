@@ -107,8 +107,14 @@ public struct TestImageFactory {
     /// quarter resolution — enough for `CGImageSourceCopyAuxiliaryDataInfoAtIndex`
     /// to report a `kCGImageAuxiliaryDataTypeHDRGainMap` block on read-back, which
     /// is what the engine extracts and re-attaches during processing.
+    ///
+    /// - Parameter orientation: EXIF orientation tag written into the base image.
+    ///   The gain map is stored at half of the *unrotated* (pixel) dimensions,
+    ///   matching how cameras store an oriented capture. Use a non-`.up` value to
+    ///   exercise the gain-map re-alignment path.
     public static func hdrHEICWithGainMap(
-        size: CGSize = CGSize(width: 64, height: 48)
+        size: CGSize = CGSize(width: 64, height: 48),
+        orientation: CGImagePropertyOrientation = .up
     ) -> URL? {
         let width = Int(size.width)
         let height = Int(size.height)
@@ -147,7 +153,10 @@ public struct TestImageFactory {
         ) else {
             return nil // No HEVC encoder available on this platform.
         }
-        CGImageDestinationAddImage(destination, mainImage, nil)
+        let imageProperties: [CFString: Any] = [
+            kCGImagePropertyOrientation: orientation.rawValue,
+        ]
+        CGImageDestinationAddImage(destination, mainImage, imageProperties as CFDictionary)
         CGImageDestinationAddAuxiliaryDataInfo(
             destination, kCGImageAuxiliaryDataTypeHDRGainMap, auxInfo as CFDictionary
         )

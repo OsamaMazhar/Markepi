@@ -1,5 +1,4 @@
 import SwiftUI
-import WatermarkCore
 
 /// Layer manager: lists every watermark layer with selection, visibility,
 /// reordering, opacity, and removal — the parametric stack editor.
@@ -195,7 +194,13 @@ public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View
                                 .markepiTypography(.value)
                                 .monospacedDigit()
                         }
-                        Slider(value: opacityBinding(index), in: 0...1)
+                        Slider(value: opacityBinding(index), in: 0...1, step: 0.01) { isEditing in
+                            if isEditing {
+                                viewModel.beginInteractiveConfigChange()
+                            } else {
+                                viewModel.endInteractiveConfigChange()
+                            }
+                        }
                             .accessibilityLabel("Layer opacity")
                     }
                 }

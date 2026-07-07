@@ -4,7 +4,9 @@ import UniformTypeIdentifiers
 import os.log
 import WatermarkCore
 
+#if DEBUG
 private let shareLog = Logger(subsystem: "com.osamamazhar.markepi", category: "ShareExtension")
+#endif
 
 /// UIKit entry point for the share extension.
 ///
@@ -52,11 +54,15 @@ class ShareViewController: UIViewController {
             .compactMap { $0 as? NSExtensionItem }
             .flatMap { $0.attachments ?? [] }
 
+        #if DEBUG
         shareLog.info("Handoff start: \(providers.count, privacy: .public) provider(s)")
+        #endif
         for provider in providers {
             await saveToInbox(provider)
         }
+        #if DEBUG
         shareLog.info("Handoff done; opening main app")
+        #endif
 
         openMainApp()
     }
@@ -74,7 +80,9 @@ class ShareViewController: UIViewController {
         } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
             typeID = UTType.image.identifier
         } else {
+            #if DEBUG
             shareLog.error("Provider has no image/movie representation; registered types: \(provider.registeredTypeIdentifiers, privacy: .public)")
+            #endif
             return
         }
 
@@ -83,10 +91,14 @@ class ShareViewController: UIViewController {
                 // The provided URL is ephemeral — copy into the App Group inbox now.
                 if let url = url {
                     if SharedInboxStore.copy(from: url) == nil {
+                        #if DEBUG
                         shareLog.error("loadFileRepresentation gave a URL but inbox copy failed")
+                        #endif
                     }
                 } else {
+                    #if DEBUG
                     shareLog.error("loadFileRepresentation returned no URL: \(error?.localizedDescription ?? "nil", privacy: .public)")
+                    #endif
                 }
                 continuation.resume()
             }

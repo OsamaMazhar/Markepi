@@ -76,7 +76,7 @@ public extension View {
     /// - Returns: A view with the glass effect applied.
     ///
     /// D-03: No custom tint — system-adaptive by default (cool light, warm dark).
-    public func markepiGlass<S: Shape>(
+    func markepiGlass<S: Shape>(
         shape: S = Capsule(),
         fallbackMaterial: Material = .ultraThinMaterial,
         isEnabled: Bool = true

@@ -60,8 +60,13 @@ struct BatchProcessorTests {
 
         #expect(result.successCount == 1, "Expected 1 success, got \(result.successCount)")
         #expect(result.failureCount == 0, "Expected 0 failures, got \(result.failureCount)")
-        #expect(result.successes[0].lastPathComponent.hasPrefix("watermark_"),
-                "Output URL should follow TempFileManager naming convention")
+        // Batch outputs are renamed for sharing (original filename when known,
+        // otherwise a dated "Markepi …" name) — not the internal "watermark_"
+        // temp name. Assert the file really exists under its share-ready name.
+        #expect(FileManager.default.fileExists(atPath: result.successes[0].path),
+                "Renamed batch output should exist on disk")
+        #expect(!result.successes[0].lastPathComponent.hasPrefix("watermark_"),
+                "Batch output should be renamed away from the internal temp name")
 
         // Clean up output temp file
         try? FileManager.default.removeItem(at: result.successes[0])

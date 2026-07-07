@@ -58,4 +58,25 @@ public struct ImageWatermarkRenderer {
 
         return scaled
     }
+
+    /// Rotates a CIImage clockwise by `degrees` about its own center, then
+    /// re-normalizes the extent origin back to (0, 0).
+    ///
+    /// Positioning math (`PositionCalculator` / `WatermarkPosition`) assumes the
+    /// watermark's extent starts at the origin, so after rotating about (0,0)
+    /// — which shifts the extent — we translate it back. The returned image's
+    /// bounding box is the rotated logo, ready to place like any other layer.
+    ///
+    /// Degrees are treated as clockwise as the viewer perceives the final image.
+    /// Core Image's y-up space makes a positive `rotationAngle` counter-clockwise,
+    /// so the angle is negated.
+    public static func rotated(_ image: CIImage, degrees: CGFloat) -> CIImage {
+        let normalized = ImageWatermarkInput.normalizeDegrees(degrees)
+        guard normalized != 0 else { return image }
+        let radians = -normalized * .pi / 180
+        let rotated = image.transformed(by: CGAffineTransform(rotationAngle: radians))
+        return rotated.transformed(
+            by: CGAffineTransform(translationX: -rotated.extent.origin.x, y: -rotated.extent.origin.y)
+        )
+    }
 }

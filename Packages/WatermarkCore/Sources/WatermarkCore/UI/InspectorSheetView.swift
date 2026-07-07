@@ -1,5 +1,4 @@
 import SwiftUI
-import WatermarkCore
 
 // MARK: - SheetDetent
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import WatermarkCore
 
 /// Full preview-area overlay shown during batch processing.
 ///
@@ -79,7 +80,7 @@ public struct BatchProgressOverlay: View {
                 }
                 .buttonStyle(.bordered)
                 .tint(.red)
-                .frame(width: 220)
+                .frame(width: MarkepiSizing.batchCancelButtonWidth)
                 .accessibilityLabel("Cancel batch processing")
             }
             .padding(32)

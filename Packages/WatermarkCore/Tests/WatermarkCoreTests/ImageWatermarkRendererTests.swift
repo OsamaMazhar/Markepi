@@ -28,7 +28,13 @@ struct ImageWatermarkRendererTests {
     ) -> Data {
         let rect = CGRect(origin: .zero, size: size)
         #if canImport(UIKit)
-        let renderer = UIGraphicsImageRenderer(size: size)
+        // Force scale 1 so the PNG's pixel size equals `size`. The default
+        // format uses the device scale (@3x on modern iPhone simulators),
+        // which silently produced a 600×300 PNG for a requested 200×100 and
+        // broke every extent-based expectation.
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         let image = renderer.pngData { ctx in
             let uiColor = UIColor(cgColor: color).withAlphaComponent(alpha)
             uiColor.setFill()

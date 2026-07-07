@@ -57,12 +57,20 @@ public struct C2PASigningIdentityStore: Sendable {
     /// Resolution order:
     ///   1. Secure Enclave-backed EC P-256 key (real device only)
     ///   2. Local Keychain software EC P-256 key (simulator/dev fallback)
-    ///   3. `.unsupported` when neither can be created
+    ///   3. Ephemeral in-memory EC P-256 key (keychain unavailable — e.g.
+    ///      locked device edge cases or test runners). Not persisted, so the
+    ///      identity rotates per process, but signing still succeeds — exports
+    ///      must never silently drop Content Credentials just because the key
+    ///      couldn't be stored (the certs are self-signed either way).
+    ///   4. `.unsupported` when no key can be created at all
     public func currentIdentity() -> C2PASigningIdentity {
         if let key = makeKey(secureEnclave: true) {
             return C2PASigningIdentity(type: .secureEnclave, secKey: key)
         }
         if let key = makeKey(secureEnclave: false) {
+            return C2PASigningIdentity(type: .localSoftware, secKey: key)
+        }
+        if let key = makeEphemeralKey() {
             return C2PASigningIdentity(type: .localSoftware, secKey: key)
         }
         return C2PASigningIdentity(type: .unsupported, secKey: nil)
@@ -99,6 +107,17 @@ public struct C2PASigningIdentityStore: Sendable {
         return key
     }
 
+    /// Creates a non-persistent EC P-256 key that never touches the Keychain.
+    /// Last-resort fallback so signing still works when key storage fails.
+    private func makeEphemeralKey() -> SecKey? {
+        let attrs: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeySizeInBits as String: 256,
+        ]
+        var error: Unmanaged<CFError>?
+        return SecKeyCreateRandomKey(attrs as CFDictionary, &error)
+    }
+
     /// Loads a previously-created persistent key from the Keychain by tag.
     private func fetchExistingKey(secureEnclave: Bool) -> SecKey? {
         var query: [String: Any] = [
@@ -113,8 +132,10 @@ public struct C2PASigningIdentityStore: Sendable {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         guard status == errSecSuccess, let ref = result else { return nil }
-        // `ref` is bridged from a CF SecKey; force-cast is safe because
-        // kSecReturnRef guarantees a SecKey reference was returned.
-        return ref as! SecKey
+        // `ref` is a CF SecKey reference (kSecReturnRef). SecKey is a
+        // CoreFoundation class type, so `as!`/`as?` only yield spurious
+        // "always succeeds" diagnostics; unsafeDowncast expresses the
+        // guaranteed-safe conversion without a warning.
+        return unsafeDowncast(ref, to: SecKey.self)
     }
 }

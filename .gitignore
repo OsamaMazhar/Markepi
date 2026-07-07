@@ -12,3 +12,7 @@ Pods/
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Icon making Python environment
+icon_making/.venv/
+icon_making/__pycache__/

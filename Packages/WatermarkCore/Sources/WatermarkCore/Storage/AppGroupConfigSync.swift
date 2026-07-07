@@ -24,13 +24,15 @@ public struct AppGroupConfigSync {
 
     /// Encodes `config` to JSON and writes it to the shared App Group `UserDefaults`.
     ///
-    /// Failures (missing suite, encoding error) are logged via `os_log` but
-    /// silently ignored — config sync is best-effort, not critical path.
+    /// Failures (missing suite, encoding error) are silently ignored — config
+    /// sync is best-effort, not critical path.
     ///
     /// - Parameter config: The `WatermarkConfiguration` to persist
     public static func save(_ config: WatermarkConfiguration) {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
+            #if DEBUG
             os_log(.error, "[AppGroupConfigSync] Failed to open UserDefaults suite '%@'", suiteName)
+            #endif
             return
         }
 
@@ -38,7 +40,9 @@ public struct AppGroupConfigSync {
             let data = try JSONEncoder().encode(config)
             defaults.set(data, forKey: configKey)
         } catch {
+            #if DEBUG
             os_log(.error, "[AppGroupConfigSync] Failed to encode config: %@", error.localizedDescription)
+            #endif
         }
     }
 
@@ -50,7 +54,9 @@ public struct AppGroupConfigSync {
     /// - Returns: The saved configuration, or `nil` if no data exists or decoding fails
     public static func load() -> WatermarkConfiguration? {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
+            #if DEBUG
             os_log(.error, "[AppGroupConfigSync] Failed to open UserDefaults suite '%@'", suiteName)
+            #endif
             return nil
         }
 
@@ -63,7 +69,9 @@ public struct AppGroupConfigSync {
             config = sanitized(config)
             return config
         } catch {
+            #if DEBUG
             os_log(.error, "[AppGroupConfigSync] Failed to decode config: %@", error.localizedDescription)
+            #endif
             return nil
         }
     }
@@ -93,9 +101,11 @@ public struct AppGroupConfigSync {
         }
         let dropped = originalCount - config.watermarks.count
         if dropped > 0 {
+            #if DEBUG
             os_log(.error,
                    "[AppGroupConfigSync] Dropped %d image watermark layer(s) with undecodable PNG data from persisted config",
                    dropped)
+            #endif
         }
         return config
     }

@@ -150,6 +150,52 @@ struct MediaPipelineRegressionTests {
         #expect(auxDataInfo != nil, "Expected HDR gain map auxiliary data in output")
     }
 
+    // MARK: - Test 5b: HDR gain map re-aligned to rotated base
+
+    @Test("HDR gain map is rotated to match an EXIF-oriented base on export")
+    func hdrGainMapReAlignedToRotatedBase() async throws {
+        // Landscape base (64×48) tagged orientation .right (6). On export the
+        // pixels rotate upright to PORTRAIT (48×64) and the tag resets to 1, so
+        // the gain map must rotate with them — portrait, not the stored landscape.
+        guard let heicURL = TestImageFactory.hdrHEICWithGainMap(
+            size: CGSize(width: 64, height: 48),
+            orientation: .right
+        ) else {
+            return // No HEVC encoder on this platform.
+        }
+        defer { cleanup(heicURL) }
+
+        let engine = WatermarkEngine()
+        let result = try await engine.process(
+            sourceURL: heicURL,
+            config: WatermarkConfiguration(watermarks: [])
+        )
+        let outputURL = try #require(result.url)
+        defer { cleanup(outputURL) }
+
+        let source = try #require(CGImageSourceCreateWithURL(outputURL as CFURL, nil))
+
+        // Base image must be upright portrait (width < height).
+        let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
+        let baseW = (props[kCGImagePropertyPixelWidth] as? Int) ?? 0
+        let baseH = (props[kCGImagePropertyPixelHeight] as? Int) ?? 0
+        try #require(baseW > 0 && baseH > 0)
+        #expect(baseW < baseH, "Exported base should be portrait after orientation .right")
+
+        // The gain map must be portrait too — proving it rotated WITH the base
+        // instead of staying in the stored landscape orientation (the bug).
+        let aux = try #require(
+            CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, kCGImageAuxiliaryDataTypeHDRGainMap)
+                as? [CFString: Any],
+            "Expected HDR gain map in output"
+        )
+        let desc = try #require(aux[kCGImageAuxiliaryDataInfoDataDescription] as? [CFString: Any])
+        let gainW = (desc["Width" as CFString] as? Int) ?? 0
+        let gainH = (desc["Height" as CFString] as? Int) ?? 0
+        try #require(gainW > 0 && gainH > 0)
+        #expect(gainW < gainH, "Exported gain map should be portrait, aligned to the base")
+    }
+
     // MARK: - Test 6: EXIF metadata preservation
 
     @Test("EXIF metadata fields survive engine.process() round-trip")

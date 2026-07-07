@@ -1,7 +1,9 @@
 import Foundation
 import os.log
 
+#if DEBUG
 private let inboxLog = Logger(subsystem: "com.osamamazhar.markepi", category: "SharedInbox")
+#endif
 
 /// Hands shared media from the Share Extension to the main app via the App Group
 /// container.
@@ -31,7 +33,9 @@ public enum SharedInboxStore {
     public static func inboxDirectory() -> URL? {
         guard let container = FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
+            #if DEBUG
             os_log(.error, "[SharedInboxStore] App Group container unavailable for '%@'", appGroupIdentifier)
+            #endif
             return nil
         }
         let dir = container.appendingPathComponent("PendingShares", isDirectory: true)
@@ -58,10 +62,14 @@ public enum SharedInboxStore {
         do {
             try FileManager.default.createDirectory(at: itemDir, withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: sourceURL, to: dest)
+            #if DEBUG
             inboxLog.info("Wrote shared item to inbox: \(dest.path, privacy: .public)")
+            #endif
             return dest
         } catch {
+            #if DEBUG
             inboxLog.error("Failed to copy incoming file: \(error.localizedDescription, privacy: .public)")
+            #endif
             try? FileManager.default.removeItem(at: itemDir)
             return nil
         }
@@ -90,7 +98,9 @@ public enum SharedInboxStore {
                 includingPropertiesForKeys: nil,
                 options: [.skipsHiddenFiles]))?.first
         }
+        #if DEBUG
         inboxLog.info("pendingURLs: \(files.count, privacy: .public) item(s) in \(dir.path, privacy: .public)")
+        #endif
         return files
     }
 

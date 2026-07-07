@@ -1,4 +1,5 @@
 import PhotosUI
+import StoreKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WatermarkCore
@@ -29,12 +30,13 @@ struct ContentView: View {
     /// Settings pane (gear icon) presentation state.
     @State private var showSettings = false
 
-    /// Premium upgrade (paywall) presentation state.
-    @State private var showPaywall = false
-
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// StoreKit entitlement, injected from `WatermarkApp`. Drives the toolbar
+    /// crown's treatment (shiny "upgrade" prompt vs. entitled state).
+    @Environment(StoreManager.self) private var store
 
     // Landscape Share↔dock alignment needs no measurement: in landscape the
     // Share button lives in the same vertical rail stack as the tool dock (see
@@ -54,15 +56,24 @@ struct ContentView: View {
     /// layout flip-flop on rotation (it would briefly render the portrait
     /// bottom-dock inside a landscape window, or get stuck there when a sheet
     /// swallowed the geometry update).
-    private func isLandscape(_ size: CGSize) -> Bool {
-        size.width > size.height && size.height >= 320
+    private func isLandscape(width: CGFloat, height: CGFloat) -> Bool {
+        width > height && height >= 320
     }
 
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
-                let landscape = isLandscape(geometry.size)
-                let _ = print("🧭 GEO size=\(geometry.size) w>h=\(geometry.size.width > geometry.size.height) h>=320=\(geometry.size.height >= 320) landscape=\(landscape)")
+                // The on-screen keyboard is delivered as a bottom safe-area inset:
+                // as it rises, `size.height` shrinks and `safeAreaInsets.bottom`
+                // grows by the same amount, so their sum is keyboard-invariant.
+                // Branching on the raw height flipped the editor into the landscape
+                // rails the instant a text field (e.g. the Content Credentials
+                // "Name") pushed the available height below the width — destroying
+                // the field's identity, resigning the keyboard, and looping (the
+                // "can't type my name" bug). The stable height pins the decision
+                // while the keyboard is up.
+                let stableHeight = geometry.size.height + geometry.safeAreaInsets.bottom
+                let landscape = isLandscape(width: geometry.size.width, height: stableHeight)
                 // In PORTRAIT the system toolbar drives the chrome (real Liquid
                 // Glass). In LANDSCAPE-while-editing the chrome moves into two
                 // custom rails — Back + Settings/Add/Files on the left, Share +
@@ -124,7 +135,7 @@ struct ContentView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView(viewModel: viewModel)
             }
-            .sheet(isPresented: $showPaywall) {
+            .sheet(isPresented: $viewModel.showPaywall) {
                 PaywallView()
             }
             .overlay {
@@ -168,9 +179,19 @@ struct ContentView: View {
             } else {
                 PreviewView(viewModel: viewModel)
                     .background(MarkepiColors.photoCanvasBackground.ignoresSafeArea())
+                    .overlay { tapToDismissOverlay }
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         VStack(spacing: 0) {
-                            mediaControls
+                            mediaControls(includeStrip: true)
+                                // Mirror the top breathing room BELOW the batch
+                                // strip so its gaps are symmetric. The outer
+                                // `.padding(.top, md)` sets the gap above; without
+                                // this the strip sat flush against the dock/panel
+                                // (RenderProgressBanner collapses to EmptyView when
+                                // idle, so it adds no spacing). Scoped to when the
+                                // media controls actually have content so a single
+                                // photo (no strip) doesn't get a phantom gap.
+                                .padding(.bottom, mediaControlsHasContent ? MarkepiSpacing.md : 0)
                             editorControls(geometry)
                         }
                         // Breathing room so the photo never sits flush against
@@ -245,12 +266,11 @@ struct ContentView: View {
             ?? "Markepi"
     }
 
-    /// "Version X.Y (build)" string from the bundle.
+    /// "Version X.Y" string from the bundle.
     private static var appVersionString: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let build = info?["CFBundleVersion"] as? String ?? "1"
-        return "Version \(short) (\(build))"
+        return "Version \(short)"
     }
 
     /// True while a render/export/batch operation is in progress.
@@ -281,15 +301,15 @@ struct ContentView: View {
                     }
                     .accessibilityLabel("Back to start")
                 } else {
-                    // First page: upgrade to Premium.
+                    // First page: upgrade to Premium. A metallic-gold crown with
+                    // a sheen that sweeps right→left draws the eye to it; once the
+                    // user is entitled the sweep stops and it reads as a calm badge.
                     Button {
-                        showPaywall = true
+                        viewModel.showPaywall = true
                     } label: {
-                        Image(systemName: "crown.fill")
-                            .symbolRenderingMode(.hierarchical)
+                        PremiumCrownIcon(isPremium: store.isPremium, reduceMotion: reduceMotion)
                     }
-                    .tint(.yellow)
-                    .accessibilityLabel("Upgrade to Premium")
+                    .accessibilityLabel(store.isPremium ? "Markepi Pro" : "Upgrade to Premium")
                 }
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -359,8 +379,11 @@ struct ContentView: View {
             PreviewView(viewModel: viewModel)
                 .background(MarkepiColors.photoCanvasBackground)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay { tapToDismissOverlay }
 
-            mediaControls
+            // Landscape moves the batch strip into the right rail (vertical), so
+            // only the video scrub bar remains under the photo here.
+            mediaControls(includeStrip: false)
         }
     }
 
@@ -494,12 +517,14 @@ struct ContentView: View {
     /// to the trailing edge and vertically centered. All chrome lives in the
     /// shared top toolbar, not here.
     private func landscapeRightRail(_ geometry: GeometryProxy) -> some View {
-        // Wider gutter between the open panel and the tool dock so the panel
-        // isn't crammed against the right rail. The canvas column is greedy
-        // (`maxWidth: .infinity`), so widening this gap also pulls the whole
-        // rail left, shrinking the (letterboxed) gap on the photo side — i.e.
-        // the panel sits with more even breathing room on both sides.
-        HStack(spacing: MarkepiSpacing.xl) {
+        // One consistent gap between the rail's columns (panel · batch strip ·
+        // dock). With the vertical batch strip now sitting between the panel and
+        // the dock, the previous `xl` gutter was applied twice — doubling the
+        // whitespace — so `md` keeps the gaps tight and symmetric on both sides
+        // of the strip. (The dock column drops its fixed width when the strip is
+        // present, below, so its trailing-alignment slack can't inflate the
+        // strip→dock gap and re-break the symmetry.)
+        HStack(spacing: MarkepiSpacing.md) {
             if let tool = activeTool, !isBusy {
                 ToolPanelView(
                     tool: tool,
@@ -514,6 +539,13 @@ struct ContentView: View {
                 // and the photo stays centered.
                 .padding(.leading, MarkepiSpacing.md)
                 .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+
+            // Batch strip as a vertical column, sitting between the (optional)
+            // open panel and the tool dock — the landscape home for what is the
+            // horizontal strip under the photo in portrait.
+            if viewModel.hasMultiplePhotos {
+                landscapeVerticalStrip(geometry)
             }
 
             // Share sits directly above the vertical dock in one centered stack,
@@ -532,9 +564,13 @@ struct ContentView: View {
             // Trailing inset clears the rounded corner (mirrors the left chrome's
             // leading inset). The fixed-width, trailing-aligned column matches the
             // left chrome's width, so the photo column between the two rails is
-            // screen-centered when the panel is closed.
+            // screen-centered when the panel is closed — but only when there's NO
+            // batch strip. With the strip present that centering is moot (the
+            // strip sits between), and the column's trailing-alignment slack would
+            // otherwise widen the strip→dock gap asymmetrically, so the dock hugs
+            // its content instead.
             .padding(.trailing, MarkepiSpacing.md)
-            .frame(width: Self.sideRailColumnWidth, alignment: .trailing)
+            .frame(width: viewModel.hasMultiplePhotos ? nil : Self.sideRailColumnWidth, alignment: .trailing)
             .frame(maxHeight: .infinity, alignment: .center)
         }
         .padding(.vertical, MarkepiSpacing.sm)
@@ -566,10 +602,22 @@ struct ContentView: View {
 
     // MARK: - Shared Media Controls
 
+    /// True when `mediaControls` renders something (the batch strip and/or the
+    /// video scrub bar). Drives the symmetric gap below the strip in portrait —
+    /// applied only when there's content, so a lone photo doesn't get an empty
+    /// band before the tool dock.
+    private var mediaControlsHasContent: Bool {
+        viewModel.hasMultiplePhotos || (viewModel.isCurrentVideo && !isBusy)
+    }
+
+    /// Media controls that sit below the photo. In portrait this holds the
+    /// horizontal batch strip and the video scrub bar; in landscape the batch
+    /// strip moves to the right rail (vertical — see `landscapeVerticalStrip`),
+    /// so `includeStrip` is false there and only the scrub bar remains.
     @ViewBuilder
-    private var mediaControls: some View {
+    private func mediaControls(includeStrip: Bool) -> some View {
         VStack(spacing: MarkepiSpacing.md) {
-            if viewModel.hasMultiplePhotos {
+            if includeStrip && viewModel.hasMultiplePhotos {
                 ThumbnailStripView(
                     photos: viewModel.photos,
                     currentIndex: $viewModel.currentIndex,
@@ -596,6 +644,32 @@ struct ContentView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.hasMultiplePhotos)
     }
 
+    /// Landscape batch strip: a slim vertical column of thumbnails that lives in
+    /// the right rail, between the open tool panel and the tool dock. Vertically
+    /// centered and height-capped so a short batch hugs its content and a long
+    /// one scrolls.
+    private func landscapeVerticalStrip(_ geometry: GeometryProxy) -> some View {
+        ThumbnailStripView(
+            photos: viewModel.photos,
+            currentIndex: $viewModel.currentIndex,
+            perItemOverrides: viewModel.perItemOverrides,
+            onItemTapped: { index in
+                selectedItemForOverride = IdentifiableIndex(value: index)
+            },
+            onReorder: { reordered in
+                viewModel.photos = reordered
+            },
+            allowsRemoval: !isBusy,
+            onRequestRemoval: { photo in
+                photoPendingRemoval = photo
+            },
+            axis: .vertical,
+            // Reserve room for the Edit toggle + the rail's vertical padding.
+            verticalMaxLength: max(160, geometry.size.height - 140)
+        )
+        .frame(maxHeight: .infinity, alignment: .center)
+    }
+
     // MARK: - Narrow Layout: Editor Controls
 
     /// Aspect ratio (width ÷ height) of the photo currently being previewed;
@@ -611,6 +685,21 @@ struct ContentView: View {
     private func closeActiveTool() {
         withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82)) {
             activeTool = nil
+        }
+    }
+
+    /// Tap-anywhere-on-the-canvas dismiss layer for the open tool panel. Shown
+    /// only while a tool is open (and not mid-render), it covers the photo so a
+    /// tap outside the panel/dock closes the panel — replacing the old
+    /// swipe-down-to-dismiss gesture on the panel itself. The panel and dock
+    /// render above this layer, so taps on them aren't intercepted.
+    @ViewBuilder
+    private var tapToDismissOverlay: some View {
+        if activeTool != nil && !isBusy {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { closeActiveTool() }
+                .accessibilityHidden(true)
         }
     }
 
@@ -820,6 +909,11 @@ private struct SheetModifiers: ViewModifier {
     let viewModel: WatermarkViewModel
     @Binding var selectedItemForOverride: IdentifiableIndex?
 
+    /// StoreKit's official review prompt (iOS 16+). The system presents the
+    /// prompt and enforces its own 3-per-year cap; we only invoke it at a good
+    /// moment. Requires `import StoreKit`.
+    @Environment(\.requestReview) private var requestReview
+
     func body(content: Content) -> some View {
         content
             .sheet(isPresented: Binding(
@@ -875,14 +969,61 @@ private struct SheetModifiers: ViewModifier {
 
     @ViewBuilder
     private var shareSheetContent: some View {
+        // The system "Save Image" (.saveToCameraRoll) re-encodes through
+        // UIImage and strips the C2PA Content Credentials manifest from signed
+        // exports. It's excluded and replaced by SaveToPhotosActivity, which
+        // stores the ORIGINAL bytes via PHAssetCreationRequest so credentials
+        // and all metadata survive into the photo library.
         if let batchResults = viewModel.batchResults, !batchResults.successes.isEmpty {
-            ShareSheetView(activityItems: batchResults.successes) {
+            ShareSheetView(
+                activityItems: batchResults.successes,
+                applicationActivities: [SaveToPhotosActivity(onFinished: handleSaveToPhotosResult)],
+                excludedActivityTypes: [.saveToCameraRoll],
+                onComplete: { completed in
+                    // A completed batch share counts as one delight moment.
+                    if completed { requestReviewAfterSuccessfulExport() }
+                }
+            ) {
                 viewModel.cleanupTempFile()
             }
         } else if viewModel.fullResResult?.url != nil {
-            ShareSheetView(activityItems: viewModel.singleShareItems) {
+            ShareSheetView(
+                activityItems: viewModel.singleShareItems,
+                applicationActivities: [SaveToPhotosActivity(onFinished: handleSaveToPhotosResult)],
+                excludedActivityTypes: [.saveToCameraRoll],
+                onComplete: { completed in
+                    if completed { requestReviewAfterSuccessfulExport() }
+                }
+            ) {
                 viewModel.cleanupTempFile()
             }
+        }
+    }
+
+    /// Surfaces Save-to-Photos failures (most commonly a denied add-photos
+    /// permission) — a UIActivity has no view controller to alert from.
+    private func handleSaveToPhotosResult(_ result: Result<Int, Error>) {
+        if case .failure(let error) = result {
+            viewModel.errorMessage = (error as? LocalizedError)?.errorDescription
+                ?? error.localizedDescription
+            viewModel.showError = true
+        }
+    }
+
+    /// Records a successful export and, when the moment is right (enough prior
+    /// successes, not already asked on this version), asks the system to show
+    /// the App Store review prompt. Fired only when the user actually saved or
+    /// shared a result — never on cancel — which is the natural point of
+    /// accomplishment Apple recommends. A short delay lets the share sheet
+    /// finish dismissing so the system prompt doesn't fight it for the screen.
+    private func requestReviewAfterSuccessfulExport() {
+        let manager = ReviewRequestManager.shared
+        manager.recordSuccessfulExport()
+        guard manager.shouldRequestReview() else { return }
+        manager.markReviewRequested()
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.2))
+            requestReview()
         }
     }
 
@@ -913,11 +1054,28 @@ private struct SheetModifiers: ViewModifier {
 struct SettingsView: View {
     @Bindable var viewModel: WatermarkViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(StoreManager.self) private var store
     @AppStorage("appearancePreference") private var appearancePreference: String = AppearancePreference.system.rawValue
 
+    #if DEBUG
+    @AppStorage("debugAlwaysShowOnboarding") private var debugAlwaysShowOnboarding = false
+    #endif
+
     var body: some View {
-        NavigationStack {
+        @Bindable var store = store
+        return NavigationStack {
             Form {
+                #if DEBUG
+                Section {
+                    Toggle("Force Premium", isOn: $store.debugForcePremium)
+                    Toggle("Always Show Onboarding", isOn: $debugAlwaysShowOnboarding)
+                } header: {
+                    Text("Developer")
+                } footer: {
+                    Text("Debug builds only. Force Premium unlocks every premium feature without a purchase. Always Show Onboarding replays the welcome flow on every launch for testing. This section does not exist in App Store builds.")
+                }
+                #endif
+
                 Section {
                     Toggle("Remember Last Settings", isOn: $viewModel.rememberLastSettings)
                 } footer: {
@@ -951,6 +1109,18 @@ struct SettingsView: View {
                     Text("Clears the current text, logo, signature, and frame so you can begin fresh.")
                 }
 
+                Section {
+                    NavigationLink {
+                        ContentCredentialsInfoView()
+                    } label: {
+                        Label("About Content Credentials", systemImage: "checkmark.seal")
+                    }
+                } header: {
+                    Text("Content Credentials")
+                } footer: {
+                    Text("Learn what C2PA Content Credentials prove, and when they're kept or removed as you share your image.")
+                }
+
                 Section("About") {
                     LabeledContent("Developer", value: "Orbitaar")
                     LabeledContent("Version", value: Self.appVersionString)
@@ -972,17 +1142,15 @@ struct SettingsView: View {
         }
     }
 
-    /// "X.Y (build)" from the bundle.
+    /// "X.Y" from the bundle.
     private static var appVersionString: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let build = info?["CFBundleVersion"] as? String ?? "1"
-        return "\(short) (\(build))"
+        return short
     }
 
-    // Placeholder destinations — point these at the real hosted documents.
-    private static let termsURL = URL(string: "https://orbitaar.com/markepi/terms")!
-    private static let privacyURL = URL(string: "https://orbitaar.com/markepi/privacy")!
+    private static let termsURL = URL(string: "https://www.orbitaar.com/markepi/terms-of-use.html")!
+    private static let privacyURL = URL(string: "https://www.orbitaar.com/markepi/privacy-policy.html")!
 }
 
 // MARK: - Window Background
@@ -1077,6 +1245,80 @@ private extension View {
         } else {
             self
         }
+    }
+}
+
+// MARK: - Premium Crown Icon
+
+/// The toolbar "upgrade" crown. It rests **grey** (a muted, non-shouty upsell);
+/// for free users a warm **golden** glow sweeps across it right→left on a slow
+/// loop, momentarily lighting the crown gold to draw the eye. Entitled users get
+/// a calm, static gold crown (earned, no animation); Reduce Motion drops the
+/// sweep and leaves the grey resting state.
+private struct PremiumCrownIcon: View {
+    let isPremium: Bool
+    let reduceMotion: Bool
+
+    /// Only free users get the attention-drawing sweep; Pro users have nothing
+    /// to upsell, and Reduce Motion suppresses it.
+    private var animate: Bool { !isPremium && !reduceMotion }
+
+    /// Metallic gold: a light top edge falling to a deeper amber. Used as the
+    /// static fill for Pro and as the colour the sweep paints for free users.
+    private static let gold = LinearGradient(
+        colors: [
+            Color(red: 1.00, green: 0.91, blue: 0.60),
+            Color(red: 0.99, green: 0.78, blue: 0.28),
+            Color(red: 0.86, green: 0.58, blue: 0.12)
+        ],
+        startPoint: .top, endPoint: .bottom
+    )
+
+    /// The warm highlight band that travels across the grey crown.
+    private static let goldGlow = LinearGradient(
+        colors: [
+            .clear,
+            Color(red: 1.00, green: 0.82, blue: 0.34).opacity(0.85),
+            Color(red: 1.00, green: 0.94, blue: 0.66),
+            Color(red: 1.00, green: 0.82, blue: 0.34).opacity(0.85),
+            .clear
+        ],
+        startPoint: .leading, endPoint: .trailing
+    )
+
+    @State private var sweep = false
+
+    var body: some View {
+        Image(systemName: "crown.fill")
+            .symbolRenderingMode(.monochrome)
+            // Rest state: gold when entitled, otherwise a muted grey.
+            .foregroundStyle(isPremium ? AnyShapeStyle(Self.gold)
+                                       : AnyShapeStyle(Color.secondary))
+            .overlay {
+                if animate {
+                    GeometryReader { geo in
+                        // A golden band, masked to the crown, sliding from
+                        // off-right (+w) to off-left (−w): a right→left sweep that
+                        // lights the grey crown gold as it passes.
+                        Self.goldGlow
+                            .frame(width: geo.size.width * 0.85)
+                            .offset(x: sweep ? -geo.size.width * 1.15 : geo.size.width * 1.15)
+                            .animation(
+                                .easeInOut(duration: 1.1)
+                                    .delay(1.4)
+                                    .repeatForever(autoreverses: false),
+                                value: sweep
+                            )
+                    }
+                    .mask {
+                        Image(systemName: "crown.fill")
+                            .symbolRenderingMode(.monochrome)
+                    }
+                    .allowsHitTesting(false)
+                }
+            }
+            .onAppear { sweep = animate }
+            .onChange(of: animate) { _, active in sweep = active }
     }
 }
 

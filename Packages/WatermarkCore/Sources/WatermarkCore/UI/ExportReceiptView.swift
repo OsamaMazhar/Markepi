@@ -4,6 +4,10 @@ public struct ExportReceiptView: View {
     public let receipt: ExportReceipt
     private let onShare: (() -> Void)?
 
+    /// Presents the full Content Credentials explainer from the "Learn more"
+    /// action on the sharing-tips card.
+    @State private var showCredentialsInfo = false
+
     public init(receipt: ExportReceipt, onShare: (() -> Void)? = nil) {
         self.receipt = receipt
         self.onShare = onShare
@@ -25,6 +29,9 @@ public struct ExportReceiptView: View {
             if let onShare {
                 shareBar(onShare)
             }
+        }
+        .sheet(isPresented: $showCredentialsInfo) {
+            NavigationStack { ContentCredentialsInfoView() }
         }
     }
 
@@ -68,6 +75,37 @@ public struct ExportReceiptView: View {
                 notesCard
             }
             privacyCard
+            if isSigned {
+                sharingTipsCard
+            }
+        }
+    }
+
+    /// Sets expectations about when Content Credentials survive sharing. Shown
+    /// only for signed exports — an unsigned photo has nothing to preserve.
+    private var sharingTipsCard: some View {
+        ReceiptCard(title: "Keeping Your Credentials", systemImage: "shield.lefthalf.filled") {
+            ReceiptNote("Content Credentials stay intact only when the file's original bytes are preserved.")
+            ReceiptDivider()
+            ReceiptRow(icon: "checkmark.circle",
+                       iconTint: .green,
+                       title: "Kept by Save to Photos, AirDrop, Files, email, and sending as a file or document",
+                       value: "")
+            ReceiptDivider()
+            ReceiptRow(icon: "xmark.circle",
+                       iconTint: .orange,
+                       title: "Removed by WhatsApp/Instagram/Facebook photos, screenshots, and most photo editors",
+                       value: "")
+            ReceiptNote("This is a limitation of the C2PA standard, not a bug — a removed credential can't be recovered, but your visible watermark always remains.")
+            Button {
+                showCredentialsInfo = true
+            } label: {
+                Label("Learn more about Content Credentials", systemImage: "info.circle")
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+            }
         }
     }
 

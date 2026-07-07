@@ -1,5 +1,4 @@
 import SwiftUI
-import WatermarkCore
 
 /// Composite view combining all watermarking controls: text input, position
 /// picker, scale stepper, logo picker, white frame toggle, and layer list.

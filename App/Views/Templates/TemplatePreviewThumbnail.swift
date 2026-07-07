@@ -22,18 +22,18 @@ struct TemplatePreviewThumbnail: View {
                 Image(uiImage: thumbnail)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 48, height: 48)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .frame(width: MarkepiSizing.templateThumbnail, height: MarkepiSizing.templateThumbnail)
+                    .clipShape(RoundedRectangle(cornerRadius: MarkepiRadius.sm))
             } else if isLoading {
                 ProgressView()
-                    .frame(width: 48, height: 48)
-                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 6))
+                    .frame(width: MarkepiSizing.templateThumbnail, height: MarkepiSizing.templateThumbnail)
+                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: MarkepiRadius.sm))
             } else {
                 Image(systemName: "doc.text")
                     .font(.system(size: 20))
                     .foregroundStyle(.secondary)
-                    .frame(width: 48, height: 48)
-                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 6))
+                    .frame(width: MarkepiSizing.templateThumbnail, height: MarkepiSizing.templateThumbnail)
+                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: MarkepiRadius.sm))
             }
         }
         .task {

@@ -8,7 +8,9 @@ import AppKit
 import CoreText
 #endif
 
+#if DEBUG
 private let frameLog = Logger(subsystem: "com.watermark.core", category: "WhiteFrame")
+#endif
 
 /// Renders a white frame border with device metadata text as a CIImage
 /// via UIGraphicsImageRenderer (iOS) / Core Graphics (macOS testing) →
@@ -122,11 +124,13 @@ public struct WhiteFrameRenderer {
         // Compositing a gray CIImage over the color photo via sourceOver makes
         // the whole result inherit that gray space — desaturating the photo.
         // Redraw into an explicit sRGB RGBA bitmap so the frame is always RGB.
-        let sourceModel = uiImage.cgImage?.colorSpace?.model.rawValue ?? -1
         guard let ciImage = ciImageInRGB(from: uiImage) else {
             throw PipelineError.frameRenderFailed
         }
+        #if DEBUG
+        let sourceModel = uiImage.cgImage?.colorSpace?.model.rawValue ?? -1
         frameLog.debug("frame rendered: srcColorSpaceModel=\(sourceModel) (2=RGB,1=mono) coerced→sRGB")
+        #endif
 
         return ciImage
     }

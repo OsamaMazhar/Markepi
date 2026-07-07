@@ -34,6 +34,18 @@ public struct LivePhotoProcessor {
 
         /// Provenance receipt from the still-image component.
         public let provenanceReceipt: ExportReceipt?
+
+        public init(
+            watermarkedStillURL: URL,
+            watermarkedVideoURL: URL,
+            stillOutputUTI: String,
+            provenanceReceipt: ExportReceipt? = nil
+        ) {
+            self.watermarkedStillURL = watermarkedStillURL
+            self.watermarkedVideoURL = watermarkedVideoURL
+            self.stillOutputUTI = stillOutputUTI
+            self.provenanceReceipt = provenanceReceipt
+        }
     }
 
     // MARK: - Entry Point
@@ -63,11 +75,14 @@ public struct LivePhotoProcessor {
         config: WatermarkConfiguration,
         provenance: ProvenanceExportOptions? = nil
     ) async throws -> LivePhotoPairResult {
-        // Step 1: Watermark still frame via existing photo pipeline
+        // Step 1: Watermark still frame via existing photo pipeline.
+        // Live Photo processing is always a real export, so any Content
+        // Credentials on the source still are preserved via the ingredient chain.
         let stillResult = try await WatermarkEngine.shared.process(
             sourceURL: stillImageURL,
             config: config,
-            provenance: provenance
+            provenance: provenance,
+            preserveSourceCredentials: true
         )
 
         // Step 2: Watermark video component via existing video pipeline
@@ -78,12 +93,16 @@ public struct LivePhotoProcessor {
         )
 
         guard let stillURL = stillResult.url else {
+            #if DEBUG
             os_log(.error, "WatermarkCore LivePhotoProcessor: Still image processing produced no output URL")
+            #endif
             throw PipelineError.renderFailed
         }
 
         guard let videoOutputURL = videoResult.url else {
+            #if DEBUG
             os_log(.error, "WatermarkCore LivePhotoProcessor: Video processing produced no output URL")
+            #endif
             throw PipelineError.renderFailed
         }
 

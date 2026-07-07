@@ -4,6 +4,10 @@
 <dict>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save your watermarked photos and videos to your photo library.</string>
+	<!-- The app imports a copy of incoming documents (it never edits the
+	     original in place), so opened files are copied into the app's Inbox. -->
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

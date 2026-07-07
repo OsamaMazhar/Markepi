@@ -1,5 +1,4 @@
 import SwiftUI
-import WatermarkCore
 
 /// Retro date-stamp controls: an enable toggle plus, when enabled, a date
 /// format picker and a size slider. Mirrors the classic film-camera databack —

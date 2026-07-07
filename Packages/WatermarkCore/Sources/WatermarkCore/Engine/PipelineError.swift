@@ -45,6 +45,9 @@ public enum PipelineError: Error, LocalizedError, Sendable, Equatable {
     /// Token substitution failed unexpectedly
     case tokenSubstitutionFailed(String)
 
+    /// C2PA signing returned without an intact read-back signature.
+    case c2paSignatureVerificationFailed
+
     // MARK: - Forward-declared ProRAW errors (Plan 05-03)
 
     /// ProRAW gain map was expected but not found in DNG file
@@ -117,6 +120,8 @@ public enum PipelineError: Error, LocalizedError, Sendable, Equatable {
             return "No image data was provided."
         case .tokenSubstitutionFailed(let token):
             return "Failed to substitute token in watermark text: \(token)"
+        case .c2paSignatureVerificationFailed:
+            return "Content Credentials signing failed because the exported image signature could not be verified."
         case .proRawGainMapMissing:
             return "ProRAW gain map was expected but not found in the DNG file."
         case .proRawWriteFailed:
@@ -179,6 +184,7 @@ public enum PipelineError: Error, LocalizedError, Sendable, Equatable {
         case (.unsupportedFormat(let a), .unsupportedFormat(let b)): return a == b
         case (.emptyData, .emptyData): return true
         case (.tokenSubstitutionFailed(let a), .tokenSubstitutionFailed(let b)): return a == b
+        case (.c2paSignatureVerificationFailed, .c2paSignatureVerificationFailed): return true
         case (.proRawGainMapMissing, .proRawGainMapMissing): return true
         case (.proRawWriteFailed, .proRawWriteFailed): return true
         case (.videoTrackNotFound, .videoTrackNotFound): return true
