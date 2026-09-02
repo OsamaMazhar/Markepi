@@ -29,6 +29,14 @@
 - [ ] 4.3 Implement variant selection: the user's colour/mono preference when the brand ships both, otherwise the single available mark, with mono resolving to the rendition that contrasts with the mat, and verify tests cover both-available, one-available, and mono picking the dark rendition on a light mat
 - [ ] 4.4 Verify end to end that a photo's metadata drives the mark: a fixture from each shipped brand resolves to that brand's mark, and a fixture with no manufacturer resolves to none
 
+## 4b. Metric sizing
+
+- [x] 4b.1 Add `borderMillimetres`, `captionTextMillimetres` and `logoHeightMillimetres` to the config, clamped and Codable-compatible, and verify a test asserts clamping, round-trip, and that a pre-metric template gets the defaults
+- [x] 4b.2 Convert millimetres to pixels against the photo's resolution, trusting only a plausible print-intent value and defaulting to 300 otherwise, and verify tests cover a real resolution, the format-default value, and an absent one
+- [x] 4b.3 Size the gallery mat, caption text and brand mark from those settings so all three scale together, and verify tests assert each is physical, that they scale together with resolution, and that each setting moves only its own element
+- [x] 4b.4 Keep classic proportional and unaffected by the metric settings, and verify a test asserts classic's mat and caption still derive from the source dimensions
+- [ ] 4b.5 Add the millimetre controls to the gallery rows in the UI — border, caption size, mark height — and verify each updates the live preview
+
 ## 5. Renderer — caption resolution and drawing
 
 - [ ] 5.1 Introduce the resolved caption model and move metadata lookup, token substitution and empty-slot elision ahead of the platform branch — D4, and verify a test resolves the four slots from a metadata dictionary including the missing-field case

@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 
 /// Where the photo sits inside a framed export, and how big that export is.
 ///
@@ -33,27 +34,89 @@ public struct FrameGeometry: Equatable, Sendable {
     /// never covers any of the photo.
     public let keylineWidth: CGFloat
 
-    /// Font size for caption text, derived from the source rather than the
-    /// framed canvas so that adding a mat does not change how big the text is.
+    /// Font size for caption text, in pixels.
+    ///
+    /// `gallery` derives it from a millimetre setting, like everything else it
+    /// measures; `classic` keeps its proportion of the source.
     public let captionFontSize: CGFloat
+
+    /// Height the brand mark is drawn at, in pixels. Zero for styles that draw
+    /// no mark.
+    public let logoHeight: CGFloat
+
+    /// How much taller the gallery bottom band is than its other edges.
+    ///
+    /// The reference layout's caption bar is about three times the side mat.
+    /// Tying it to the mat means the band tracks the border setting: widen the
+    /// mat and the caption bar widens with it.
+    static let galleryBottomMultiple: CGFloat = 3.0
+
+    /// Pixels per inch to convert a millimetre border against.
+    ///
+    /// Uses the image's own resolution when it looks like a real measurement.
+    /// A great many JPEGs carry 72 DPI because that is the JFIF default, not
+    /// because anyone measured anything — taking that literally would turn a
+    /// 5mm border into 14px on an 8000px photo, which reads as no border at
+    /// all. So only a print-intent resolution is believed; anything lower
+    /// falls back to 300.
+    public static func resolveDPI(from metadata: [String: Any]) -> CGFloat {
+        let candidates = [
+            metadata[kCGImagePropertyDPIWidth as String],
+            metadata[kCGImagePropertyDPIHeight as String],
+        ]
+        for case let value? in candidates {
+            if let dpi = (value as? NSNumber)?.doubleValue, dpi >= 150 {
+                return CGFloat(dpi)
+            }
+        }
+        return 300
+    }
+
+    /// Converts millimetres to pixels at `dpi`.
+    public static func pixels(millimetres mm: CGFloat, dpi: CGFloat) -> CGFloat {
+        (mm / 25.4 * dpi).rounded()
+    }
 
     /// Creates the geometry for a source of `sourceSize` under `config`.
     ///
     /// - Parameters:
     ///   - config: the frame configuration; `style` selects the mat shape.
     ///   - sourceSize: the unframed source size in pixels.
-    public init(config: WhiteFrameConfig, sourceSize: CGSize) {
+    ///   - dpi: resolution used to turn a millimetre border into pixels.
+    ///     Only `gallery` uses it; `classic` sizes proportionally.
+    public init(config: WhiteFrameConfig, sourceSize: CGSize, dpi: CGFloat = 300) {
         self.sourceSize = sourceSize
 
         let shorter = min(sourceSize.width, sourceSize.height)
-        // Mat thickness keeps the existing rule — a proportion of the shorter
-        // dimension — so a frame looks the same at any export resolution.
-        let mat = (shorter * config.frameWidthRatio).rounded()
-        let fontSize = shorter * config.textFontSizeRatio
-        self.captionFontSize = fontSize
 
         let keyline = config.keylineEnabled ? max(1, (shorter * 0.0015).rounded()) : 0
         self.keylineWidth = keyline
+
+        // The two styles mean different things by "border": classic is a
+        // proportion of the photo, gallery is a physical size on paper.
+        let mat: CGFloat
+        switch config.style {
+        case .classic:
+            mat = (shorter * config.frameWidthRatio).rounded()
+        case .gallery:
+            mat = Self.pixels(millimetres: config.borderMillimetres, dpi: dpi)
+        }
+
+        // Caption size follows whatever the style measures its mat in, so the
+        // two cannot fight. Classic scales with the photo, like its mat does.
+        // Gallery ties the text to its physical mat: if the caption kept
+        // scaling with pixels, a 48MP photo would have text taller than a 5mm
+        // border, and the band would stop tracking the millimetre setting.
+        let fontSize: CGFloat
+        switch config.style {
+        case .classic:
+            fontSize = shorter * config.textFontSizeRatio
+            self.logoHeight = 0
+        case .gallery:
+            fontSize = Self.pixels(millimetres: config.captionTextMillimetres, dpi: dpi)
+            self.logoHeight = Self.pixels(millimetres: config.logoHeightMillimetres, dpi: dpi)
+        }
+        self.captionFontSize = fontSize
 
         // The keyline lives in the innermost part of the mat, so a mat has to
         // be at least thick enough to hold it and still read as a mat.
@@ -66,15 +129,19 @@ public struct FrameGeometry: Equatable, Sendable {
             // mat at the existing proportions, so the bottom is not special.
             bottomEdge = edge
         case .gallery:
-            // The bottom band has to hold two stacked lines of caption. Derive
-            // its height from that text rather than picking a fraction: line
-            // height plus the gap between the two lines, plus breathing room
-            // above and below scaled to the same text.
+            // The bottom band is a multiple of the side mat, so it tracks the
+            // millimetre setting. It still has to hold two stacked lines,
+            // though, so a very small border is floored by what the caption
+            // physically needs rather than crushing the text.
             let lineHeight = fontSize * 1.25
             let interlineGap = fontSize * 0.25
             let verticalPadding = fontSize * 0.85
-            let captionBlock = lineHeight * 2 + interlineGap
-            bottomEdge = max(edge, (captionBlock + verticalPadding * 2).rounded() + keyline)
+            let logoHeight = self.logoHeight
+            // The band has to clear whichever is taller: the two stacked text
+            // lines, or the brand mark beside them.
+            let textBlock = lineHeight * 2 + interlineGap
+            let contentFloor = (max(textBlock, logoHeight) + verticalPadding * 2).rounded() + keyline
+            bottomEdge = max(mat * Self.galleryBottomMultiple + keyline, contentFloor)
         }
 
         self.top = edge

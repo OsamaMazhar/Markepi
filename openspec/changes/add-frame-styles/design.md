@@ -100,6 +100,20 @@ The framed size is rounded up to even numbers in both dimensions.
 
 *Why:* H.264 and HEVC want even dimensions; an odd `renderSize` is a real source of encoder trouble. Doing it for photos too keeps photo and video geometry identical, which is what makes them testable against each other.
 
+### D8 — Gallery measures in millimetres; classic stays proportional
+
+`gallery` sizes its border, caption text and brand mark in millimetres, converted against the photo's resolution. `classic` keeps `frameWidthRatio` and `textFontSizeRatio`.
+
+*Why per-style rather than a mode flag:* the two styles genuinely mean different things by "border". Classic is a proportion of the photo and always has been; gallery is a mat on a print. A `borderSizing` enum would make every call site ask which mode it is in, to express what the style already says.
+
+*Why every gallery measurement is metric, not just the border:* mixing units within one style makes the parts fight. Caption text sized as a proportion of the photo would, on a 48MP export, come out taller than a 5mm border — and the bottom band would stop tracking the border setting, because the text floor would always dominate. One unit per style keeps the band a function of the setting.
+
+*Why the mark is sized by height:* the supplied artwork runs from about 10:1 wordmarks to square glyphs. A width-based size would make a wordmark microscopic and a glyph enormous.
+
+*Resolving DPI:* the photo's own resolution is used when it is at least a plausible print-intent value, and 300 otherwise. A great many files carry 72 DPI because it is the format default rather than a measurement; believing it would turn a 5mm border into 14px on an 8000px photo, which reads as no border at all. This floor is a deliberate deviation from taking the metadata literally, and is the piece to revisit if a real low-resolution source ever needs framing.
+
+*Trade-off:* a physical border does not scale with the photo, so on screen a 5mm border looks thicker on a small image than a large one. That is what a physical unit means, and it is the right behaviour for a frame intended to be printed.
+
 ## Risks / Trade-offs
 
 - **Every brand mark is a third-party registered trademark**, and this change ships roughly fifteen of them. Reproducing them in exported images carries App Store review risk, and the risk scales with the number of brands rather than staying flat. The user was told this and accepted it. → Materially reduced by D6: because the mark is derived from the photo's own metadata, it only ever appears on a photo actually taken on that manufacturer's device, which is factual attribution rather than decoration, and no user can stamp one brand's mark onto another brand's photo. Reduced further by marks being per-brand files — pulling one brand is deleting a file. Not eliminated: attribution is still reproduction, and each brand's own usage guidelines may differ.

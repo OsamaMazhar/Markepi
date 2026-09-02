@@ -631,7 +631,11 @@ public actor WatermarkEngine {
 
         // D-12: the mat is the outermost layer, and it enlarges the canvas.
         if let frameConfig = config.whiteFrame, frameConfig.isEnabled {
-            let geometry = FrameGeometry(config: frameConfig, sourceSize: watermarkedResult.extent.size)
+            let geometry = FrameGeometry(
+                config: frameConfig,
+                sourceSize: watermarkedResult.extent.size,
+                dpi: FrameGeometry.resolveDPI(from: metadata)
+            )
             let mat = try WhiteFrameRenderer.render(
                 config: frameConfig,
                 geometry: geometry,

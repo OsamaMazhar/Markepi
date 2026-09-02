@@ -26,7 +26,7 @@ A frame SHALL have a style, and the style SHALL determine the mat geometry and t
 
 Every frame style SHALL place the mat *outside* the photo: the exported image SHALL be larger than the source, and every pixel of the source SHALL remain visible and uncropped. **BREAKING** — this replaces the previous behaviour, where the border was drawn over the source's outer edge and the export kept the source's dimensions.
 
-Mat width and caption size SHALL scale with the source image's shorter dimension, so a frame looks the same at any export resolution. In the `gallery` style the mat SHALL be of uniform width on the left, right and top edges, with a taller bottom band sized to hold the caption.
+In the `gallery` style the mat SHALL be of uniform width on the left, right and top edges, with a taller bottom band sized to hold the caption. Each style SHALL size its mat and caption in a single unit — `classic` as a proportion of the source, `gallery` in physical units — so that the parts of a frame cannot be measured against each other in ways that fight.
 
 #### Scenario: Source image is never cropped
 - **WHEN** a photo is exported with a frame in any style
@@ -38,8 +38,8 @@ Mat width and caption size SHALL scale with the source image's shorter dimension
 - **THEN** the bottom mat band is taller than the left, right and top mat edges
 - **AND** the caption is fully contained within that bottom band
 
-#### Scenario: Proportions hold across resolutions
-- **WHEN** the same photo is rendered at two different export resolutions
+#### Scenario: Classic proportions hold across resolutions
+- **WHEN** the same photo is rendered in the `classic` style at two different export resolutions
 - **THEN** the ratio of mat width to source shorter dimension is the same in both
 - **AND** the ratio of caption text size to source shorter dimension is the same in both
 
@@ -51,6 +51,44 @@ Mat width and caption size SHALL scale with the source image's shorter dimension
 - **WHEN** a photo carrying text, logo or signature watermarks is exported with a frame enabled
 - **THEN** each of those layers sits at the same place on the photo as it does without a frame
 - **AND** none of them is displaced onto the mat by the canvas growing
+
+### Requirement: Gallery is measured in physical units
+
+In the `gallery` style the user SHALL set the border thickness, the caption text size and the brand mark height in millimetres. These SHALL be physical sizes: the same setting SHALL produce the same measurement on paper regardless of the photo's pixel dimensions.
+
+Millimetres SHALL be converted to pixels using the photo's own recorded resolution where that resolution is a plausible print-intent measurement, and a print-standard default otherwise. The brand mark SHALL be sized by height, because these marks range from wide wordmarks to square glyphs and a width-based size would render them wildly inconsistently.
+
+The bottom band SHALL grow and shrink with the border setting, and SHALL always remain tall enough to contain the caption lines and the brand mark.
+
+#### Scenario: A millimetre setting is a physical size
+- **WHEN** the same border setting is applied to a small photo and to a much larger one
+- **THEN** the border occupies the same number of pixels in both
+- **AND** so the two, printed at the same resolution, have borders that measure the same
+
+#### Scenario: Resolution changes the pixel size
+- **WHEN** a photo carries a higher print-intent resolution
+- **THEN** the same millimetre settings resolve to proportionally more pixels
+- **AND** the border, caption text and brand mark all scale together, keeping their relationship to one another
+
+#### Scenario: A meaningless recorded resolution is not trusted
+- **WHEN** a photo records a resolution too low to be a real print-intent measurement, as most camera files do by format default
+- **THEN** the print-standard default is used instead, so the border does not collapse to something invisible
+
+#### Scenario: The bottom band tracks the border
+- **WHEN** the user increases the border setting
+- **THEN** the bottom band grows with it and remains the tallest edge
+
+#### Scenario: The band never crushes its contents
+- **WHEN** the border is set very small, or the caption text or brand mark very large
+- **THEN** the bottom band is still tall enough to contain the caption lines and the mark
+
+#### Scenario: Each setting moves only its own element
+- **WHEN** the user changes the caption text size
+- **THEN** the brand mark height and the border thickness are unchanged
+
+#### Scenario: Classic is unaffected
+- **WHEN** the `classic` style is used
+- **THEN** it sizes its mat and caption as a proportion of the photo, and the millimetre settings have no effect on it
 
 ### Requirement: Four-slot gallery caption
 

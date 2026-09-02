@@ -39,7 +39,10 @@ public struct VideoLayerBuilder {
         // source — same rule as photos, from the same type, which is what keeps
         // the two geometries comparable.
         let frameConfig = config.whiteFrame?.isEnabled == true ? config.whiteFrame : nil
-        let geometry = frameConfig.map { FrameGeometry(config: $0, sourceSize: videoSize) }
+        let geometry = frameConfig.map {
+            FrameGeometry(config: $0, sourceSize: videoSize,
+                          dpi: FrameGeometry.resolveDPI(from: metadata))
+        }
         let renderSize = geometry?.framedSize ?? videoSize
 
         let parentLayer = CALayer()

@@ -219,6 +219,32 @@ public struct WhiteFrameConfig: Sendable, Codable {
     /// predates styles keeps the border it always had.
     public var style: FrameStyle
 
+    /// Mat thickness in millimetres, used by `gallery`.
+    ///
+    /// A physical size rather than a proportion: 5mm is 5mm on paper whatever
+    /// the photo's pixel dimensions. `classic` keeps `frameWidthRatio`, which
+    /// is proportional — the two styles genuinely mean different things by
+    /// "border", and existing templates keep the ratio they were saved with.
+    ///
+    /// Converted to pixels against the photo's own resolution; see
+    /// `FrameGeometry.resolveDPI`.
+    public var borderMillimetres: CGFloat
+
+    /// Caption text size in millimetres, used by `gallery`.
+    ///
+    /// Physical like the border it sits in. If the text were sized as a
+    /// proportion of the photo instead, a large photo would grow text that a
+    /// millimetre border could not hold — the two units would fight.
+    /// `classic` keeps `textFontSizeRatio`.
+    public var captionTextMillimetres: CGFloat
+
+    /// Brand mark height in millimetres, used by `gallery`.
+    ///
+    /// Height, not width: these marks are mostly wordmarks whose aspect ratios
+    /// run from about 10:1 to taller-than-wide, so a width-based size would
+    /// make a wordmark microscopic and a square glyph enormous.
+    public var logoHeightMillimetres: CGFloat
+
     /// Thin black stroke between the photo and the mat. Applies to every
     /// style, not just `gallery`. Default: false
     public var keylineEnabled: Bool
@@ -279,6 +305,9 @@ public struct WhiteFrameConfig: Sendable, Codable {
         textColor: CGColor = CGColor(gray: 0.333, alpha: 1.0),
         textFontSizeRatio: CGFloat = 0.018,
         style: FrameStyle = .classic,
+        borderMillimetres: CGFloat = 5.0,
+        captionTextMillimetres: CGFloat = 2.5,
+        logoHeightMillimetres: CGFloat = 4.0,
         keylineEnabled: Bool = false,
         logoVariant: LogoVariant = .color,
         leftPrimary: CaptionSlot = WhiteFrameConfig.defaultLeftPrimary,
@@ -296,6 +325,11 @@ public struct WhiteFrameConfig: Sendable, Codable {
         self.textColor = textColor
         self.textFontSizeRatio = textFontSizeRatio
         self.style = style
+        // A hairline mat is a rendering bug waiting to happen, and nobody
+        // frames a print with a 10cm border; clamp rather than throw.
+        self.borderMillimetres = min(50, max(0.5, borderMillimetres))
+        self.captionTextMillimetres = min(20, max(0.5, captionTextMillimetres))
+        self.logoHeightMillimetres = min(30, max(0.5, logoHeightMillimetres))
         self.keylineEnabled = keylineEnabled
         self.logoVariant = logoVariant
         self.leftPrimary = leftPrimary
@@ -310,7 +344,8 @@ public struct WhiteFrameConfig: Sendable, Codable {
         case isEnabled, frameWidthRatio, metadataTextEnabled
         case captionPrefix, captionFields
         case customAttributionText, textColorRGBA, textFontSizeRatio
-        case style, keylineEnabled, logoVariant
+        case style, borderMillimetres, captionTextMillimetres, logoHeightMillimetres
+        case keylineEnabled, logoVariant
         case leftPrimary, leftSecondary, rightPrimary, rightSecondary
     }
 
@@ -339,6 +374,12 @@ public struct WhiteFrameConfig: Sendable, Codable {
         // styles existed: it gets the classic border, no keyline, and the
         // reference gallery defaults it will only use if switched to gallery.
         style = try container.decodeIfPresent(FrameStyle.self, forKey: .style) ?? .classic
+        borderMillimetres = min(50, max(0.5,
+            try container.decodeIfPresent(CGFloat.self, forKey: .borderMillimetres) ?? 5.0))
+        captionTextMillimetres = min(20, max(0.5,
+            try container.decodeIfPresent(CGFloat.self, forKey: .captionTextMillimetres) ?? 2.5))
+        logoHeightMillimetres = min(30, max(0.5,
+            try container.decodeIfPresent(CGFloat.self, forKey: .logoHeightMillimetres) ?? 4.0))
         keylineEnabled = try container.decodeIfPresent(Bool.self, forKey: .keylineEnabled) ?? false
         logoVariant = try container.decodeIfPresent(LogoVariant.self, forKey: .logoVariant) ?? .color
         leftPrimary = try container.decodeIfPresent(CaptionSlot.self, forKey: .leftPrimary)
@@ -366,6 +407,9 @@ public struct WhiteFrameConfig: Sendable, Codable {
             : [0.333, 0.333, 0.333, 1.0]
         try container.encode(rgba, forKey: .textColorRGBA)
         try container.encode(style, forKey: .style)
+        try container.encode(borderMillimetres, forKey: .borderMillimetres)
+        try container.encode(captionTextMillimetres, forKey: .captionTextMillimetres)
+        try container.encode(logoHeightMillimetres, forKey: .logoHeightMillimetres)
         try container.encode(keylineEnabled, forKey: .keylineEnabled)
         try container.encode(logoVariant, forKey: .logoVariant)
         try container.encode(leftPrimary, forKey: .leftPrimary)

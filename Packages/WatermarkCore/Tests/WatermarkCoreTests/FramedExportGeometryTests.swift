@@ -54,9 +54,9 @@ struct FramedExportGeometryTests {
                     space: CGColorSpace(name: CGColorSpace.sRGB)!,
                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
                 ) else { return false }
-                // CGContext is y-up; flip so row 0 is the TOP.
-                ctx.translateBy(x: 0, y: CGFloat(h))
-                ctx.scaleBy(x: 1, y: -1)
+                // `draw(image:in:)` already renders upright into a bitmap
+                // context, so memory row 0 is the top. Adding a flip here
+                // inverts the image and reads every y coordinate mirrored.
                 ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
                 return true
             }
