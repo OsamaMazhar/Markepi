@@ -16,11 +16,11 @@
 
 ## 3. Geometry — mat outside the photo
 
-- [ ] 3.1 Add a single source of truth for framed geometry (mat insets per edge for a given style, config and source size, plus the resulting framed size rounded up to even in both dimensions — D7), and verify unit tests cover classic vs gallery insets, both orientations, and the even-rounding
-- [ ] 3.2 Change `WhiteFrameRenderer.render` to return a mat image at the framed size with a transparent hole at the photo rect, and verify a test asserts the returned extent equals the framed size and that the hole is fully transparent while the mat is opaque
-- [ ] 3.3 Update `WatermarkEngine.buildFilterGraph` to translate the composited photo into the hole and composite the mat over it, and verify a test asserts the output extent is the framed size and that a known source pixel is unchanged at its translated position
-- [ ] 3.4 Delete the `frameInset` watermark-positioning workaround in `WatermarkEngine.buildFilterGraph` and verify a test asserts a corner watermark lands at the same position on the photo with and without a frame
-- [ ] 3.5 Update the render call and `graphMetadata` PixelWidth/PixelHeight to report the framed size, and verify an exported file's recorded dimensions match the framed size
+- [x] 3.1 Add a single source of truth for framed geometry (mat insets per edge for a given style, config and source size, plus the resulting framed size rounded up to even in both dimensions — D7), and verify unit tests cover classic vs gallery insets, both orientations, and the even-rounding
+- [x] 3.2 Change `WhiteFrameRenderer.render` to return a mat image at the framed size with a transparent hole at the photo rect, and verify a test asserts the returned extent equals the framed size and that the hole is fully transparent while the mat is opaque
+- [x] 3.3 Update `WatermarkEngine.buildFilterGraph` to translate the composited photo into the hole and composite the mat over it, and verify a test asserts the output extent is the framed size and that a known source pixel is unchanged at its translated position
+- [x] 3.4 Delete the `frameInset` watermark-positioning workaround in `WatermarkEngine.buildFilterGraph` and verify a test asserts a corner watermark lands at the same position on the photo with and without a frame
+- [x] 3.5 Update the render call and `graphMetadata` PixelWidth/PixelHeight to report the framed size, and verify an exported file's recorded dimensions match the framed size
 
 ## 4. Brand resolution
 
@@ -41,8 +41,8 @@
 
 ## 6. Video parity
 
-- [ ] 6.1 Grow `videoComposition.renderSize` to the framed size and inset the video layer to the photo rect in `VideoLayerBuilder`/`VideoProcessor`, reusing the task 3.1 geometry, and verify a test asserts the built layer tree's video layer frame equals the photo rect within the framed parent
-- [ ] 6.2 Delete the `frameInset` workaround in `VideoLayerBuilder` to match task 3.4, and verify a test asserts photo and video place the same corner watermark at the same relative position
+- [x] 6.1 Grow `videoComposition.renderSize` to the framed size and inset the video layer to the photo rect in `VideoLayerBuilder`/`VideoProcessor`, reusing the task 3.1 geometry, and verify a test asserts the built layer tree's video layer frame equals the photo rect within the framed parent
+- [x] 6.2 Delete the `frameInset` workaround in `VideoLayerBuilder` to match task 3.4, and verify a test asserts photo and video place the same corner watermark at the same relative position
 - [ ] 6.3 Verify a real device video export with each style: the export completes, output dimensions are the framed size, and source metadata is preserved (Simulator cannot be used — its CoreMedia XPC fault is unrelated and pre-existing)
 
 ## 7. UI

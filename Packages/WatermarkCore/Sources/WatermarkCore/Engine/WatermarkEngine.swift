@@ -513,22 +513,11 @@ public actor WatermarkEngine {
         var layers: [(CIImage, CGPoint)] = []
         let extent = composited.extent
 
-        // When the white frame is enabled it is composited as an opaque band on
-        // TOP of the watermark layers (see below). If watermarks were positioned
-        // against the full image edge, corner/edge placements would be hidden
-        // underneath that band. To make the frame respect watermark placement,
-        // position watermarks within the inner content rect — inset by the frame
-        // width — so edge/corner watermarks land just inside the border and stay
-        // fully visible. Frame width matches WhiteFrameRenderer exactly:
-        // shorter dimension × frameWidthRatio.
-        let frameInset: CGFloat = {
-            guard let frame = config.whiteFrame, frame.isEnabled else { return 0 }
-            return min(extent.width, extent.height) * frame.frameWidthRatio
-        }()
-        // Inner rect the watermarks are positioned against. Origin shifts to
-        // (frameInset, frameInset); PositionCalculator works in size-relative
-        // coordinates so the origin offset is re-applied below.
-        let positioningExtent = extent.insetBy(dx: frameInset, dy: frameInset)
+        // Watermarks position against the whole photo. They used to be inset by
+        // the frame width, because the mat was composited over the photo's outer
+        // edge and would otherwise bury a corner watermark. The mat now sits
+        // outside the photo, so there is nothing to dodge.
+        let positioningExtent = extent
 
         // Edge padding scales with the image instead of being a fixed 20px,
         // which was invisible on multi-thousand-pixel photos. ~4% of the shorter
@@ -640,18 +629,32 @@ public actor WatermarkEngine {
         // D-12: Composite watermark layers onto base (text → image, bottom to top)
         let watermarkedResult = WatermarkRenderer.composite(layers: layers, onto: composited)
 
-        // D-12: White frame composited ON TOP (outermost layer)
+        // D-12: the mat is the outermost layer, and it enlarges the canvas.
         if let frameConfig = config.whiteFrame, frameConfig.isEnabled {
-            let frameCIImage = try WhiteFrameRenderer.render(
+            let geometry = FrameGeometry(config: frameConfig, sourceSize: watermarkedResult.extent.size)
+            let mat = try WhiteFrameRenderer.render(
                 config: frameConfig,
-                baseExtent: watermarkedResult.extent,
+                geometry: geometry,
                 metadata: metadata,
                 scale: 1.0
             )
+
+            // Core Image works bottom-left up while FrameGeometry is expressed
+            // top-left down, so the photo's vertical offset inside the framed
+            // canvas is the BOTTOM mat — which for gallery is the tall caption
+            // band, not the thin top edge. Getting this backwards silently
+            // shifts the photo into the caption.
+            let e = watermarkedResult.extent
+            let placedPhoto = watermarkedResult.transformed(
+                by: CGAffineTransform(translationX: geometry.left - e.minX,
+                                      y: geometry.bottom - e.minY)
+            )
+
             let frameFilter = CIFilter.sourceOverCompositing()
-            frameFilter.inputImage = frameCIImage
-            frameFilter.backgroundImage = watermarkedResult
-            return frameFilter.outputImage ?? watermarkedResult
+            frameFilter.inputImage = mat
+            frameFilter.backgroundImage = placedPhoto
+            let framed = frameFilter.outputImage ?? placedPhoto
+            return framed.cropped(to: CGRect(origin: .zero, size: geometry.framedSize))
         }
 
         return watermarkedResult

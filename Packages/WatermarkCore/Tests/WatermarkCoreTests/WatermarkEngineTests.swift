@@ -773,7 +773,8 @@ struct WatermarkEngineTests {
             }
             #expect(CGImageSourceGetCount(source) == 1)
 
-            // Verify dimensions preserved
+            // No frame here, so the export keeps the source's dimensions —
+            // which is what makes this the control for the framed cases.
             let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
             #expect((props[kCGImagePropertyPixelWidth] as? Int) == 400)
             #expect((props[kCGImagePropertyPixelHeight] as? Int) == 300)
@@ -931,8 +932,13 @@ struct WatermarkEngineTests {
 
             // Verify dimensions preserved
             let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
-            #expect((props[kCGImagePropertyPixelWidth] as? Int) == 400)
-            #expect((props[kCGImagePropertyPixelHeight] as? Int) == 300)
+            // Framed export: the mat is added outside the 400x300 source.
+            let framed = FrameGeometry(
+                config: config.whiteFrame ?? WhiteFrameConfig(),
+                sourceSize: CGSize(width: 400, height: 300)
+            ).framedSize
+            #expect((props[kCGImagePropertyPixelWidth] as? Int) == Int(framed.width))
+            #expect((props[kCGImagePropertyPixelHeight] as? Int) == Int(framed.height))
 
             cleanup(inputURL, outputURL)
         } catch {
@@ -981,8 +987,13 @@ struct WatermarkEngineTests {
 
             // Verify dimensions preserved
             let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
-            #expect((props[kCGImagePropertyPixelWidth] as? Int) == 500)
-            #expect((props[kCGImagePropertyPixelHeight] as? Int) == 400)
+            // Framed export: the mat is added outside the 500x400 source.
+            let framed = FrameGeometry(
+                config: config.whiteFrame ?? WhiteFrameConfig(),
+                sourceSize: CGSize(width: 500, height: 400)
+            ).framedSize
+            #expect((props[kCGImagePropertyPixelWidth] as? Int) == Int(framed.width))
+            #expect((props[kCGImagePropertyPixelHeight] as? Int) == Int(framed.height))
 
             // Verify format preserved
             #expect(result.outputUTI == "public.jpeg")

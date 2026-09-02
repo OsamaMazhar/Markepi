@@ -30,6 +30,14 @@ struct WhiteFrameRendererTests {
         return [:]
     }
 
+    /// The canvas a frame renders into: source plus mat, from the same
+    /// geometry the renderer uses. The mat is drawn outside the photo, so this
+    /// is always larger than the source.
+    func framedRect(_ config: WhiteFrameConfig, _ source: CGRect) -> CGRect {
+        CGRect(origin: .zero,
+               size: FrameGeometry(config: config, sourceSize: source.size).framedSize)
+    }
+
     // MARK: - Border width tests
 
     @Test("Frame width ratio 0.04 on 1000x800 produces 32pt border")
@@ -43,12 +51,11 @@ struct WhiteFrameRendererTests {
         let metadata = emptyMetadata()
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: metadata
+            config: config, sourceSize: extent.size, metadata: metadata
         )
         // Frame width = min(1000, 800) × 0.04 = 32pt
-        // Rendered extent must match base extent (full image size)
-        #expect(rendered.extent == extent,
-                "Rendered CIImage extent should match baseExtent (\(extent)), got \(rendered.extent)")
+        #expect(rendered.extent == framedRect(config, extent),
+                "Rendered extent should be the framed canvas \(framedRect(config, extent)), got \(rendered.extent)")
         #expect(!rendered.extent.isInfinite, "Rendered extent should not be infinite")
     }
 
@@ -62,10 +69,10 @@ struct WhiteFrameRendererTests {
         let extent = CGRect(x: 0, y: 0, width: 1000, height: 800)
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: emptyMetadata()
+            config: config, sourceSize: extent.size, metadata: emptyMetadata()
         )
         // Frame width = min(1000, 800) × 0.03 = 24pt
-        #expect(rendered.extent == extent)
+        #expect(rendered.extent == framedRect(config, extent))
     }
 
     @Test("Frame width ratio 0.05 (maximum per D-05) produces valid border")
@@ -78,10 +85,10 @@ struct WhiteFrameRendererTests {
         let extent = CGRect(x: 0, y: 0, width: 1000, height: 800)
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: emptyMetadata()
+            config: config, sourceSize: extent.size, metadata: emptyMetadata()
         )
         // Frame width = min(1000, 800) × 0.05 = 40pt
-        #expect(rendered.extent == extent)
+        #expect(rendered.extent == framedRect(config, extent))
     }
 
     @Test("Frame width ratio out-of-range values are clamped (0.02 → 0.03, 0.06 → 0.05)")
@@ -107,15 +114,15 @@ struct WhiteFrameRendererTests {
         let extent = CGRect(x: 0, y: 0, width: 500, height: 500)
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: emptyMetadata()
+            config: config, sourceSize: extent.size, metadata: emptyMetadata()
         )
-        #expect(rendered.extent == extent)
+        #expect(rendered.extent == framedRect(config, extent))
         // Frame width = min(500,500) × 0.04 = 20pt on all 4 sides (D-04)
     }
 
     // MARK: - Extent preservation
 
-    @Test("Rendered CIImage extent matches baseExtent size for various dimensions")
+    @Test("Rendered extent is the framed canvas for various dimensions")
     func extentMatchesBaseExtent() throws {
         let config = WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false)
         let sizes: [CGSize] = [
@@ -127,9 +134,9 @@ struct WhiteFrameRendererTests {
         for size in sizes {
             let extent = CGRect(origin: .zero, size: size)
             let rendered = try WhiteFrameRenderer.render(
-                config: config, baseExtent: extent, metadata: emptyMetadata()
+                config: config, sourceSize: extent.size, metadata: emptyMetadata()
             )
-            #expect(rendered.extent == extent,
+            #expect(rendered.extent == framedRect(config, extent),
                     "Expected extent \(extent) for size \(size), got \(rendered.extent)")
         }
     }
@@ -147,11 +154,11 @@ struct WhiteFrameRendererTests {
         let metadata = metadataWithModel("iPhone 16 Pro")
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: metadata
+            config: config, sourceSize: extent.size, metadata: metadata
         )
         // Rendered output should be valid (non-infinite extent)
         #expect(!rendered.extent.isInfinite)
-        #expect(rendered.extent == extent)
+        #expect(rendered.extent == framedRect(config, extent))
     }
 
     @Test("Metadata text disabled produces pure white frame (no text pixels)")
@@ -164,9 +171,9 @@ struct WhiteFrameRendererTests {
         let extent = CGRect(x: 0, y: 0, width: 600, height: 400)
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: emptyMetadata()
+            config: config, sourceSize: extent.size, metadata: emptyMetadata()
         )
-        #expect(rendered.extent == extent)
+        #expect(rendered.extent == framedRect(config, extent))
         // When text is disabled, bottom frame region should be pure white
         // (verified by absence of text rendering path)
     }
@@ -182,7 +189,7 @@ struct WhiteFrameRendererTests {
         let metadata = metadataWithModel("iPhone 16 Pro")
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: metadata
+            config: config, sourceSize: extent.size, metadata: metadata
         )
         // Text should be "Taken by: iPhone 16 Pro" (single line per D-08)
         #expect(!rendered.extent.isInfinite)
@@ -204,7 +211,7 @@ struct WhiteFrameRendererTests {
         let metadata = metadataWithModel("iPhone 16 Pro")
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: metadata
+            config: config, sourceSize: extent.size, metadata: metadata
         )
         #expect(!rendered.extent.isInfinite)
         // Custom text "Custom Camera v2.0" should appear instead of
@@ -223,7 +230,7 @@ struct WhiteFrameRendererTests {
         let metadata = metadataWithModel("iPhone 14")
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: metadata
+            config: config, sourceSize: extent.size, metadata: metadata
         )
         #expect(!rendered.extent.isInfinite)
         // Should auto-generate "Taken by: iPhone 14" via DeviceMetadataProvider
@@ -241,7 +248,7 @@ struct WhiteFrameRendererTests {
         let extent = CGRect(x: 0, y: 0, width: 600, height: 400)
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: emptyMetadata()
+            config: config, sourceSize: extent.size, metadata: emptyMetadata()
         )
         #expect(!rendered.extent.isInfinite)
         // Should fall back to UIDevice.current.model (or "Unknown" on macOS)
@@ -260,7 +267,7 @@ struct WhiteFrameRendererTests {
         let extent = CGRect(x: 0, y: 0, width: 400, height: 300)
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: emptyMetadata()
+            config: config, sourceSize: extent.size, metadata: emptyMetadata()
         )
         // GREEN: the UIGraphicsImageRendererFormat inside render() must
         // use `preferredRange = .extended` for HDR compatibility.
@@ -274,13 +281,13 @@ struct WhiteFrameRendererTests {
         let extent = CGRect(x: 0, y: 0, width: 800, height: 600)
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: emptyMetadata()
+            config: config, sourceSize: extent.size, metadata: emptyMetadata()
         )
         // The output must have a finite extent matching the base dimensions
         #expect(!rendered.extent.isInfinite, "Output CIImage should have finite extent")
         #expect(rendered.extent.origin == .zero, "Origin should be (0,0)")
-        #expect(rendered.extent.width == extent.width, "Width should match base extent")
-        #expect(rendered.extent.height == extent.height, "Height should match base extent")
+        #expect(rendered.extent.width == framedRect(config, extent).width, "Width should be the framed canvas")
+        #expect(rendered.extent.height == framedRect(config, extent).height, "Height should be the framed canvas")
     }
 
     // MARK: - Border has transparent inner area (per D-04)
@@ -295,11 +302,11 @@ struct WhiteFrameRendererTests {
         let extent = CGRect(x: 0, y: 0, width: 400, height: 300)
 
         let rendered = try WhiteFrameRenderer.render(
-            config: config, baseExtent: extent, metadata: emptyMetadata()
+            config: config, sourceSize: extent.size, metadata: emptyMetadata()
         )
         // GREEN: The inner area uses .clear blend mode for transparency
         // (grep for `.clear` in WhiteFrameRenderer.swift >=1 match)
-        #expect(rendered.extent == extent)
+        #expect(rendered.extent == framedRect(config, extent))
     }
 
     // MARK: - Default values

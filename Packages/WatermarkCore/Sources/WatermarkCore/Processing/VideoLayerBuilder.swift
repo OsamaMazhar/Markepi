@@ -29,42 +29,50 @@ public struct VideoLayerBuilder {
         videoSize: CGSize,
         metadata: [String: Any] = [:],
         isHDR: Bool = false
-    ) throws -> (parentLayer: CALayer, videoLayer: CALayer) {
+    ) throws -> (parentLayer: CALayer, videoLayer: CALayer, renderSize: CGSize) {
         // Match overlay rasterization to the export bit depth. Half-float only
         // for HDR; 8-bit for SDR so the CoreAnimation compositor / VT compression
         // session isn't handed an unsupported pixel format (see VideoProcessor).
         let overlayFormat: CIFormat = isHDR ? .RGBAh : .RGBA8
+
+        // The mat sits outside the video, so a framed export is larger than its
+        // source — same rule as photos, from the same type, which is what keeps
+        // the two geometries comparable.
+        let frameConfig = config.whiteFrame?.isEnabled == true ? config.whiteFrame : nil
+        let geometry = frameConfig.map { FrameGeometry(config: $0, sourceSize: videoSize) }
+        let renderSize = geometry?.framedSize ?? videoSize
+
         let parentLayer = CALayer()
-        parentLayer.frame = CGRect(origin: .zero, size: videoSize)
+        parentLayer.frame = CGRect(origin: .zero, size: renderSize)
 
         let videoLayer = CALayer()
-        videoLayer.frame = parentLayer.bounds
+        // Where the video sits inside the framed canvas. Core Animation's
+        // compositing space is y-up, so the vertical offset is the BOTTOM mat —
+        // for gallery that is the tall caption band, not the thin top edge.
+        // This is the one piece of the geometry the Simulator cannot verify
+        // (its CoreMedia XPC fault aborts video export), so it is what a device
+        // check is actually checking.
+        videoLayer.frame = geometry.map {
+            CGRect(x: $0.left, y: $0.bottom, width: videoSize.width, height: videoSize.height)
+        } ?? parentLayer.bounds
         parentLayer.addSublayer(videoLayer)
 
-        // Build white frame layer below all watermark layers (if enabled)
-        // D-02: White frame parity with photos
-        if let frameConfig = config.whiteFrame, frameConfig.isEnabled {
+        // Mat layer above the video, covering the whole canvas; its transparent
+        // hole lines up with videoLayer.
+        if let frameConfig, let geometry {
             let frameLayer = try buildWhiteFrameLayer(
                 config: frameConfig,
-                baseExtent: CGRect(origin: .zero, size: videoSize),
-                videoSize: videoSize,
+                geometry: geometry,
                 metadata: metadata,
                 format: overlayFormat
             )
             parentLayer.addSublayer(frameLayer)
         }
 
-        // When the white frame is enabled, position watermarks within the inner
-        // content rect (inset by the frame width) so corner/edge placements land
-        // just inside the border and stay clear of it — matching the photo path
-        // in WatermarkEngine.buildFilterGraph. Frame width matches
-        // WhiteFrameRenderer: shorter dimension × frameWidthRatio.
-        let frameInset: CGFloat = {
-            guard let frame = config.whiteFrame, frame.isEnabled else { return 0 }
-            return min(videoSize.width, videoSize.height) * frame.frameWidthRatio
-        }()
-        let positioningExtent = CGRect(origin: .zero, size: videoSize)
-            .insetBy(dx: frameInset, dy: frameInset)
+        // Watermarks position against the video itself, offset into the canvas.
+        // They used to be inset by the frame width because the mat covered the
+        // video's outer edge; with the mat outside there is nothing to dodge.
+        let positioningExtent = videoLayer.frame
 
         // Build watermark layers in order: bottom → top (D-01, D-02)
         for watermark in config.watermarks {
@@ -111,7 +119,7 @@ public struct VideoLayerBuilder {
             parentLayer.addSublayer(dateLayer)
         }
 
-        return (parentLayer, videoLayer)
+        return (parentLayer, videoLayer, renderSize)
     }
 
     // MARK: - Watermark Layer Building
@@ -227,14 +235,13 @@ public struct VideoLayerBuilder {
     /// `VideoProcessor`), converts to CGImage, and creates the frame CALayer.
     private static func buildWhiteFrameLayer(
         config: WhiteFrameConfig,
-        baseExtent: CGRect,
-        videoSize: CGSize,
+        geometry: FrameGeometry,
         metadata: [String: Any],
         format: CIFormat
     ) throws -> CALayer {
         let frameCIImage = try WhiteFrameRenderer.render(
             config: config,
-            baseExtent: baseExtent,
+            geometry: geometry,
             metadata: metadata,
             scale: 1.0
         )
@@ -244,7 +251,7 @@ public struct VideoLayerBuilder {
         let frameLayer = CALayer()
         frameLayer.contents = cgImage
         frameLayer.contentsGravity = .resizeAspect
-        frameLayer.frame = CGRect(origin: .zero, size: videoSize)
+        frameLayer.frame = CGRect(origin: .zero, size: geometry.framedSize)
 
         return frameLayer
     }

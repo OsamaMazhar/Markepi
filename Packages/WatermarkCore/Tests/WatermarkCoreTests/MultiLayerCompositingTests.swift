@@ -88,9 +88,14 @@ struct MultiLayerCompositingTests {
             cleanup(inputURL)
             return
         }
+        // Framed export: the mat is added outside the 800x600 source.
+        let framed = FrameGeometry(
+            config: config.whiteFrame ?? WhiteFrameConfig(),
+            sourceSize: CGSize(width: 800, height: 600)
+        ).framedSize
         let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
-        #expect((props[kCGImagePropertyPixelWidth] as? Int) == 800)
-        #expect((props[kCGImagePropertyPixelHeight] as? Int) == 600)
+        #expect((props[kCGImagePropertyPixelWidth] as? Int) == Int(framed.width))
+        #expect((props[kCGImagePropertyPixelHeight] as? Int) == Int(framed.height))
 
         cleanup(inputURL, outputURL)
     }
@@ -304,9 +309,14 @@ struct MultiLayerCompositingTests {
             cleanup(inputURL)
             return
         }
+        // Framed export: the mat is added outside the 500x400 source.
+        let framed = FrameGeometry(
+            config: config.whiteFrame ?? WhiteFrameConfig(),
+            sourceSize: CGSize(width: 500, height: 400)
+        ).framedSize
         let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
-        #expect((props[kCGImagePropertyPixelWidth] as? Int) == 500)
-        #expect((props[kCGImagePropertyPixelHeight] as? Int) == 400)
+        #expect((props[kCGImagePropertyPixelWidth] as? Int) == Int(framed.width))
+        #expect((props[kCGImagePropertyPixelHeight] as? Int) == Int(framed.height))
 
         cleanup(inputURL, outputURL)
     }

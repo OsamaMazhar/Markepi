@@ -135,7 +135,7 @@ public struct VideoProcessor {
         }
 
         // Step 4: Build CALayer hierarchy via VideoLayerBuilder (D-01, D-02)
-        let (parentLayer, videoLayer) = try VideoLayerBuilder.buildLayers(
+        let (parentLayer, videoLayer, framedRenderSize) = try VideoLayerBuilder.buildLayers(
             config: config,
             videoSize: videoSize,
             metadata: videoMetadata,
@@ -146,7 +146,9 @@ public struct VideoProcessor {
         var hdrPreservationAttempted = false
 
         let videoComposition = AVMutableVideoComposition()
-        videoComposition.renderSize = videoSize
+        // Framing enlarges the canvas, so the composition renders at the framed
+        // size rather than the source's.
+        videoComposition.renderSize = framedRenderSize
         videoComposition.frameDuration = try await videoTrack.load(.minFrameDuration)
         videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(
             postProcessingAsVideoLayer: videoLayer,
