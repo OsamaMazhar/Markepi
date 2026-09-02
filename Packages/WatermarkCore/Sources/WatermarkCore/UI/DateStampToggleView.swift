@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 /// Retro date-stamp controls: an enable toggle plus, when enabled, a date
@@ -157,3 +160,4 @@ public struct DateStampToggleView<ViewModel: WatermarkConfigurable & Observable>
         )
     }
 }
+#endif

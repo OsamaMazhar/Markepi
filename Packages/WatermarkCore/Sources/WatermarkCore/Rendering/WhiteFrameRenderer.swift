@@ -277,10 +277,22 @@ public struct WhiteFrameRenderer {
             attributed.draw(in: textRect)
             #else
             // On macOS, use Core Text to draw directly into the CGContext
-            // (NSAttributedString.draw(in:) requires NSGraphicsContext, not CGContext)
+            // (NSAttributedString.draw(in:) requires NSGraphicsContext, not CGContext).
+            // The context was flipped to a top-left origin above so the frame
+            // rects match iOS; glyph outlines are defined +y up, so without a
+            // matching text matrix the caption renders upside-down and mirrored.
+            // Flip the text matrix back and position on the BASELINE (box top +
+            // ascent) rather than the box top.
             let line = CTLineCreateWithAttributedString(attributed)
-            cgContext.textPosition = CGPoint(x: textX, y: textY)
+            var ascent: CGFloat = 0
+            var descent: CGFloat = 0
+            var leading: CGFloat = 0
+            CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+            cgContext.saveGState()
+            cgContext.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+            cgContext.textPosition = CGPoint(x: textX, y: textY + ascent)
             CTLineDraw(line, cgContext)
+            cgContext.restoreGState()
             #endif
         }
     }

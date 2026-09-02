@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 /// A single-file catalog rendering every Markepi design system primitive
@@ -141,3 +144,4 @@ public struct PreviewCatalog: View {
 #Preview("Design System Catalog") {
     PreviewCatalog()
 }
+#endif

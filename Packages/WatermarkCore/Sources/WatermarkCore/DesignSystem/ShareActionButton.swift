@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 /// A standalone Share/Render button that drives off the ViewModel's
@@ -171,3 +174,4 @@ public struct ShareActionButton<ViewModel: WatermarkConfigurable & Observable>: 
         .padding(.vertical, 4)
     }
 }
+#endif

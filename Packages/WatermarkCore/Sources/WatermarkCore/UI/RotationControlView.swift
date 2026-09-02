@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 /// Rotation control for the active logo (image) layer.
@@ -104,3 +107,4 @@ public struct RotationControlView<ViewModel: WatermarkConfigurable & Observable>
         degreeText = String(Int(currentRotation.rounded()))
     }
 }
+#endif

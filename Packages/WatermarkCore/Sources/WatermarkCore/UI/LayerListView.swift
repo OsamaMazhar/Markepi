@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 /// Layer manager: lists every watermark layer with selection, visibility,
@@ -272,3 +275,4 @@ public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View
         }
     }
 }
+#endif

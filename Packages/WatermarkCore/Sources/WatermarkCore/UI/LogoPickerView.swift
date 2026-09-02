@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import CoreImage
 import PhotosUI
 import SwiftUI
@@ -236,3 +239,4 @@ public struct LogoPickerView<ViewModel: WatermarkConfigurable & Observable>: Vie
         }
     }
 }
+#endif

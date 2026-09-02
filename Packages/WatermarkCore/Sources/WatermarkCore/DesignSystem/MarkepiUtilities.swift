@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 extension View {
@@ -23,3 +26,4 @@ extension View {
         transform(self)
     }
 }
+#endif

@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 // MARK: - ControlsSection
@@ -91,3 +94,4 @@ public struct MarkepiPillBar: View {
         // D-16: Glass backing provides the blur when content scrolls beneath
     }
 }
+#endif

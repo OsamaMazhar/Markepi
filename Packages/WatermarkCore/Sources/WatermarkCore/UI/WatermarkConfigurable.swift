@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import CoreImage
 import Foundation
 import SwiftUI
@@ -281,3 +284,4 @@ extension WatermarkConfigurable {
     /// Default returns nil — ViewModels override with stored properties.
     public var sourceProvenanceReport: SourceProvenanceReport? { nil }
 }
+#endif

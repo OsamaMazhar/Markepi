@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 /// Color tokens for the Markepi design system.
@@ -87,3 +90,4 @@ public enum MarkepiColors {
     public static let statusError = Color.red
     public static let statusWarning = Color.orange
 }
+#endif

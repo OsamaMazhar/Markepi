@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import CoreGraphics
 
 /// Corner radius tokens for the Markepi design system.
@@ -12,3 +15,4 @@ public enum MarkepiRadius {
     public static let xxxxl: CGFloat = 28
     public static let pill: CGFloat = 999
 }
+#endif

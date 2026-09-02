@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 /// Applies Liquid Glass on iOS 26 or material fallback on iOS 18.
@@ -88,3 +91,4 @@ public extension View {
         ))
     }
 }
+#endif

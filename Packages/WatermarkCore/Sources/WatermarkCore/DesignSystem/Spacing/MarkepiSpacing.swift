@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import CoreGraphics
 
 /// Semantic spacing tokens for the Markepi design system.
@@ -14,3 +17,4 @@ public enum MarkepiSpacing {
     public static let xxl: CGFloat = 24
     public static let xxxl: CGFloat = 32
 }
+#endif

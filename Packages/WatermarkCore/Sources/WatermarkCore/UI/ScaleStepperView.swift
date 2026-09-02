@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 /// Scale stepper control for adjusting watermark size.
@@ -50,3 +53,4 @@ public struct ScaleStepperView<ViewModel: WatermarkConfigurable & Observable>: V
         )
     }
 }
+#endif

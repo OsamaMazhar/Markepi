@@ -31,6 +31,13 @@ let package = Package(
                 .swiftLanguageMode(.v6)
             ]
         ),
+        // Command-line front end (macOS only). Not part of any product, so the
+        // Xcode app/extension builds never see it — `swift run markepi` only.
+        .executableTarget(
+            name: "markepi",
+            dependencies: ["WatermarkCore"],
+            path: "Sources/markepi"
+        ),
         .testTarget(
             name: "WatermarkCoreTests",
             dependencies: ["WatermarkCore"],

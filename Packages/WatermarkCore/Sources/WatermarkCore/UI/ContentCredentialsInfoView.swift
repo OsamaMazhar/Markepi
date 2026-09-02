@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 /// Plain-language explainer for Content Credentials (C2PA), reached from
@@ -128,3 +131,4 @@ public struct ContentCredentialsInfoView: View {
 
     private static let verifyURL = URL(string: "https://contentcredentials.org/verify")!
 }
+#endif

@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 /// Composite view combining all watermarking controls: text input, position
@@ -274,3 +277,4 @@ private struct ControlSection<Content: View>: View {
         .padding(.horizontal, 16)
     }
 }
+#endif

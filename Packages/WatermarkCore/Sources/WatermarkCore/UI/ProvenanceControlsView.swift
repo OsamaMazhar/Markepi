@@ -1,3 +1,6 @@
+// iOS-only UI. Guarded so WatermarkCore also builds for macOS, where the
+// `markepi` CLI target links the engine without the SwiftUI layer.
+#if canImport(UIKit)
 import SwiftUI
 
 public struct ProvenanceControlsView<ViewModel: WatermarkConfigurable & Observable>: View {
@@ -479,3 +482,4 @@ public struct ProvenanceControlsView<ViewModel: WatermarkConfigurable & Observab
         }
     }
 }
+#endif
