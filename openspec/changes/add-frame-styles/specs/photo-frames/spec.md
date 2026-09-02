@@ -77,22 +77,55 @@ The `gallery` caption SHALL be composed of four independently configurable slots
 - **WHEN** the user turns the caption off
 - **THEN** the mat is drawn with uniform width on all four sides and no text or logo appears
 
-### Requirement: Gallery caption logo and divider
+### Requirement: Gallery caption brand mark and divider
 
-The `gallery` caption SHALL support a logo drawn immediately before the right-hand text group, separated from it by a thin vertical divider rule. The logo SHALL be selectable from the available marks or set to none, and none SHALL be a valid choice that removes both the logo and its divider. The logo SHALL be rendered from a vector source so that it stays sharp at full export resolution.
+The `gallery` caption SHALL draw a brand mark immediately before the right-hand text group, separated from it by a thin vertical divider rule. The mark SHALL be determined by the manufacturer recorded in the source image's metadata — a photo taken on an Apple device gets the Apple mark, one taken on a Samsung device gets the Samsung mark, and so on. The user SHALL NOT be able to choose which brand's mark appears.
 
-#### Scenario: Logo renders sharply at export resolution
-- **WHEN** a photo is exported at its full resolution with a logo selected
-- **THEN** the logo's edges are sharp, showing no resampling softness or visible pixel stepping
+Manufacturer matching SHALL tolerate how manufacturers actually write themselves into metadata, so that spelling, case and corporate suffixes do not defeat recognition. The mark SHALL be rendered from a vector source so that it stays sharp at full export resolution.
 
-#### Scenario: No logo selected
-- **WHEN** the logo is set to none
-- **THEN** neither the logo nor the vertical divider is drawn
+#### Scenario: Recognised manufacturer
+- **WHEN** a photo whose metadata identifies a manufacturer the app ships a mark for is rendered in the `gallery` style
+- **THEN** that manufacturer's mark is drawn before the right-hand text group with its vertical divider
+
+#### Scenario: Manufacturer written with case or suffix variation
+- **WHEN** the metadata records the manufacturer with different case or with a corporate suffix, such as a camera body writing its maker's name in capitals followed by "CORPORATION"
+- **THEN** it resolves to the same mark as the plain manufacturer name
+
+#### Scenario: No manufacturer in metadata
+- **WHEN** the source image's metadata carries no manufacturer information
+- **THEN** neither a mark nor the vertical divider is drawn
 - **AND** the right-hand text group remains aligned to the right edge of the caption band
 
-#### Scenario: Logo is vertically centred against the text group
-- **WHEN** a logo is drawn
+#### Scenario: Manufacturer the app ships no mark for
+- **WHEN** the metadata names a manufacturer the app has no mark for
+- **THEN** neither a mark nor the vertical divider is drawn
+- **AND** the caption renders normally in every other respect
+
+#### Scenario: Mark renders sharply at export resolution
+- **WHEN** a photo is exported at its full resolution with a mark resolved
+- **THEN** the mark's edges are sharp, showing no resampling softness or visible pixel stepping
+
+#### Scenario: Mark is vertically centred against the text group
+- **WHEN** a mark is drawn
 - **THEN** its vertical centre aligns with the vertical centre of the two-line right-hand text group
+
+### Requirement: Brand mark colour variant
+
+Where a resolved brand ships both a colour and a monochrome mark, the user SHALL be able to choose between them. Where a brand ships only one, that one SHALL be used and the choice SHALL NOT be offered. The choice SHALL apply to whichever brand is resolved, not to one specific brand.
+
+#### Scenario: Both variants available
+- **WHEN** the resolved brand ships a colour and a monochrome mark
+- **THEN** the user can switch between them
+- **AND** the selected variant is the one drawn
+
+#### Scenario: Only one variant available
+- **WHEN** the resolved brand ships only one mark
+- **THEN** that mark is drawn regardless of the user's variant preference
+- **AND** no variant choice is offered for it
+
+#### Scenario: Preference persists across photos
+- **WHEN** the user has chosen a variant and then frames a photo from a different manufacturer that also ships both variants
+- **THEN** the same variant preference applies to that brand's mark
 
 ### Requirement: Optional keyline
 

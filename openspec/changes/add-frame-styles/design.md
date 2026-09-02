@@ -64,23 +64,31 @@ Replace `attributionText: String?` with a small resolved struct — the centred 
 
 *Why:* both render paths then draw from the same already-resolved values, which is what keeps them identical. It also keeps metadata access out of the drawing code.
 
-### D5 — Logo ships as vector PDF, drawn with Core Graphics
+### D5 — Marks ship as vector PDFs, drawn with Core Graphics
 
-Convert the official SVGs to single-page PDFs at authoring time, ship them under `Resources/Logos/`, load with `CGPDFDocument`, and draw with `CGContext.drawPDFPage` scaled to the caption band.
+The user supplies each brand's mark as a vector. Those are converted to single-page PDFs at authoring time, shipped under `Resources/Logos/`, loaded with `CGPDFDocument`, and drawn with `CGContext.drawPDFPage` scaled to the caption band.
 
 *Why:* `CGPDFDocument` is plain Core Graphics, so one code path serves both iOS and macOS with no `UIImage`/`NSImage` split and no asset-catalog vector-data caveats. It is vector all the way to the rasteriser, so it is sharp at any export size — which a PNG in an imageset, like the existing `BrandMark`, would not be.
 
 *Alternative — SVG in the asset catalog with Preserve Vector Data:* needs the platform image split, and its behaviour for an SPM resource bundle on macOS is less certain than Core Graphics'.
 
-*Alternative — transcribe the SVG paths into Swift `CGPath` code:* no resource loading at all, but the rainbow artwork uses elliptical arcs, and hand-porting arc-to-bézier is exactly the kind of fiddly conversion a PDF gets right for free.
+*Alternative — transcribe the vector paths into Swift `CGPath` code:* no resource loading at all, but it is per-brand hand work, and artwork using elliptical arcs makes arc-to-bézier conversion fiddly. A PDF gets it right for free, and scales to fifteen brands where hand-porting would not.
 
-*Sources (verified reachable):* rainbow `commons.wikimedia.org/.../8/84/Apple_Computer_Logo_rainbow.svg`, black `.../f/fa/Apple_logo_black.svg`, white `.../3/31/Apple_logo_white.svg`.
+*Naming is the contract with the sourcing work:* files are keyed by brand and variant on disk, so handing over a new brand's artwork is a drop-in plus a registry entry, with no renderer change. A brand whose file has not arrived yet resolves to no mark, so the implementation never blocks on sourcing.
 
-### D6 — The logo slot is pluggable and defaults to none
+### D6 — The mark is resolved from metadata, not chosen
 
-`FrameLogo` is an enum with `.none` as the default. Drawing takes the resolved PDF page, so a non-Apple mark is a new case plus a file.
+A brand registry maps a normalised manufacturer key to that brand's available mark files. Resolution reads the manufacturer from the source image's metadata, normalises it, and looks it up; a miss — no manufacturer recorded, or one with no shipped mark — yields no mark, and the renderer then draws neither mark nor divider.
 
-*Why:* see the trademark risk below. A default of `.none` means the shipped app does not put Apple's mark on anyone's photo unless they choose it.
+*Normalisation matters more than it looks.* Manufacturers write themselves into EXIF inconsistently: lowercase, uppercase, with corporate suffixes. Matching therefore case-folds, trims, and strips trailing corporate suffixes before lookup, rather than comparing raw strings.
+
+*Why derived rather than chosen:* a mark that is derived is a statement of fact about the photo — the device that took it. A mark that is chosen is decoration, and decoration with someone else's trademark is the version that gets an app rejected. It also removes a picker from an already busy controls column.
+
+*What the user does control:* colour versus monochrome, as a single preference that applies to whichever brand is resolved. It is offered only when the resolved brand ships both variants, so the control reflects what actually exists rather than promising a variant that would silently fall back.
+
+*Pluggable, for the implementer:* adding a brand is a vector file plus a registry entry. No renderer, config, or UI change.
+
+*Alternative — a user-facing brand picker:* rejected by the user, and it is the trademark-risky shape.
 
 ### D7 — Mat dimensions round to even pixels
 
@@ -90,7 +98,8 @@ The framed size is rounded up to even numbers in both dimensions.
 
 ## Risks / Trade-offs
 
-- **Apple's mark is a registered trademark.** Reproducing it in exported images carries a real App Store review risk, and the reference frame's rainbow logo is Apple's 1977 mark. The user was told this and accepted it. → Mitigated by `.none` as the default, by keeping the slot pluggable per D6 so a neutral mark can replace it in one commit, and by recording here that the risk was accepted rather than overlooked.
+- **Every brand mark is a third-party registered trademark**, and this change ships roughly fifteen of them. Reproducing them in exported images carries App Store review risk, and the risk scales with the number of brands rather than staying flat. The user was told this and accepted it. → Materially reduced by D6: because the mark is derived from the photo's own metadata, it only ever appears on a photo actually taken on that manufacturer's device, which is factual attribution rather than decoration, and no user can stamp one brand's mark onto another brand's photo. Reduced further by marks being per-brand files — pulling one brand is deleting a file. Not eliminated: attribution is still reproduction, and each brand's own usage guidelines may differ.
+- **Sourcing runs ahead of implementation.** Fifteen brands' artwork arrives over time, from the user. → The registry treats a missing file as "no mark for this brand", so every brand is independently shippable and a half-populated registry is a valid state, not a broken one.
 - **Breaking output change.** Every framed export changes size; snapshot tests and any extent assertions fail until rebaselined. → Regenerate baselines as an explicit task and review the diffs by eye rather than accepting them wholesale, since a rebaseline can hide a real regression.
 - **Video export is the fragile path.** `renderSize` growing means the video layer must be inset and the track transform must still map portrait/rotated footage upright. Simulator video export crashes with an unrelated CoreMedia XPC fault, so this can only be confirmed on device. → Keep the mat insets identical between photo and video code so a photo test covers the geometry, and verify video export on hardware before shipping.
 - **Larger exports use more memory.** A mat on a 48MP photo adds a band of pixels to an already large intermediate. → The addition is a few percent of area; no mitigation planned, but worth watching if frame widths ever grow.
