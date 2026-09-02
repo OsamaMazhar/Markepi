@@ -32,8 +32,9 @@ struct FrameStyleConfigTests {
         // The handle is the photographer's to type, so it starts as empty free
         // text rather than a metadata field.
         #expect(config.rightPrimary == .text(""))
-        // Three metadata values on one line, which a single field cannot carry.
-        #expect(config.rightSecondary == .text("{lens} {focal_length} {aperture}"))
+        // The EXIF lens string already carries focal length and aperture, so
+        // composing it with those fields as well printed both twice.
+        #expect(config.rightSecondary == .field(.lens))
     }
 
     // MARK: - CaptionSlot

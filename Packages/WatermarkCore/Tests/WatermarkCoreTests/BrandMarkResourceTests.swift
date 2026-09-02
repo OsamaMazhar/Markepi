@@ -115,3 +115,98 @@ struct BrandMarkResourceTests {
         }
     }
 }
+
+/// Resolving a photo's manufacturer to a brand mark. The user never picks the
+/// brand — a photo can only carry the mark of the device that took it.
+@Suite("Brand resolution")
+struct BrandResolutionTests {
+
+    @Test("Every shipped brand resolves from the way it writes itself into EXIF")
+    func realWorldMakeStrings() {
+        let cases: [(String, String)] = [
+            ("Apple", "apple"),
+            ("Canon", "canon"), ("CANON", "canon"),
+            ("NIKON CORPORATION", "nikon"), ("Nikon", "nikon"),
+            ("SONY", "sony"),
+            ("FUJIFILM", "fujifilm"),
+            ("LEICA CAMERA AG", "leica"),
+            ("OLYMPUS CORPORATION", "olympus"),
+            ("OLYMPUS IMAGING CORP.", "olympus"),
+            ("OM Digital Solutions", "olympus"),
+            ("Panasonic", "panasonic"),
+            ("PENTAX Corporation", "pentax"),
+            ("RICOH IMAGING COMPANY, LTD.", "pentax"),
+            ("samsung", "samsung"), ("SAMSUNG", "samsung"),
+            ("Google", "google"),
+            ("Xiaomi", "xiaomi"),
+            ("HUAWEI", "huawei"),
+            ("HONOR", "honor"),
+            ("OnePlus", "oneplus"),
+            ("OPPO", "oppo"), ("vivo", "vivo"),
+            ("realme", "realme"),
+            ("motorola", "motorola"),
+            ("Nothing Technology", "nothing"),
+            ("DJI", "dji"), ("GoPro", "gopro"),
+            ("Hasselblad", "hasselblad"),
+            ("Arashi Vision", "insta360"),
+        ]
+        for (make, expected) in cases {
+            #expect(BrandMarkRegistry.brandKey(make: make, model: nil) == expected,
+                    "\(make) should resolve to \(expected)")
+        }
+    }
+
+    @Test("A sub-brand is told apart by its model, not its make")
+    func subBrandNeedsTheModel() {
+        // Redmi phones write Make=Xiaomi; make alone would give every Redmi the
+        // Xiaomi mark.
+        #expect(BrandMarkRegistry.brandKey(make: "Xiaomi", model: "Redmi Note 13") == "redmi")
+        #expect(BrandMarkRegistry.brandKey(make: "Xiaomi", model: "Mi 11") == "xiaomi")
+    }
+
+    @Test("Unknown or absent manufacturers resolve to no mark")
+    func unknownMakesResolveToNothing() {
+        #expect(BrandMarkRegistry.brandKey(make: nil, model: nil) == nil)
+        #expect(BrandMarkRegistry.brandKey(make: "", model: nil) == nil)
+        #expect(BrandMarkRegistry.brandKey(make: "Kodak", model: nil) == nil)
+    }
+
+    @Test("Resolution reads the TIFF dictionary the pipeline actually carries")
+    func resolvesFromMetadataDictionary() {
+        let metadata: [String: Any] = ["{TIFF}": ["Make": "Apple", "Model": "iPhone 6s"]]
+        #expect(BrandMarkRegistry.brandKey(metadata: metadata) == "apple")
+        #expect(BrandMarkRegistry.brandKey(metadata: [:]) == nil)
+    }
+
+    @Test("A resolved brand loads drawable artwork")
+    func resolvedBrandLoadsArtwork() throws {
+        let metadata: [String: Any] = ["{TIFF}": ["Make": "Apple"]]
+        let mark = BrandMarkRegistry.mark(metadata: metadata, variant: .color, matIsLight: true)
+        #expect(mark != nil, "Apple should have artwork")
+        #expect((mark?.aspectRatio ?? 0) > 0)
+    }
+
+    @Test("Monochrome picks the rendition that contrasts with the mat")
+    func monochromeContrastsWithTheMat() {
+        // Not a user choice: dark mark on a light mat, light on a dark one.
+        #expect(BrandMarkRegistry.variantNames(for: .monochrome, matIsLight: true).first == "black")
+        #expect(BrandMarkRegistry.variantNames(for: .monochrome, matIsLight: false).first == "white")
+        #expect(BrandMarkRegistry.variantNames(for: .color, matIsLight: true).first == "color")
+    }
+
+    @Test("Colour falls back to a mono rendition for a brand shipping no colour mark")
+    func colourFallsBack() {
+        // Order matters more than the first entry: a brand with only one
+        // rendition still draws something.
+        let order = BrandMarkRegistry.variantNames(for: .color, matIsLight: true)
+        #expect(order.count > 1, "colour should have a fallback")
+    }
+
+    @Test("Every brand key in the registry has artwork on disk")
+    func registryMatchesShippedArtwork() {
+        for key in BrandMarkRegistry.brandKeys {
+            let mark = BrandMarkRegistry.artwork(brandKey: key, variant: .color, matIsLight: true)
+            #expect(mark != nil, "\(key) is in the registry but ships no artwork")
+        }
+    }
+}

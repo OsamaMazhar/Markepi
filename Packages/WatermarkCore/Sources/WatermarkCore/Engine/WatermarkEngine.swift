@@ -634,7 +634,9 @@ public actor WatermarkEngine {
             let geometry = FrameGeometry(
                 config: frameConfig,
                 sourceSize: watermarkedResult.extent.size,
-                dpi: FrameGeometry.resolveDPI(from: metadata)
+                dpi: FrameGeometry.resolveDPI(from: metadata),
+                hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(
+                    config: frameConfig, metadata: metadata)
             )
             let mat = try WhiteFrameRenderer.render(
                 config: frameConfig,

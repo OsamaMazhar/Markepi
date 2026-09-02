@@ -84,7 +84,16 @@ public struct FrameGeometry: Equatable, Sendable {
     ///   - sourceSize: the unframed source size in pixels.
     ///   - dpi: resolution used to turn a millimetre border into pixels.
     ///     Only `gallery` uses it; `classic` sizes proportionally.
-    public init(config: WhiteFrameConfig, sourceSize: CGSize, dpi: CGFloat = 300) {
+    ///   - hasCaptionContent: whether the caption will actually draw anything.
+    ///     A gallery frame whose slots all resolve to nothing — a photo with no
+    ///     metadata and no typed handle — collapses its bottom band to a
+    ///     uniform mat rather than leaving an empty bar.
+    public init(
+        config: WhiteFrameConfig,
+        sourceSize: CGSize,
+        dpi: CGFloat = 300,
+        hasCaptionContent: Bool = true
+    ) {
         self.sourceSize = sourceSize
 
         let shorter = min(sourceSize.width, sourceSize.height)
@@ -127,6 +136,9 @@ public struct FrameGeometry: Equatable, Sendable {
         case .classic:
             // A uniform border. Its single centred caption already fits the
             // mat at the existing proportions, so the bottom is not special.
+            bottomEdge = edge
+        case .gallery where !hasCaptionContent:
+            // Nothing to say, so no bar to say it in.
             bottomEdge = edge
         case .gallery:
             // The bottom band is a multiple of the side mat, so it tracks the

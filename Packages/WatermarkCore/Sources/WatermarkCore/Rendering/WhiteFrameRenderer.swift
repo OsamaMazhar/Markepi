@@ -32,6 +32,97 @@ private let frameLog = Logger(subsystem: "com.watermark.core", category: "WhiteF
 /// that produces equivalent pixel output for structural testing.
 public struct WhiteFrameRenderer {
 
+    /// The four gallery caption lines, already resolved against metadata, plus
+    /// the brand mark the photo's manufacturer earned.
+    ///
+    /// Resolution happens once, before the platform branch, so both render
+    /// paths draw from identical values — which is what keeps them in step.
+    struct ResolvedGalleryCaption {
+        var leftPrimary: String?
+        var leftSecondary: String?
+        var rightPrimary: String?
+        var rightSecondary: String?
+        var mark: BrandMarkArtwork?
+
+        var hasText: Bool {
+            leftPrimary != nil || leftSecondary != nil || rightPrimary != nil || rightSecondary != nil
+        }
+        var isEmpty: Bool { !hasText && mark == nil }
+    }
+
+    /// Resolves one slot, or nil when it has nothing to say.
+    static func resolveSlot(_ slot: CaptionSlot, metadata: [String: Any]) -> String? {
+        let raw: String
+        switch slot {
+        case .empty:
+            return nil
+        case .field(let field):
+            raw = EXIFTokenParser.substitute(field.token, metadata: metadata)
+        case .text(let text):
+            guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+            raw = EXIFTokenParser.substitute(text, metadata: metadata)
+        }
+        // A missing EXIF field substitutes as "--" (D-08). A line made only of
+        // placeholders says nothing, and a line with some present values reads
+        // better without the gaps — so drop the placeholders and keep the rest.
+        let words = raw.split(separator: " ").filter { $0 != "--" }
+        let cleaned = words.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        return cleaned.isEmpty ? nil : cleaned
+    }
+
+    static func resolveGalleryCaption(
+        config: WhiteFrameConfig,
+        metadata: [String: Any]
+    ) -> ResolvedGalleryCaption {
+        guard config.metadataTextEnabled else { return ResolvedGalleryCaption() }
+        let matIsLight = isLight(matColor(for: config.style))
+
+        // Apple writes the device name into the lens string too ("iPhone 6s
+        // back camera 4.15mm f/2.2"). With the device already on its own line,
+        // repeating it wastes the band — the reference layout shows the lens
+        // with that prefix dropped.
+        let deviceName = resolveSlot(.field(.cameraModel), metadata: metadata)
+        func trimmed(_ slot: CaptionSlot) -> String? {
+            guard let text = resolveSlot(slot, metadata: metadata) else { return nil }
+            guard let deviceName, text != deviceName,
+                  text.lowercased().hasPrefix(deviceName.lowercased() + " ") else { return text }
+            let stripped = String(text.dropFirst(deviceName.count)).trimmingCharacters(in: .whitespaces)
+            return stripped.isEmpty ? text : stripped
+        }
+
+        return ResolvedGalleryCaption(
+            leftPrimary: resolveSlot(config.leftPrimary, metadata: metadata),
+            leftSecondary: trimmed(config.leftSecondary),
+            rightPrimary: resolveSlot(config.rightPrimary, metadata: metadata),
+            rightSecondary: trimmed(config.rightSecondary),
+            mark: BrandMarkRegistry.mark(metadata: metadata,
+                                         variant: config.logoVariant,
+                                         matIsLight: matIsLight)
+        )
+    }
+
+    /// Whether this frame's caption will draw anything at all.
+    ///
+    /// Callers build geometry before resolving content, so this lets the band
+    /// collapse when there is nothing to put in it.
+    public static func hasCaptionContent(config: WhiteFrameConfig, metadata: [String: Any]) -> Bool {
+        switch config.style {
+        case .classic:
+            return resolveCaption(config: config, metadata: metadata) != nil
+        case .gallery:
+            return !resolveGalleryCaption(config: config, metadata: metadata).isEmpty
+        }
+    }
+
+    /// Whether a mat is light enough that a dark mark reads on it.
+    static func isLight(_ color: CGColor) -> Bool {
+        let comps = color.components ?? [1]
+        let luminance = comps.count >= 3
+            ? 0.2126 * comps[0] + 0.7152 * comps[1] + 0.0722 * comps[2]
+            : comps[0]
+        return luminance > 0.5
+    }
+
     /// Renders the mat that surrounds a photo, as a `CIImage` the size of the
     /// framed export with a transparent hole where the photo goes.
     ///
@@ -54,11 +145,15 @@ public struct WhiteFrameRenderer {
         scale: CGFloat = 1.0
     ) throws -> CIImage {
         let attributionText = resolveCaption(config: config, metadata: metadata)
+        let gallery = config.style == .gallery
+            ? resolveGalleryCaption(config: config, metadata: metadata)
+            : ResolvedGalleryCaption()
 
         #if canImport(UIKit)
         return try renderWithUIGraphics(
             geometry: geometry,
             attributionText: attributionText,
+            gallery: gallery,
             config: config,
             scale: scale
         )
@@ -66,6 +161,7 @@ public struct WhiteFrameRenderer {
         return try renderWithCoreGraphics(
             geometry: geometry,
             attributionText: attributionText,
+            gallery: gallery,
             config: config,
             scale: scale
         )
@@ -81,7 +177,12 @@ public struct WhiteFrameRenderer {
     ) throws -> CIImage {
         try render(
             config: config,
-            geometry: FrameGeometry(config: config, sourceSize: sourceSize),
+            geometry: FrameGeometry(
+                config: config,
+                sourceSize: sourceSize,
+                dpi: FrameGeometry.resolveDPI(from: metadata),
+                hasCaptionContent: hasCaptionContent(config: config, metadata: metadata)
+            ),
             metadata: metadata,
             scale: scale
         )
@@ -113,6 +214,7 @@ public struct WhiteFrameRenderer {
     private static func renderWithUIGraphics(
         geometry: FrameGeometry,
         attributionText: String?,
+        gallery: ResolvedGalleryCaption,
         config: WhiteFrameConfig,
         scale: CGFloat
     ) throws -> CIImage {
@@ -123,7 +225,7 @@ public struct WhiteFrameRenderer {
         let renderer = UIGraphicsImageRenderer(size: geometry.framedSize, format: format)
         let uiImage = renderer.image { ctx in
             drawFrame(cgContext: ctx.cgContext, geometry: geometry,
-                      attributionText: attributionText, config: config)
+                      attributionText: attributionText, gallery: gallery, config: config)
         }
 
         guard let cgImage = uiImage.cgImage else {
@@ -139,6 +241,7 @@ public struct WhiteFrameRenderer {
     private static func renderWithCoreGraphics(
         geometry: FrameGeometry,
         attributionText: String?,
+        gallery: ResolvedGalleryCaption,
         config: WhiteFrameConfig,
         scale: CGFloat
     ) throws -> CIImage {
@@ -164,7 +267,7 @@ public struct WhiteFrameRenderer {
         cgContext.scaleBy(x: scale, y: -scale)
 
         drawFrame(cgContext: cgContext, geometry: geometry,
-                  attributionText: attributionText, config: config)
+                  attributionText: attributionText, gallery: gallery, config: config)
 
         guard let cgImage = cgContext.makeImage() else {
             throw PipelineError.frameRenderFailed
@@ -191,6 +294,7 @@ public struct WhiteFrameRenderer {
         cgContext: CGContext,
         geometry: FrameGeometry,
         attributionText: String?,
+        gallery: ResolvedGalleryCaption,
         config: WhiteFrameConfig
     ) {
         let canvas = CGRect(origin: .zero, size: geometry.framedSize)
@@ -218,9 +322,153 @@ public struct WhiteFrameRenderer {
             drawClassicCaption(cgContext: cgContext, geometry: geometry,
                                attributionText: attributionText, config: config)
         case .gallery:
-            // Laid out in the two-column pass; see the gallery caption work.
-            break
+            drawGalleryCaption(cgContext: cgContext, geometry: geometry,
+                               content: gallery, config: config)
         }
+    }
+
+    /// The gallery caption: two stacked lines on the left, a brand mark, a
+    /// divider rule, and two stacked lines on the right.
+    ///
+    /// Everything is measured from `geometry`, which is metric for this style,
+    /// so the parts keep their relationship at any resolution.
+    private static func drawGalleryCaption(
+        cgContext: CGContext,
+        geometry: FrameGeometry,
+        content: ResolvedGalleryCaption,
+        config: WhiteFrameConfig
+    ) {
+        guard !content.isEmpty else { return }
+
+        let band = geometry.captionBand
+        let fontSize = geometry.captionFontSize
+        let lineHeight = fontSize * 1.25
+        let interlineGap = fontSize * 0.25
+        let gap = fontSize * 0.9
+
+        // The reference pairs a heavy dark line with a lighter grey one. The
+        // secondary tone is derived from the user's caption colour rather than
+        // hardcoded, so a recoloured caption keeps the contrast.
+        let primaryColor = config.textColor
+        let secondaryColor = lighten(config.textColor, towards: matColor(for: config.style), by: 0.45)
+
+        func attributed(_ text: String, size: CGFloat, primary: Bool) -> NSAttributedString {
+            NSAttributedString(string: text, attributes: [
+                .font: platformFont(ofSize: size, weight: primary ? .semibold : .regular),
+                .foregroundColor: platformColor(from: primary ? primaryColor : secondaryColor),
+            ])
+        }
+
+        /// One column of up to two stacked lines.
+        struct Column {
+            var primary: NSAttributedString?
+            var secondary: NSAttributedString?
+            var width: CGFloat { max(primary?.size().width ?? 0, secondary?.size().width ?? 0) }
+            var isEmpty: Bool { primary == nil && secondary == nil }
+        }
+
+        func column(_ primaryText: String?, _ secondaryText: String?, size: CGFloat) -> Column {
+            Column(primary: primaryText.map { attributed($0, size: size, primary: true) },
+                   secondary: secondaryText.map { attributed($0, size: size, primary: false) })
+        }
+
+        // Mark first: it takes its width from a metric height, and the columns
+        // divide what is left.
+        var markWidth: CGFloat = 0
+        var markSize = CGSize.zero
+        if let mark = content.mark {
+            let height = min(geometry.logoHeight, band.height - fontSize * 0.6)
+            let width = height * mark.aspectRatio
+            // A 10:1 wordmark would otherwise crowd out the caption entirely.
+            let maxWidth = band.width * 0.28
+            markSize = width > maxWidth
+                ? CGSize(width: maxWidth, height: maxWidth / mark.aspectRatio)
+                : CGSize(width: width, height: height)
+            markWidth = markSize.width + gap
+        }
+
+        let dividerWidth = max(1, (fontSize * 0.06).rounded())
+        let hasDivider = content.mark != nil && (content.rightPrimary != nil || content.rightSecondary != nil)
+        let dividerSpace = hasDivider ? dividerWidth + gap : 0
+
+        // Each column gets half of what the mark and divider leave. Shrinking
+        // is per column, so one long lens string does not shrink the device
+        // name across the band from it.
+        let available = max(0, band.width - markWidth - dividerSpace - gap)
+        var left = column(content.leftPrimary, content.leftSecondary, size: fontSize)
+        var right = column(content.rightPrimary, content.rightSecondary, size: fontSize)
+
+        let leftAllowance = right.isEmpty ? available : available * 0.5
+        let rightAllowance = left.isEmpty ? available : available * 0.5
+        if left.width > leftAllowance, left.width > 0 {
+            left = column(content.leftPrimary, content.leftSecondary,
+                          size: fontSize * (leftAllowance / left.width))
+        }
+        if right.width > rightAllowance, right.width > 0 {
+            right = column(content.rightPrimary, content.rightSecondary,
+                           size: fontSize * (rightAllowance / right.width))
+        }
+
+        /// Draws a column, returning the block height it occupied.
+        func draw(_ col: Column, x: (NSAttributedString) -> CGFloat, top: CGFloat) {
+            var y = top
+            if let primary = col.primary {
+                drawLine(primary, at: CGPoint(x: x(primary), y: y), in: cgContext)
+                y += lineHeight + interlineGap
+            }
+            if let secondary = col.secondary {
+                drawLine(secondary, at: CGPoint(x: x(secondary), y: y), in: cgContext)
+            }
+        }
+
+        func blockHeight(_ col: Column) -> CGFloat {
+            let lines = (col.primary != nil ? 1 : 0) + (col.secondary != nil ? 1 : 0)
+            guard lines > 0 else { return 0 }
+            return CGFloat(lines) * lineHeight + CGFloat(lines - 1) * interlineGap
+        }
+
+        let tallest = max(blockHeight(left), blockHeight(right), markSize.height)
+        let blockTop = band.midY - tallest / 2
+
+        // Left column hugs the left edge of the band.
+        draw(left, x: { _ in band.minX }, top: blockTop + (tallest - blockHeight(left)) / 2)
+
+        // Right column hugs the right edge; the mark and divider sit before it.
+        let rightEdge = band.maxX
+        draw(right, x: { rightEdge - $0.size().width },
+             top: blockTop + (tallest - blockHeight(right)) / 2)
+
+        let rightBlockWidth = right.width
+        var cursor = rightEdge - rightBlockWidth
+        if hasDivider {
+            cursor -= gap
+            let dividerHeight = max(blockHeight(right), markSize.height * 0.8)
+            let dividerRect = CGRect(x: cursor - dividerWidth,
+                                     y: band.midY - dividerHeight / 2,
+                                     width: dividerWidth, height: dividerHeight)
+            cgContext.setFillColor(platformColor(from: secondaryColor).cgColor)
+            cgContext.fill(dividerRect)
+            cursor -= dividerWidth + gap
+        } else if content.mark != nil {
+            cursor -= gap
+        }
+
+        if let mark = content.mark {
+            let markRect = CGRect(x: cursor - markSize.width,
+                                  y: band.midY - markSize.height / 2,
+                                  width: markSize.width, height: markSize.height)
+            mark.draw(in: markRect, context: cgContext)
+        }
+    }
+
+    /// Moves a colour part-way towards another — used to derive the secondary
+    /// caption tone from the primary one and the mat behind it.
+    static func lighten(_ color: CGColor, towards target: CGColor, by amount: CGFloat) -> CGColor {
+        guard let a = color.components, let b = target.components,
+              a.count >= 3, b.count >= 3 else { return color }
+        func mix(_ i: Int) -> CGFloat { a[i] + (b[i] - a[i]) * amount }
+        return CGColor(colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+                       components: [mix(0), mix(1), mix(2), a.count > 3 ? a[3] : 1]) ?? color
     }
 
     /// Classic's single centred line, sitting in the bottom mat.

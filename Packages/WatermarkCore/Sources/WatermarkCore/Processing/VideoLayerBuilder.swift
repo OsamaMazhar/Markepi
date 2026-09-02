@@ -41,7 +41,9 @@ public struct VideoLayerBuilder {
         let frameConfig = config.whiteFrame?.isEnabled == true ? config.whiteFrame : nil
         let geometry = frameConfig.map {
             FrameGeometry(config: $0, sourceSize: videoSize,
-                          dpi: FrameGeometry.resolveDPI(from: metadata))
+                          dpi: FrameGeometry.resolveDPI(from: metadata),
+                          hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(
+                              config: $0, metadata: metadata))
         }
         let renderSize = geometry?.framedSize ?? videoSize
 

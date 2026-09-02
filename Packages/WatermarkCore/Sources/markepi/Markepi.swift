@@ -27,7 +27,7 @@ private let aliases: [String: String] = [
 
 private let boolFlags: Set<String> = [
     "--help", "--force", "--list-fonts",
-    "--border", "--border-no-text",
+    "--border", "--border-no-text", "--border-keyline",
     "--date-stamp",
 ]
 
@@ -36,8 +36,21 @@ private let valueFlags: Set<String> = [
     "--text", "--text-position", "--text-size", "--text-font", "--text-color", "--text-opacity",
     "--logo", "--logo-position", "--logo-size", "--logo-opacity", "--logo-rotation",
     "--border-width", "--border-caption", "--border-fields", "--border-text-color", "--border-text-size",
+    "--border-style", "--border-mm", "--border-caption-mm", "--border-logo-mm", "--border-logo-variant",
+    "--border-left-primary", "--border-left-secondary",
+    "--border-right-primary", "--border-right-secondary",
     "--date-format", "--date-size", "--date-position",
 ]
+
+/// Parses a caption slot argument. A bare `CaptionField` name selects that
+/// field; anything else is free text, which may carry `{tokens}`. An empty
+/// string clears the slot.
+func captionSlot(_ raw: String?) -> CaptionSlot? {
+    guard let raw else { return nil }
+    if raw.isEmpty { return .empty }
+    if let field = CaptionField(rawValue: raw) { return .field(field) }
+    return .text(raw)
+}
 
 struct Flags {
     var values: [String: String] = [:]
@@ -288,7 +301,30 @@ struct Markepi {
                 } ?? CGColor(gray: 0.333, alpha: 1),
                 textFontSizeRatio: CGFloat(try flags.value("--border-text-size").map {
                     try doubleValue($0, flag: "--border-text-size", in: 0.005...0.05)
-                } ?? 0.018)
+                } ?? 0.018),
+                style: try flags.value("--border-style").map { try enumValue($0, flag: "--border-style") }
+                    ?? .classic,
+                borderMillimetres: CGFloat(try flags.value("--border-mm").map {
+                    try doubleValue($0, flag: "--border-mm", in: 0.5...50)
+                } ?? 5.0),
+                captionTextMillimetres: CGFloat(try flags.value("--border-caption-mm").map {
+                    try doubleValue($0, flag: "--border-caption-mm", in: 0.5...20)
+                } ?? 2.5),
+                logoHeightMillimetres: CGFloat(try flags.value("--border-logo-mm").map {
+                    try doubleValue($0, flag: "--border-logo-mm", in: 0.5...30)
+                } ?? 4.0),
+                keylineEnabled: flags.has("--border-keyline"),
+                logoVariant: try flags.value("--border-logo-variant").map {
+                    try enumValue($0, flag: "--border-logo-variant")
+                } ?? .color,
+                leftPrimary: captionSlot(flags.value("--border-left-primary"))
+                    ?? WhiteFrameConfig.defaultLeftPrimary,
+                leftSecondary: captionSlot(flags.value("--border-left-secondary"))
+                    ?? WhiteFrameConfig.defaultLeftSecondary,
+                rightPrimary: captionSlot(flags.value("--border-right-primary"))
+                    ?? WhiteFrameConfig.defaultRightPrimary,
+                rightSecondary: captionSlot(flags.value("--border-right-secondary"))
+                    ?? WhiteFrameConfig.defaultRightSecondary
             )
         }
 

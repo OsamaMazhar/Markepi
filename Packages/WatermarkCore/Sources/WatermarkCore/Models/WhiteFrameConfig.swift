@@ -267,9 +267,9 @@ public struct WhiteFrameConfig: Sendable, Codable {
     /// text — this is where the photographer types their handle.
     public var rightPrimary: CaptionSlot
 
-    /// Lower-right caption line, drawn lighter. Default: the lens line from
-    /// the reference layout, which needs three metadata values on one line and
-    /// so is expressed as tokens rather than a single field.
+    /// Lower-right caption line, drawn lighter. Default: the lens, whose EXIF
+    /// string already carries focal length and aperture — composing it with
+    /// those fields as well would print both twice.
     public var rightSecondary: CaptionSlot
 
     /// The default set of caption fields: camera plus the common shooting
@@ -282,7 +282,7 @@ public struct WhiteFrameConfig: Sendable, Codable {
     public static let defaultLeftPrimary: CaptionSlot = .field(.cameraModel)
     public static let defaultLeftSecondary: CaptionSlot = .field(.date)
     public static let defaultRightPrimary: CaptionSlot = .text("")
-    public static let defaultRightSecondary: CaptionSlot = .text("{lens} {focal_length} {aperture}")
+    public static let defaultRightSecondary: CaptionSlot = .field(.lens)
 
     /// Creates a white frame configuration.
     ///

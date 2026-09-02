@@ -24,10 +24,10 @@
 
 ## 4. Brand resolution
 
-- [ ] 4.1 Add the brand registry mapping a normalised manufacturer key to that brand's available mark files, and verify a test asserts a registered brand resolves and an unregistered one resolves to nothing
-- [ ] 4.2 Implement manufacturer normalisation — case-folding, trimming, stripping trailing corporate suffixes — plus sub-brand disambiguation from the model where the make names the parent (Redmi under Xiaomi), and verify a test covers the real-world spellings for each of the 25 shipped brands, a camera body writing its maker in capitals with a corporate suffix, and a Redmi resolving to Redmi rather than Xiaomi
-- [ ] 4.3 Implement variant selection: the user's colour/mono preference when the brand ships both, otherwise the single available mark, with mono resolving to the rendition that contrasts with the mat, and verify tests cover both-available, one-available, and mono picking the dark rendition on a light mat
-- [ ] 4.4 Verify end to end that a photo's metadata drives the mark: a fixture from each shipped brand resolves to that brand's mark, and a fixture with no manufacturer resolves to none
+- [x] 4.1 Add the brand registry mapping a normalised manufacturer key to that brand's available mark files, and verify a test asserts a registered brand resolves and an unregistered one resolves to nothing
+- [x] 4.2 Implement manufacturer normalisation — case-folding, trimming, stripping trailing corporate suffixes — plus sub-brand disambiguation from the model where the make names the parent (Redmi under Xiaomi), and verify a test covers the real-world spellings for each of the 25 shipped brands, a camera body writing its maker in capitals with a corporate suffix, and a Redmi resolving to Redmi rather than Xiaomi
+- [x] 4.3 Implement variant selection: the user's colour/mono preference when the brand ships both, otherwise the single available mark, with mono resolving to the rendition that contrasts with the mat, and verify tests cover both-available, one-available, and mono picking the dark rendition on a light mat
+- [x] 4.4 Verify end to end that a photo's metadata drives the mark: a fixture from each shipped brand resolves to that brand's mark, and a fixture with no manufacturer resolves to none
 
 ## 4b. Metric sizing
 
@@ -39,13 +39,13 @@
 
 ## 5. Renderer — caption resolution and drawing
 
-- [ ] 5.1 Introduce the resolved caption model and move metadata lookup, token substitution and empty-slot elision ahead of the platform branch — D4, and verify a test resolves the four slots from a metadata dictionary including the missing-field case
-- [ ] 5.2 Change `drawFrame` to take the resolved model instead of `attributionText: String?`, keeping classic's centred single line unchanged apart from the new geometry, and verify the existing classic renderer tests pass
-- [ ] 5.3 Draw the gallery two-column caption — left group left-aligned, right group right-aligned, primary line heavier and darker, secondary lighter — and verify a test asserts the left group's left edge and the right group's right edge sit within the mat, and that primary and secondary use different weights
-- [ ] 5.4 Apply per-group auto-shrink so a long right-hand string does not shrink the left group, and verify a test with an overlong lens string asserts the left group's font size is unchanged and neither group overflows the band
-- [ ] 5.5 Draw the resolved mark and its vertical divider before the right group, vertically centred on that group, omitting both when metadata resolved no mark, and verify tests cover the resolved case, the no-mark case, and the vertical-centre alignment
-- [ ] 5.6 Draw the optional keyline between the photo rect and the mat for both styles, scaled to the source's shorter dimension, and verify a test asserts the stroke is present on all four edges when enabled, absent when disabled, and covers no more of the photo than its own thickness
-- [ ] 5.7 Confirm the macOS Core Text path renders the gallery caption upright and correctly positioned (its baseline/text-matrix handling still applies per line), and verify by rendering a gallery frame through `swift test` on macOS and asserting text pixels fall inside the bottom band
+- [x] 5.1 Introduce the resolved caption model and move metadata lookup, token substitution and empty-slot elision ahead of the platform branch — D4, and verify a test resolves the four slots from a metadata dictionary including the missing-field case
+- [x] 5.2 Change `drawFrame` to take the resolved model instead of `attributionText: String?`, keeping classic's centred single line unchanged apart from the new geometry, and verify the existing classic renderer tests pass
+- [x] 5.3 Draw the gallery two-column caption — left group left-aligned, right group right-aligned, primary line heavier and darker, secondary lighter — and verify a test asserts the left group's left edge and the right group's right edge sit within the mat, and that primary and secondary use different weights
+- [x] 5.4 Apply per-group auto-shrink so a long right-hand string does not shrink the left group, and verify a test with an overlong lens string asserts the left group's font size is unchanged and neither group overflows the band
+- [x] 5.5 Draw the resolved mark and its vertical divider before the right group, vertically centred on that group, omitting both when metadata resolved no mark, and verify tests cover the resolved case, the no-mark case, and the vertical-centre alignment
+- [x] 5.6 Draw the optional keyline between the photo rect and the mat for both styles, scaled to the source's shorter dimension, and verify a test asserts the stroke is present on all four edges when enabled, absent when disabled, and covers no more of the photo than its own thickness
+- [x] 5.7 Confirm the macOS Core Text path renders the gallery caption upright and correctly positioned (its baseline/text-matrix handling still applies per line), and verify by rendering a gallery frame through `swift test` on macOS and asserting text pixels fall inside the bottom band
 
 ## 6. Video parity
 

@@ -122,14 +122,17 @@ struct FramedExportGeometryTests {
             color: CGColor(red: 0, green: 0, blue: 1, alpha: 1), size: source)
         let inputURL = try createTempInputFile(data: jpegData, name: "framed_gallery")
 
-        let frame = WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false, style: .gallery)
+        // A typed handle so the caption has content: an empty caption now
+        // collapses the band, which is a different case (covered below).
+        let frame = WhiteFrameConfig(isEnabled: true, style: .gallery,
+                                     rightPrimary: .text("@test"))
         let config = WatermarkConfiguration(watermarks: [], whiteFrame: frame)
         let result = try await WatermarkEngine().process(sourceURL: inputURL, config: config)
         guard let outputURL = result.url, let cg = loadCGImage(outputURL), let output = Bitmap(cg) else {
             Issue.record("no output"); cleanup(inputURL); return
         }
 
-        let g = FrameGeometry(config: frame, sourceSize: source)
+        let g = FrameGeometry(config: frame, sourceSize: source, hasCaptionContent: true)
         // This is the assertion that catches a flipped vertical offset: if the
         // photo were placed using the top inset instead of the bottom, the tall
         // caption band would end up above the photo and this pixel would be mat.
@@ -233,9 +236,11 @@ struct FramedExportGeometryTests {
     func videoLayerTreeMatchesPhotoGeometry() throws {
         let videoSize = CGSize(width: 1920, height: 1080)
         for style in FrameStyle.allCases {
-            let frame = WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false, style: style)
+            let frame = WhiteFrameConfig(isEnabled: true, style: style,
+                                         rightPrimary: .text("@test"))
             let config = WatermarkConfiguration(watermarks: [], whiteFrame: frame)
-            let geometry = FrameGeometry(config: frame, sourceSize: videoSize)
+            let geometry = FrameGeometry(config: frame, sourceSize: videoSize,
+                                         hasCaptionContent: true)
 
             let tree = try VideoLayerBuilder.buildLayers(
                 config: config, videoSize: videoSize, metadata: [:], isHDR: false)
@@ -249,6 +254,34 @@ struct FramedExportGeometryTests {
                                                     width: videoSize.width, height: videoSize.height),
                     "\(style): video layer should sit in the photo rect")
         }
+    }
+
+    @Test("A gallery frame with nothing to say collapses its caption band")
+    func emptyCaptionCollapsesTheBand() async throws {
+        let source = CGSize(width: 400, height: 300)
+        let (_, jpegData) = TestImageFactory.solidColorImage(
+            color: CGColor(red: 0, green: 0, blue: 1, alpha: 1), size: source)
+        let inputURL = try createTempInputFile(data: jpegData, name: "framed_empty_caption")
+
+        // No metadata in the fixture and no typed handle, so every slot
+        // resolves to nothing. Leaving a tall empty bar would just look broken.
+        let frame = WhiteFrameConfig(isEnabled: true, style: .gallery,
+                                     leftPrimary: .empty, leftSecondary: .empty,
+                                     rightPrimary: .empty, rightSecondary: .empty)
+        let config = WatermarkConfiguration(watermarks: [], whiteFrame: frame)
+        let result = try await WatermarkEngine().process(sourceURL: inputURL, config: config)
+        guard let outputURL = result.url, let cg = loadCGImage(outputURL) else {
+            Issue.record("no output"); cleanup(inputURL); return
+        }
+
+        let collapsed = FrameGeometry(config: frame, sourceSize: source, hasCaptionContent: false)
+        let withCaption = FrameGeometry(config: frame, sourceSize: source, hasCaptionContent: true)
+        #expect(collapsed.bottom == collapsed.top, "band should collapse to a uniform mat")
+        #expect(collapsed.framedSize.height < withCaption.framedSize.height)
+        #expect(cg.height == Int(collapsed.framedSize.height),
+                "export should use the collapsed geometry")
+
+        cleanup(inputURL, outputURL)
     }
 
     @Test("An unframed video composition is unchanged")
