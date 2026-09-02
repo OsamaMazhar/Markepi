@@ -6,7 +6,7 @@ Adding a *second* style is cheap; adding the *concept* of styles is what unlocks
 
 ## What Changes
 
-- **Frame styles.** `WhiteFrameConfig` gains a `FrameStyle` enum. `.classic` is today's uniform border with a centred caption and stays the default, so saved templates and existing exports are pixel-identical. `.gallery` is the new two-column mat.
+- **Frame styles.** `WhiteFrameConfig` gains a `FrameStyle` enum. `.classic` is today's uniform border with a centred caption and stays the default, so saved templates keep their look. `.gallery` is the new two-column mat.
 - **The `.gallery` style.** A light-grey mat, even on three sides with a taller bottom band, carrying a caption row split into a left group (two stacked lines) and a right group (two stacked lines) preceded by a logo and a thin vertical divider rule. In each group the first line is bold and dark, the second lighter and grey.
 - **Four configurable caption slots.** `leftPrimary`, `leftSecondary`, `rightPrimary`, `rightSecondary` each resolve to a `CaptionField` or to free text. Defaults reproduce the reference: camera model over date on the left; handle over lens/focal-length/aperture on the right.
 - **Optional black keyline.** A thin black stroke between the photo edge and the mat, on/off. It lives in the shared renderer, so `.classic` gets it too rather than it being special-cased into the new style.

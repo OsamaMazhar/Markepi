@@ -25,7 +25,12 @@ let package = Package(
             path: "Sources/WatermarkCore",
             resources: [
                 .process("Resources/Fonts"),
-                .process("Resources/Media.xcassets")
+                .process("Resources/Media.xcassets"),
+                // Copied, not processed: the marks stay in a `Logos/`
+                // subdirectory so they can be enumerated at runtime, and the
+                // README rides along instead of tripping the unhandled-file
+                // warning `.process` would raise.
+                .copy("Resources/Logos")
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v6)

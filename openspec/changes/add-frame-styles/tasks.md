@@ -1,8 +1,8 @@
 ## 1. Brand mark assets
 
-- [ ] 1.1 Define and document the drop convention for supplied artwork — one file per brand and variant, named by brand key and variant — in `Resources/Logos/README.md`, and verify it lists the brand keys the registry expects so the sourcing work has an unambiguous target
-- [ ] 1.2 Add a repeatable conversion step from a supplied vector to a single-page PDF, and verify with `CGPDFDocument` that a converted file opens, reports one page, and has a non-zero media box
-- [ ] 1.3 Add `Resources/Logos/` to the WatermarkCore target's `resources:` in Package.swift, and verify `swift build` succeeds and `Bundle.module.url(forResource:)` resolves a converted mark at runtime
+- [x] 1.1 Define and document the drop convention for supplied artwork — one file per brand and variant, named by brand key and variant — in `Resources/Logos/README.md`, and verify it lists the brand keys the registry expects so the sourcing work has an unambiguous target
+- [x] 1.2 Add a repeatable conversion step from a supplied vector to a single-page PDF, and verify with `CGPDFDocument` that a converted file opens, reports one page, and has a non-zero media box
+- [x] 1.3 Add `Resources/Logos/` to the WatermarkCore target's `resources:` in Package.swift, and verify `swift build` succeeds and `Bundle.module.url(forResource:)` resolves a converted mark at runtime
 - [ ] 1.4 Convert and register each brand's artwork as it is supplied, recording source and licence per file in the README, and verify each converted mark opens and draws
 - [ ] 1.5 Verify a brand whose artwork has not been supplied yet resolves to no mark and no divider, so a partly-populated registry is a valid state and implementation never blocks on sourcing
 

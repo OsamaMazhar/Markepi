@@ -1,3 +1,7 @@
+// Exercises the iOS-only SwiftUI layer, which is behind `canImport(UIKit)`
+// in the sources. Guarded to match so the test target still builds for
+// macOS, where `swift test` and the `markepi` CLI run.
+#if canImport(UIKit)
 import Testing
 import SwiftUI
 @testable import WatermarkCore
@@ -155,3 +159,4 @@ struct ShareActionButtonTests {
                 "renderAndPrepareShare should be called when Retry button is tapped in .error state")
     }
 }
+#endif

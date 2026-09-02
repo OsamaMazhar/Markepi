@@ -1,3 +1,7 @@
+// Exercises the iOS-only SwiftUI layer, which is behind `canImport(UIKit)`
+// in the sources. Guarded to match so the test target still builds for
+// macOS, where `swift test` and the `markepi` CLI run.
+#if canImport(UIKit)
 import Foundation
 import SwiftUI
 import WatermarkCore
@@ -47,3 +51,4 @@ final class MockRenderingViewModel: WatermarkConfigurable {
         cancelBatchProcessingCallCount += 1
     }
 }
+#endif
