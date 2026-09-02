@@ -64,23 +64,27 @@ Replace `attributionText: String?` with a small resolved struct — the centred 
 
 *Why:* both render paths then draw from the same already-resolved values, which is what keeps them identical. It also keeps metadata access out of the drawing code.
 
-### D5 — Marks ship as vector PDFs, drawn with Core Graphics
+### D5 — Vector where a vector exists, official raster otherwise
 
-The user supplies each brand's mark as a vector. Those are converted to single-page PDFs at authoring time, shipped under `Resources/Logos/`, loaded with `CGPDFDocument`, and drawn with `CGContext.drawPDFPage` scaled to the caption band.
+The supplied artwork is 25 brands, each with an official full-colour SVG and official monochrome renditions — vector for Apple, 1024px transparent PNG for the rest. `tools/logos/build-logos.sh` rebuilds `Resources/Logos/` from `LogoSources/`: colour SVGs become vector PDFs for every brand, mono becomes a PDF where a mono SVG was supplied and the official PNG otherwise. Loading is `CGPDFDocument` for PDFs and `CGImageSource` for rasters, behind one artwork type with one draw call.
 
-*Why:* `CGPDFDocument` is plain Core Graphics, so one code path serves both iOS and macOS with no `UIImage`/`NSImage` split and no asset-catalog vector-data caveats. It is vector all the way to the rasteriser, so it is sharp at any export size — which a PNG in an imageset, like the existing `BrandMark`, would not be.
+*Why not vector for everything:* the official monochrome artwork only exists as raster for 24 of the 25 brands. Deriving mono by forcing every fill in the colour vector to one colour would be a guess — it happens to be right for a wordmark and wrong for any logo with a knockout shape, and the supplied renditions are authoritative. A raster here costs nothing real: a mark draws at roughly 200–400px even on a 48MP export, so a 1024px master is only ever downscaled. A test asserts the raster masters stay large enough for that to hold.
 
-*Alternative — SVG in the asset catalog with Preserve Vector Data:* needs the platform image split, and its behaviour for an SPM resource bundle on macOS is less certain than Core Graphics'.
+*Why PDF rather than the asset catalog:* `CGPDFDocument` is plain Core Graphics, so one code path serves both iOS and macOS with no `UIImage`/`NSImage` split and no asset-catalog vector-data caveats.
 
-*Alternative — transcribe the vector paths into Swift `CGPath` code:* no resource loading at all, but it is per-brand hand work, and artwork using elliptical arcs makes arc-to-bézier conversion fiddly. A PDF gets it right for free, and scales to fifteen brands where hand-porting would not.
+*Sources live outside the target.* `LogoSources/` sits beside `Sources/`, so the original artwork is kept verbatim and reviewable without shipping 1.7MB of unused masters in the app bundle; the generated set is 936KB.
 
-*Naming is the contract with the sourcing work:* files are keyed by brand and variant on disk, so handing over a new brand's artwork is a drop-in plus a registry entry, with no renderer change. A brand whose file has not arrived yet resolves to no mark, so the implementation never blocks on sourcing.
+*Most of these are wordmarks, not glyphs.* Aspect ratios run from about 10:1 (Canon, Sony) to taller-than-wide. The renderer therefore sizes a mark by height to fit the caption band and lets width follow, then caps width so a long wordmark cannot crowd out the caption text. Sizing by width would make a wordmark microscopic and a square glyph enormous.
 
 ### D6 — The mark is resolved from metadata, not chosen
 
 A brand registry maps a normalised manufacturer key to that brand's available mark files. Resolution reads the manufacturer from the source image's metadata, normalises it, and looks it up; a miss — no manufacturer recorded, or one with no shipped mark — yields no mark, and the renderer then draws neither mark nor divider.
 
 *Normalisation matters more than it looks.* Manufacturers write themselves into EXIF inconsistently: lowercase, uppercase, with corporate suffixes. Matching therefore case-folds, trims, and strips trailing corporate suffixes before lookup, rather than comparing raw strings.
+
+*Sub-brands need the model, not just the make.* Redmi phones write `Make = Xiaomi` and put the sub-brand in `Model`. Make alone would give every Redmi the Xiaomi mark, so resolution checks the model for known sub-brands before falling back to the make. Honor is the mirror case and needs no special handling: current devices write `HONOR`, Huawei-era ones wrote `HUAWEI`, and those correctly get the Huawei mark — that is what the metadata says.
+
+*Which monochrome is not a user choice.* Both a dark and a light rendition ship. Monochrome resolves to whichever contrasts with the mat, so the light rendition simply becomes reachable if a dark mat is ever added, with no new control and no spec change.
 
 *Why derived rather than chosen:* a mark that is derived is a statement of fact about the photo — the device that took it. A mark that is chosen is decoration, and decoration with someone else's trademark is the version that gets an app rejected. It also removes a picker from an already busy controls column.
 

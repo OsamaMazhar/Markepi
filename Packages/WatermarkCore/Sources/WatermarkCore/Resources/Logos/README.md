@@ -1,78 +1,89 @@
 # Brand marks
 
+Generated. Do not edit by hand — run `tools/logos/build-logos.sh`, which
+rebuilds this directory from the artwork in `Packages/WatermarkCore/LogoSources/`.
+
 The `gallery` frame style draws the mark of the manufacturer that took the
 photo, read from the image's own metadata. The user never picks a brand — they
-only pick colour or monochrome, and only where a brand ships both.
+only pick colour or monochrome.
 
-Everything in this directory is third-party trademarked artwork. It is used as
-factual attribution: a mark only ever appears on a photo actually taken on that
+Everything here is third-party trademarked artwork, used as factual
+attribution: a mark only ever appears on a photo actually taken on that
 manufacturer's device.
 
-## Drop convention
+## What ships
 
-One file per brand and variant, named `<brand-key>-<variant>.pdf`:
+`<brand>-<variant>.<pdf|png>`, flat, where variant is `color`, `black` or
+`white`.
 
-```
-apple-color.pdf     apple-mono.pdf
-samsung-color.pdf   samsung-mono.pdf
-```
+- **`color`** — vector PDF, converted from each brand's official SVG. Every
+  brand has one.
+- **`black` / `white`** — vector PDF where an official mono SVG was supplied
+  (Apple), otherwise the official 1024px transparent PNG.
 
-- `<brand-key>` is the lowercase key from the table below.
-- `<variant>` is `color` or `mono`.
-- Both variants are optional. Ship `mono` only, `color` only, or both — the
-  variant control appears in the UI only for brands that have both.
-- A brand with no file here resolves to no mark and no divider. A missing brand
-  is a valid state, not a broken one, so brands can land one at a time.
+Vector wins wherever a vector exists. The mono rasters are only ever
+downscaled: a mark draws at roughly 200–400px even on a 48MP export, so a
+1024px master never has to be stretched.
 
-## Supplying artwork
+`color` vs mono is the user's choice. Which mono — `black` or `white` — is not:
+the renderer picks whichever contrasts with the mat, so `white` only comes up
+if a dark mat is ever added.
 
-Hand over SVG (preferred), PDF, or EPS. SVG is converted with:
+A brand with no file here resolves to no mark and no divider, which is a valid
+state rather than a bug.
 
-```sh
-tools/logos/import-logo.sh <brand-key> <color|mono> path/to/artwork.svg
-```
+## Aspect ratios vary wildly
 
-That converts to a single-page PDF, drops it here under the right name, and
-checks the result opens as one page with a non-zero media box. A PDF handed over
-directly is copied and checked the same way.
-
-Vector only. A PNG would soften on a 48MP export, which is the whole reason
-these are PDFs.
-
-Artwork should be the plain mark on a transparent background — no wordmark
-lockup, no padding, no background plate. The renderer scales it to the caption
-band and centres it against the two text lines, so any baked-in margin shows up
-as the mark sitting too small or off-centre.
+Most of these are wordmarks, not glyphs: Canon and Sony are ~10:1, Xiaomi is
+~1:1, some are taller than wide. The renderer sizes a mark by **height** to fit
+the caption band and lets width follow, then caps the width so a long wordmark
+cannot crowd out the caption text.
 
 ## Brand keys
 
-The `Make` column lists what the manufacturer actually writes into EXIF.
-Matching case-folds, trims, and strips corporate suffixes, so every spelling in
-a row resolves to the same key.
+`Make` is what the manufacturer actually writes into EXIF. Matching case-folds,
+trims, and strips corporate suffixes, so every spelling in a row resolves to
+the same key.
 
-| Brand key   | Matches `Make`                                    |
-|-------------|---------------------------------------------------|
-| `apple`     | Apple                                             |
-| `samsung`   | samsung, SAMSUNG                                  |
-| `google`    | Google                                            |
-| `canon`     | Canon, CANON                                      |
-| `nikon`     | NIKON CORPORATION, Nikon                          |
-| `sony`      | SONY, Sony                                        |
-| `fujifilm`  | FUJIFILM                                          |
-| `leica`     | LEICA CAMERA AG, Leica Camera AG                  |
-| `panasonic` | Panasonic, PANASONIC                              |
-| `olympus`   | OLYMPUS CORPORATION, OM Digital Solutions         |
-| `xiaomi`    | Xiaomi, xiaomi                                    |
-| `huawei`    | HUAWEI, Huawei                                    |
-| `oneplus`   | OnePlus, ONEPLUS                                  |
-| `dji`       | DJI, dji                                          |
-| `gopro`     | GoPro, GOPRO                                      |
+| Brand key    | Matches `Make`                                                  |
+|--------------|-----------------------------------------------------------------|
+| `apple`      | Apple                                                            |
+| `canon`      | Canon, CANON                                                     |
+| `dji`        | DJI, dji                                                         |
+| `fujifilm`   | FUJIFILM                                                         |
+| `google`     | Google                                                           |
+| `gopro`      | GoPro, GOPRO                                                     |
+| `hasselblad` | Hasselblad, HASSELBLAD                                           |
+| `honor`      | HONOR, Honor                                                     |
+| `huawei`     | HUAWEI, Huawei                                                   |
+| `insta360`   | Insta360, Arashi Vision                                          |
+| `leica`      | LEICA CAMERA AG, Leica Camera AG                                 |
+| `motorola`   | motorola, Motorola                                               |
+| `nikon`      | NIKON CORPORATION, Nikon                                         |
+| `nothing`    | Nothing, Nothing Technology                                      |
+| `olympus`    | OLYMPUS CORPORATION, OLYMPUS IMAGING CORP., OM Digital Solutions  |
+| `oneplus`    | OnePlus, ONEPLUS                                                 |
+| `oppo`       | OPPO, oppo                                                       |
+| `panasonic`  | Panasonic, PANASONIC                                             |
+| `pentax`     | PENTAX, PENTAX Corporation, RICOH IMAGING COMPANY, LTD.          |
+| `realme`     | realme, RealMe                                                   |
+| `redmi`      | Xiaomi **with** a `Model` starting "Redmi" — see below            |
+| `samsung`    | samsung, SAMSUNG                                                 |
+| `sony`       | SONY, Sony                                                       |
+| `vivo`       | vivo, VIVO                                                       |
+| `xiaomi`     | Xiaomi, xiaomi                                                   |
+
+### Sub-brands need `Model`, not just `Make`
+
+Redmi phones write `Make = Xiaomi` and put the sub-brand in `Model`
+(`Redmi Note 13`, …). `Make` alone would give every Redmi the Xiaomi mark, so
+resolution checks `Model` for known sub-brands before falling back to the
+`Make` match. Honor is the mirror image: current devices write `HONOR`, but
+Huawei-era Honors wrote `HUAWEI`, and those correctly get the Huawei mark —
+that is what the metadata says.
 
 ## Provenance
 
-Record every file as it lands: where the artwork came from, and the licence or
-usage terms it arrived under.
-
-| File | Source | Licence / terms |
-|------|--------|-----------------|
-| _(none yet)_ | | |
+Artwork supplied by the project owner, 2026-09-02: 25 brands, official
+full-colour vectors plus official monochrome renditions. Each brand's original
+files are kept verbatim under `LogoSources/<brand>/`.

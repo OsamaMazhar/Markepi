@@ -81,7 +81,7 @@ The `gallery` caption SHALL be composed of four independently configurable slots
 
 The `gallery` caption SHALL draw a brand mark immediately before the right-hand text group, separated from it by a thin vertical divider rule. The mark SHALL be determined by the manufacturer recorded in the source image's metadata — a photo taken on an Apple device gets the Apple mark, one taken on a Samsung device gets the Samsung mark, and so on. The user SHALL NOT be able to choose which brand's mark appears.
 
-Manufacturer matching SHALL tolerate how manufacturers actually write themselves into metadata, so that spelling, case and corporate suffixes do not defeat recognition. The mark SHALL be rendered from a vector source so that it stays sharp at full export resolution.
+Manufacturer matching SHALL tolerate how manufacturers actually write themselves into metadata, so that spelling, case and corporate suffixes do not defeat recognition. Where a manufacturer ships sub-brands that record the parent company as the manufacturer, the device model SHALL be consulted so the sub-brand's own mark is used. The mark SHALL be rendered from a vector source so that it stays sharp at full export resolution.
 
 #### Scenario: Recognised manufacturer
 - **WHEN** a photo whose metadata identifies a manufacturer the app ships a mark for is rendered in the `gallery` style
@@ -90,6 +90,10 @@ Manufacturer matching SHALL tolerate how manufacturers actually write themselves
 #### Scenario: Manufacturer written with case or suffix variation
 - **WHEN** the metadata records the manufacturer with different case or with a corporate suffix, such as a camera body writing its maker's name in capitals followed by "CORPORATION"
 - **THEN** it resolves to the same mark as the plain manufacturer name
+
+#### Scenario: Sub-brand recorded under its parent manufacturer
+- **WHEN** a photo records the parent company as its manufacturer but names a known sub-brand in its model
+- **THEN** the sub-brand's own mark is drawn rather than the parent's
 
 #### Scenario: No manufacturer in metadata
 - **WHEN** the source image's metadata carries no manufacturer information
@@ -111,7 +115,7 @@ Manufacturer matching SHALL tolerate how manufacturers actually write themselves
 
 ### Requirement: Brand mark colour variant
 
-Where a resolved brand ships both a colour and a monochrome mark, the user SHALL be able to choose between them. Where a brand ships only one, that one SHALL be used and the choice SHALL NOT be offered. The choice SHALL apply to whichever brand is resolved, not to one specific brand.
+Where a resolved brand ships both a colour and a monochrome mark, the user SHALL be able to choose between them. Where a brand ships only one, that one SHALL be used and the choice SHALL NOT be offered. When monochrome is in effect, the system SHALL draw whichever monochrome rendition contrasts with the mat; the user SHALL NOT choose between light and dark monochrome. The choice SHALL apply to whichever brand is resolved, not to one specific brand.
 
 #### Scenario: Both variants available
 - **WHEN** the resolved brand ships a colour and a monochrome mark
@@ -122,6 +126,10 @@ Where a resolved brand ships both a colour and a monochrome mark, the user SHALL
 - **WHEN** the resolved brand ships only one mark
 - **THEN** that mark is drawn regardless of the user's variant preference
 - **AND** no variant choice is offered for it
+
+#### Scenario: Monochrome contrasts with the mat
+- **WHEN** monochrome is in effect on a light mat
+- **THEN** the dark monochrome rendition is drawn, so the mark is legible against the mat
 
 #### Scenario: Preference persists across photos
 - **WHEN** the user has chosen a variant and then frames a photo from a different manufacturer that also ships both variants

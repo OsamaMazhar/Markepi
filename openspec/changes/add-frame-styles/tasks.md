@@ -1,9 +1,9 @@
 ## 1. Brand mark assets
 
-- [x] 1.1 Define and document the drop convention for supplied artwork — one file per brand and variant, named by brand key and variant — in `Resources/Logos/README.md`, and verify it lists the brand keys the registry expects so the sourcing work has an unambiguous target
-- [x] 1.2 Add a repeatable conversion step from a supplied vector to a single-page PDF, and verify with `CGPDFDocument` that a converted file opens, reports one page, and has a non-zero media box
+- [x] 1.1 Document the artwork convention and the brand keys with the EXIF `Make` spellings each must match, in `Resources/Logos/README.md`, and verify it covers every supplied brand
+- [x] 1.2 Add `tools/logos/build-logos.sh` to rebuild the shipped marks from `LogoSources/` — colour SVG to vector PDF, mono to PDF where a mono vector exists and the official raster otherwise — and verify with `CGPDFDocument` that every generated PDF opens as one page with a non-zero media box
 - [x] 1.3 Add `Resources/Logos/` to the WatermarkCore target's `resources:` in Package.swift, and verify `swift build` succeeds and `Bundle.module.url(forResource:)` resolves a converted mark at runtime
-- [ ] 1.4 Convert and register each brand's artwork as it is supplied, recording source and licence per file in the README, and verify each converted mark opens and draws
+- [x] 1.4 Convert and register the supplied artwork, recording provenance in the README, and verify every brand ships a colour and a black mark, colour marks are vectors, and raster masters are large enough to only ever be downscaled
 - [ ] 1.5 Verify a brand whose artwork has not been supplied yet resolves to no mark and no divider, so a partly-populated registry is a valid state and implementation never blocks on sourcing
 
 ## 2. Config model
@@ -25,8 +25,8 @@
 ## 4. Brand resolution
 
 - [ ] 4.1 Add the brand registry mapping a normalised manufacturer key to that brand's available mark files, and verify a test asserts a registered brand resolves and an unregistered one resolves to nothing
-- [ ] 4.2 Implement manufacturer normalisation — case-folding, trimming, stripping trailing corporate suffixes — and verify a test covers the real-world spellings for each shipped brand, including a camera body writing its maker in capitals with a corporate suffix
-- [ ] 4.3 Implement variant selection: use the user's preference when the resolved brand ships both, otherwise the single available mark, and verify tests cover both-available, one-available, and no-preference-set
+- [ ] 4.2 Implement manufacturer normalisation — case-folding, trimming, stripping trailing corporate suffixes — plus sub-brand disambiguation from the model where the make names the parent (Redmi under Xiaomi), and verify a test covers the real-world spellings for each of the 25 shipped brands, a camera body writing its maker in capitals with a corporate suffix, and a Redmi resolving to Redmi rather than Xiaomi
+- [ ] 4.3 Implement variant selection: the user's colour/mono preference when the brand ships both, otherwise the single available mark, with mono resolving to the rendition that contrasts with the mat, and verify tests cover both-available, one-available, and mono picking the dark rendition on a light mat
 - [ ] 4.4 Verify end to end that a photo's metadata drives the mark: a fixture from each shipped brand resolves to that brand's mark, and a fixture with no manufacturer resolves to none
 
 ## 5. Renderer — caption resolution and drawing
