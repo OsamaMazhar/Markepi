@@ -53,6 +53,113 @@ public enum CaptionField: String, Codable, CaseIterable, Sendable, Identifiable 
     }
 }
 
+/// The visual style of the frame: what shape the mat takes and how the caption
+/// is laid out on it.
+///
+/// `classic` is the original look — a uniform border with one centred caption
+/// line. `gallery` is the two-column caption bar: device and date on the left,
+/// a brand mark and the photographer's details on the right.
+public enum FrameStyle: String, Codable, CaseIterable, Sendable, Identifiable {
+    case classic
+    case gallery
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .classic: return "Classic"
+        case .gallery: return "Gallery"
+        }
+    }
+
+    public var summary: String {
+        switch self {
+        case .classic: return "An even border with one centred line of text"
+        case .gallery: return "A gallery mat with device details and a brand mark"
+        }
+    }
+
+    /// Decodes leniently: a style written by a newer build falls back to
+    /// `classic` rather than failing the whole config, so a template can move
+    /// backwards between versions.
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = FrameStyle(rawValue: raw) ?? .classic
+    }
+}
+
+/// What one line of the `gallery` caption says.
+///
+/// A slot is either a metadata field picked from `CaptionField`, free text the
+/// user typed, or nothing. Free text goes through `EXIFTokenParser`, so
+/// `"{lens} {focal_length}"` works there too — which is how a single line can
+/// carry several metadata values, as the reference layout's lens line does.
+public enum CaptionSlot: Sendable, Codable, Equatable {
+    case field(CaptionField)
+    case text(String)
+    case empty
+
+    /// True when this slot can never produce text, regardless of metadata.
+    public var isEmpty: Bool {
+        switch self {
+        case .empty: return true
+        case .text(let t): return t.trimmingCharacters(in: .whitespaces).isEmpty
+        case .field: return false
+        }
+    }
+
+    // MARK: Codable
+
+    // Encoded as one tagged string rather than a nested object, so a slot
+    // round-trips through a single value and stays readable in a saved template.
+    private static let fieldPrefix = "field:"
+    private static let textPrefix = "text:"
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        if raw.isEmpty {
+            self = .empty
+        } else if raw.hasPrefix(Self.fieldPrefix) {
+            let name = String(raw.dropFirst(Self.fieldPrefix.count))
+            // An unknown field name means a newer build wrote it; drop the slot
+            // rather than failing the whole config.
+            self = CaptionField(rawValue: name).map { .field($0) } ?? .empty
+        } else if raw.hasPrefix(Self.textPrefix) {
+            self = .text(String(raw.dropFirst(Self.textPrefix.count)))
+        } else {
+            // Untagged legacy value: treat it as what the user typed.
+            self = .text(raw)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .empty: try container.encode("")
+        case .field(let f): try container.encode(Self.fieldPrefix + f.rawValue)
+        case .text(let t): try container.encode(Self.textPrefix + t)
+        }
+    }
+}
+
+/// Whether the brand mark is drawn in colour or as a single tone.
+///
+/// Which single tone — the dark or the light rendition — is not a user choice:
+/// the renderer picks whichever contrasts with the mat.
+public enum LogoVariant: String, Codable, CaseIterable, Sendable, Identifiable {
+    case color
+    case monochrome
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .color: return "Colour"
+        case .monochrome: return "Monochrome"
+        }
+    }
+}
+
 /// Configuration for the white frame border overlay.
 ///
 /// The white frame is a uniform 4-sided border with proportional width
@@ -108,11 +215,48 @@ public struct WhiteFrameConfig: Sendable, Codable {
     /// Default: 0.018
     public var textFontSizeRatio: CGFloat
 
+    /// Which frame look to render. Default: `.classic`, so a config that
+    /// predates styles keeps the border it always had.
+    public var style: FrameStyle
+
+    /// Thin black stroke between the photo and the mat. Applies to every
+    /// style, not just `gallery`. Default: false
+    public var keylineEnabled: Bool
+
+    /// Colour or monochrome for the brand mark. The brand itself is never
+    /// configured — it is resolved from the photo's metadata.
+    /// Default: `.color`
+    public var logoVariant: LogoVariant
+
+    // The four `gallery` caption lines. Unused by `classic`, which renders the
+    // single centred caption built from `captionPrefix` + `captionFields`.
+
+    /// Upper-left caption line, drawn bold and dark. Default: camera model.
+    public var leftPrimary: CaptionSlot
+
+    /// Lower-left caption line, drawn lighter. Default: capture date.
+    public var leftSecondary: CaptionSlot
+
+    /// Upper-right caption line, drawn bold and dark. Default: empty free
+    /// text — this is where the photographer types their handle.
+    public var rightPrimary: CaptionSlot
+
+    /// Lower-right caption line, drawn lighter. Default: the lens line from
+    /// the reference layout, which needs three metadata values on one line and
+    /// so is expressed as tokens rather than a single field.
+    public var rightSecondary: CaptionSlot
+
     /// The default set of caption fields: camera plus the common shooting
     /// details. Mirrors the previous auto "detailed attribution" caption.
     public static let defaultCaptionFields: [CaptionField] = [
         .cameraModel, .focalLength, .aperture, .shutterSpeed, .iso, .dimensions, .format,
     ]
+
+    /// The `gallery` caption defaults, reproducing the reference layout.
+    public static let defaultLeftPrimary: CaptionSlot = .field(.cameraModel)
+    public static let defaultLeftSecondary: CaptionSlot = .field(.date)
+    public static let defaultRightPrimary: CaptionSlot = .text("")
+    public static let defaultRightSecondary: CaptionSlot = .text("{lens} {focal_length} {aperture}")
 
     /// Creates a white frame configuration.
     ///
@@ -133,7 +277,14 @@ public struct WhiteFrameConfig: Sendable, Codable {
         captionFields: [CaptionField] = WhiteFrameConfig.defaultCaptionFields,
         customAttributionText: String? = nil,
         textColor: CGColor = CGColor(gray: 0.333, alpha: 1.0),
-        textFontSizeRatio: CGFloat = 0.018
+        textFontSizeRatio: CGFloat = 0.018,
+        style: FrameStyle = .classic,
+        keylineEnabled: Bool = false,
+        logoVariant: LogoVariant = .color,
+        leftPrimary: CaptionSlot = WhiteFrameConfig.defaultLeftPrimary,
+        leftSecondary: CaptionSlot = WhiteFrameConfig.defaultLeftSecondary,
+        rightPrimary: CaptionSlot = WhiteFrameConfig.defaultRightPrimary,
+        rightSecondary: CaptionSlot = WhiteFrameConfig.defaultRightSecondary
     ) {
         self.isEnabled = isEnabled
         // Clamp to 0.03–0.05 per D-05 (warning-level tolerance, not a throw)
@@ -144,6 +295,13 @@ public struct WhiteFrameConfig: Sendable, Codable {
         self.customAttributionText = customAttributionText
         self.textColor = textColor
         self.textFontSizeRatio = textFontSizeRatio
+        self.style = style
+        self.keylineEnabled = keylineEnabled
+        self.logoVariant = logoVariant
+        self.leftPrimary = leftPrimary
+        self.leftSecondary = leftSecondary
+        self.rightPrimary = rightPrimary
+        self.rightSecondary = rightSecondary
     }
 
     // MARK: - Codable (CGColor)
@@ -152,6 +310,8 @@ public struct WhiteFrameConfig: Sendable, Codable {
         case isEnabled, frameWidthRatio, metadataTextEnabled
         case captionPrefix, captionFields
         case customAttributionText, textColorRGBA, textFontSizeRatio
+        case style, keylineEnabled, logoVariant
+        case leftPrimary, leftSecondary, rightPrimary, rightSecondary
     }
 
     public init(from decoder: Decoder) throws {
@@ -175,6 +335,20 @@ public struct WhiteFrameConfig: Sendable, Codable {
                 debugDescription: "Invalid RGBA components for CGColor")
         }
         textColor = cgColor
+        // All new as of frame styles. Absent means a template written before
+        // styles existed: it gets the classic border, no keyline, and the
+        // reference gallery defaults it will only use if switched to gallery.
+        style = try container.decodeIfPresent(FrameStyle.self, forKey: .style) ?? .classic
+        keylineEnabled = try container.decodeIfPresent(Bool.self, forKey: .keylineEnabled) ?? false
+        logoVariant = try container.decodeIfPresent(LogoVariant.self, forKey: .logoVariant) ?? .color
+        leftPrimary = try container.decodeIfPresent(CaptionSlot.self, forKey: .leftPrimary)
+            ?? WhiteFrameConfig.defaultLeftPrimary
+        leftSecondary = try container.decodeIfPresent(CaptionSlot.self, forKey: .leftSecondary)
+            ?? WhiteFrameConfig.defaultLeftSecondary
+        rightPrimary = try container.decodeIfPresent(CaptionSlot.self, forKey: .rightPrimary)
+            ?? WhiteFrameConfig.defaultRightPrimary
+        rightSecondary = try container.decodeIfPresent(CaptionSlot.self, forKey: .rightSecondary)
+            ?? WhiteFrameConfig.defaultRightSecondary
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -191,5 +365,12 @@ public struct WhiteFrameConfig: Sendable, Codable {
             ? [components[0], components[1], components[2], components[3]]
             : [0.333, 0.333, 0.333, 1.0]
         try container.encode(rgba, forKey: .textColorRGBA)
+        try container.encode(style, forKey: .style)
+        try container.encode(keylineEnabled, forKey: .keylineEnabled)
+        try container.encode(logoVariant, forKey: .logoVariant)
+        try container.encode(leftPrimary, forKey: .leftPrimary)
+        try container.encode(leftSecondary, forKey: .leftSecondary)
+        try container.encode(rightPrimary, forKey: .rightPrimary)
+        try container.encode(rightSecondary, forKey: .rightSecondary)
     }
 }

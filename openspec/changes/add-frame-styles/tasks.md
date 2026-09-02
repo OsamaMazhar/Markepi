@@ -8,11 +8,11 @@
 
 ## 2. Config model
 
-- [ ] 2.1 Add `FrameStyle` (`.classic`, `.gallery`, defaulting to `.classic`) to WhiteFrameConfig.swift and verify a unit test asserts the default
-- [ ] 2.2 Add `CaptionSlot` (`.field(CaptionField)`, `.text(String)`, `.empty`) with the tagged single-value Codable form from design.md — D3, and verify a round-trip test covers all three cases
-- [ ] 2.3 Add a `LogoVariant` preference (colour or monochrome) and verify a unit test asserts its default and that it round-trips through Codable
-- [ ] 2.4 Add the four slot properties, `keylineEnabled` (default false) and the variant preference to `WhiteFrameConfig`, with gallery defaults reproducing the reference (camera model / date / handle text / lens details), and verify a test asserts each default. The brand itself is NOT a config field — it is resolved from metadata
-- [ ] 2.5 Extend the hand-written `init(from:)`/`encode(to:)` using `decodeIfPresent` for every new key, and verify a test decodes a JSON blob containing only the pre-existing keys and gets `.classic` with the keyline off and the default variant
+- [x] 2.1 Add `FrameStyle` (`.classic`, `.gallery`, defaulting to `.classic`) to WhiteFrameConfig.swift and verify a unit test asserts the default
+- [x] 2.2 Add `CaptionSlot` (`.field(CaptionField)`, `.text(String)`, `.empty`) with the tagged single-value Codable form from design.md — D3, and verify a round-trip test covers all three cases
+- [x] 2.3 Add a `LogoVariant` preference (colour or monochrome) and verify a unit test asserts its default and that it round-trips through Codable
+- [x] 2.4 Add the four slot properties, `keylineEnabled` (default false) and the variant preference to `WhiteFrameConfig`, with gallery defaults reproducing the reference (camera model / date / handle text / lens details), and verify a test asserts each default. The brand itself is NOT a config field — it is resolved from metadata
+- [x] 2.5 Extend the hand-written `init(from:)`/`encode(to:)` using `decodeIfPresent` for every new key, and verify a test decodes a JSON blob containing only the pre-existing keys and gets `.classic` with the keyline off and the default variant
 
 ## 3. Geometry — mat outside the photo
 
