@@ -642,3 +642,56 @@ struct ClassicMetricTests {
         #expect(abs(high.captionFontSize - low.captionFontSize * 2) <= 1)
     }
 }
+
+// MARK: - Millimetre grid
+
+@Suite("Millimetre sizes sit on a half-millimetre grid")
+struct MillimetreGridTests {
+
+    private func isOnGrid(_ value: CGFloat) -> Bool {
+        abs(value - WatermarkScaling.snapped(millimetres: value)) < 0.0001
+    }
+
+    @Test("Snapping rounds to the nearest half millimetre")
+    func snapping() {
+        #expect(WatermarkScaling.snapped(millimetres: 10.92) == 11.0)
+        #expect(WatermarkScaling.snapped(millimetres: 11.43) == 11.5)
+        #expect(WatermarkScaling.snapped(millimetres: 11.24) == 11.0)
+        #expect(WatermarkScaling.snapped(millimetres: 11.26) == 11.5)
+        #expect(WatermarkScaling.snapped(millimetres: 8) == 8)
+    }
+
+    @Test("A layer's size is on the grid however it was set")
+    func layerSizesAreOnGrid() {
+        // 0.043 of the short edge is 10.92mm — the sort of value the old
+        // percentage stepper left behind, which then stepped 10.9, 11.4, 11.9.
+        for scale in [0.043, 0.045, 0.15, 0.01, 0.9] as [CGFloat] {
+            #expect(isOnGrid(WatermarkScaling.millimetres(forScale: scale)))
+        }
+        // And what is drawn is what is shown: converting back and forth is
+        // stable, so the stepper cannot creep off the grid.
+        let scale = WatermarkScaling.scale(forMillimetres: 10.92)
+        #expect(WatermarkScaling.millimetres(forScale: scale) == 11.0)
+        #expect(WatermarkScaling.scale(forMillimetres: 11.0) == scale)
+    }
+
+    @Test("The frame's own defaults are on the grid")
+    func frameDefaultsAreOnGrid() {
+        // 8 x 0.73 is 5.84mm and 8 x 1.70 is 13.6mm; both used to arrive
+        // off-grid, so the sliders opened on a number they could not return to.
+        #expect(isOnGrid(FrameMetrics.defaultBorderMillimetres))
+        #expect(isOnGrid(FrameMetrics.defaultCaptionMillimetres))
+        #expect(isOnGrid(FrameMetrics.defaultMarkMillimetres))
+        #expect(FrameMetrics.defaultCaptionMillimetres == 6.0)
+        #expect(FrameMetrics.defaultMarkMillimetres == 13.5)
+    }
+
+    @Test("Snapping the caption barely moves it off the reference")
+    func snappingStaysFaithful() {
+        // The grid must not undo the calibration: 5.84 -> 6.0 is under 3%.
+        let exact = FrameMetrics.defaultBorderMillimetres * FrameMetrics.reference.captionToBorder
+        #expect(abs(FrameMetrics.defaultCaptionMillimetres - exact) / exact < 0.03)
+        let mark = FrameMetrics.defaultBorderMillimetres * FrameMetrics.reference.markToBorder
+        #expect(abs(FrameMetrics.defaultMarkMillimetres - mark) / mark < 0.03)
+    }
+}

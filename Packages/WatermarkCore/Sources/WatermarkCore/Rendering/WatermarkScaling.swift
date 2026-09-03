@@ -67,6 +67,19 @@ public enum WatermarkScaling {
 
     // MARK: - Millimetres
 
+    /// The grid every millimetre setting sits on.
+    ///
+    /// Sizes are shown to one decimal, so a value off this grid reads as an
+    /// arbitrary 10.9 or 11.4 and steps to another arbitrary number. Snapping
+    /// the value itself — not just the number on screen — is what keeps what
+    /// is drawn and what is displayed the same size.
+    public static let millimetreStep: CGFloat = 0.5
+
+    /// Rounds a millimetre value onto `millimetreStep`.
+    public static func snapped(millimetres: CGFloat) -> CGFloat {
+        (millimetres / millimetreStep).rounded() * millimetreStep
+    }
+
     /// Every user-facing size is stated in millimetres of a reference print,
     /// and a layer's `scale` is a fraction of the frame's short edge — so the
     /// two are related by the reference print's short edge and nothing else.
@@ -79,15 +92,16 @@ public enum WatermarkScaling {
         FrameGeometry.referencePrintShortEdgeInches * 25.4
     }
 
-    /// A layer's `scale` expressed in millimetres.
+    /// A layer's `scale` expressed in millimetres, on the grid.
     public static func millimetres(forScale scale: CGFloat) -> CGFloat {
-        scale * referenceShortEdgeMillimetres
+        snapped(millimetres: scale * referenceShortEdgeMillimetres)
     }
 
-    /// Millimetres expressed as a layer `scale`.
+    /// Millimetres expressed as a layer `scale`, snapped first so the size
+    /// drawn is the size shown.
     public static func scale(forMillimetres millimetres: CGFloat) -> CGFloat {
         guard referenceShortEdgeMillimetres > 0 else { return 0 }
-        return millimetres / referenceShortEdgeMillimetres
+        return snapped(millimetres: millimetres) / referenceShortEdgeMillimetres
     }
 
     /// Edge padding in pixels for a frame of `baseSize`.

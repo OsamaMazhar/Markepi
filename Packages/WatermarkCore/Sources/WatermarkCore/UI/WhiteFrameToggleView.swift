@@ -155,7 +155,7 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
                     }
                 }
                 Spacer()
-                Text(String(format: "%.1f mm", binding.wrappedValue))
+                Text(Self.millimetreLabel(binding.wrappedValue))
                     .markepiTypography(.value)
                     .monospacedDigit()
             }
@@ -168,9 +168,17 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
         .padding(.vertical, 12)
     }
 
+    /// "8 mm", not "8.0 mm" — the grid is halves, so a trailing zero is noise.
+    static func millimetreLabel(_ millimetres: CGFloat) -> String {
+        let snapped = WatermarkScaling.snapped(millimetres: millimetres)
+        return snapped == snapped.rounded()
+            ? String(format: "%.0f mm", snapped)
+            : String(format: "%.1f mm", snapped)
+    }
+
     private var borderMillimetresRow: some View {
         millimetreRow("Border", identifier: "border", subtitle: "The bottom widens with it",
-                      binding: borderMMBinding, range: 1...25, step: 0.5)
+                      binding: borderMMBinding, range: 1...25, step: WatermarkScaling.millimetreStep)
     }
 
     private var captionMillimetresRow: some View {
@@ -178,13 +186,13 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
             "Text size", identifier: "caption",
             subtitle: styleBinding.wrappedValue == .classic
                 ? "The bottom of the border widens to hold it" : nil,
-            binding: captionMMBinding, range: 1...10, step: 0.25)
+            binding: captionMMBinding, range: 1...10, step: WatermarkScaling.millimetreStep)
     }
 
     private var logoMillimetresRow: some View {
         millimetreRow("Logo size", identifier: "logo",
                       subtitle: "Set by the camera in the photo's metadata",
-                      binding: logoMMBinding, range: 1...15, step: 0.25)
+                      binding: logoMMBinding, range: 1...15, step: WatermarkScaling.millimetreStep)
     }
 
     /// Names which half of the caption bar the rows beneath it drive, so the
@@ -407,22 +415,31 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
 
     private var borderMMBinding: Binding<CGFloat> {
         Binding(
-            get: { viewModel.config.whiteFrame?.borderMillimetres ?? 5 },
-            set: { newValue in mutateFrame { $0.borderMillimetres = newValue } }
+            get: { WatermarkScaling.snapped(
+                millimetres: viewModel.config.whiteFrame?.borderMillimetres ?? 5) },
+            set: { newValue in
+                mutateFrame { $0.borderMillimetres = WatermarkScaling.snapped(millimetres: newValue) }
+            }
         )
     }
 
     private var captionMMBinding: Binding<CGFloat> {
         Binding(
-            get: { viewModel.config.whiteFrame?.captionTextMillimetres ?? 2.5 },
-            set: { newValue in mutateFrame { $0.captionTextMillimetres = newValue } }
+            get: { WatermarkScaling.snapped(
+                millimetres: viewModel.config.whiteFrame?.captionTextMillimetres ?? 2.5) },
+            set: { newValue in
+                mutateFrame { $0.captionTextMillimetres = WatermarkScaling.snapped(millimetres: newValue) }
+            }
         )
     }
 
     private var logoMMBinding: Binding<CGFloat> {
         Binding(
-            get: { viewModel.config.whiteFrame?.logoHeightMillimetres ?? 4 },
-            set: { newValue in mutateFrame { $0.logoHeightMillimetres = newValue } }
+            get: { WatermarkScaling.snapped(
+                millimetres: viewModel.config.whiteFrame?.logoHeightMillimetres ?? 4) },
+            set: { newValue in
+                mutateFrame { $0.logoHeightMillimetres = WatermarkScaling.snapped(millimetres: newValue) }
+            }
         )
     }
 

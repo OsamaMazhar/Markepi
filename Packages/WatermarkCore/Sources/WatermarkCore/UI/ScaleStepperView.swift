@@ -28,14 +28,14 @@ public struct ScaleStepperView<ViewModel: WatermarkConfigurable & Observable>: V
                     .markepiTypography(.metadata)
             }
             Spacer()
-            Text(String(format: "%.1f mm", currentMillimetres))
+            Text(Self.label(currentMillimetres))
                 .markepiTypography(.value)
                 .monospacedDigit()
             Stepper(
                 "",
                 value: millimetreBinding,
                 in: Self.range,
-                step: 0.5
+                step: WatermarkScaling.millimetreStep
             )
             .labelsHidden()
             .frame(width: 100)
@@ -46,12 +46,38 @@ public struct ScaleStepperView<ViewModel: WatermarkConfigurable & Observable>: V
         .accessibilityLabel("Watermark size")
         .accessibilityValue(String(format: "%.1f millimetres", currentMillimetres))
         .accessibilityHint("Adjusts the watermark's size, measured on a standard print")
+        .onAppear(perform: snapToGrid)
+    }
+
+    /// "12 mm", not "12.0 mm".
+    static func label(_ millimetres: CGFloat) -> String {
+        millimetres == millimetres.rounded()
+            ? String(format: "%.0f mm", millimetres)
+            : String(format: "%.1f mm", millimetres)
+    }
+
+    /// Brings a size set before the grid existed onto it.
+    ///
+    /// Without this the stepper reads a snapped 11 mm while the layer is still
+    /// drawn at the 10.92 mm behind it, and every step carries that offset
+    /// along — 11.4, 11.9. Writing the snapped value back once makes what is
+    /// shown and what is drawn the same number.
+    private func snapToGrid() {
+        guard let layer = viewModel.config.watermarks[safe: layerIndex] else { return }
+        let snapped = WatermarkScaling.scale(forMillimetres: currentMillimetres)
+        guard abs(layer.scale - snapped) > 0.00001 else { return }
+        viewModel.updateLayerScale(at: layerIndex, scale: snapped)
     }
 
     /// The same 1%–90% of the frame the stepper always allowed, stated in the
-    /// millimetres the user now sets it in.
+    /// millimetres the user now sets it in and pulled onto the grid so the
+    /// bounds are reachable values rather than 2.54 and 228.6.
     private static var range: ClosedRange<CGFloat> {
-        WatermarkScaling.millimetres(forScale: 0.01)...WatermarkScaling.millimetres(forScale: 0.90)
+        // Kept on one expression: a line starting with "..." parses as the
+        // prefix range operator, which quietly splits this in two.
+        let low = WatermarkScaling.snapped(millimetres: WatermarkScaling.millimetres(forScale: 0.01))
+        let high = WatermarkScaling.snapped(millimetres: WatermarkScaling.millimetres(forScale: 0.90))
+        return low...high
     }
 
     /// Millimetres on a reference print, which is a fixed share of the frame —
@@ -74,11 +100,5 @@ public struct ScaleStepperView<ViewModel: WatermarkConfigurable & Observable>: V
         return layer.scale
     }
 
-    private var scaleBinding: Binding<CGFloat> {
-        Binding(
-            get: { currentScale },
-            set: { viewModel.updateLayerScale(at: layerIndex, scale: $0) }
-        )
-    }
 }
 #endif

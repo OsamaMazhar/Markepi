@@ -147,7 +147,7 @@ public struct FrameMetrics: Sendable, Equatable {
     /// Caption text default, in millimetres — the reference's ratio applied to
     /// the default border, so the two arrive in proportion.
     public static var defaultCaptionMillimetres: CGFloat {
-        (defaultBorderMillimetres * reference.captionToBorder * 100).rounded() / 100
+        WatermarkScaling.snapped(millimetres: defaultBorderMillimetres * reference.captionToBorder)
     }
 
     /// Caption default for `classic`, in millimetres.
@@ -163,6 +163,6 @@ public struct FrameMetrics: Sendable, Equatable {
 
     /// Mark height default, in millimetres.
     public static var defaultMarkMillimetres: CGFloat {
-        (defaultBorderMillimetres * reference.markToBorder * 100).rounded() / 100
+        WatermarkScaling.snapped(millimetres: defaultBorderMillimetres * reference.markToBorder)
     }
 }
