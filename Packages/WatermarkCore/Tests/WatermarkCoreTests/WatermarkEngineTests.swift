@@ -15,6 +15,15 @@ import UIKit
 struct WatermarkEngineTests {
 
     /// Creates a temp JPEG file from test image data for engine input.
+    /// The metadata the engine will read from a source file, so a test can
+    /// predict the framed size the same way the engine computes it.
+    private func sourceMetadata(_ url: URL) -> [String: Any] {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any]
+        else { return [:] }
+        return props
+    }
+
     private func createTempInputFile(data: Data, name: String) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(name)_\(UUID().uuidString).jpg")
@@ -933,9 +942,12 @@ struct WatermarkEngineTests {
             // Verify dimensions preserved
             let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
             // Framed export: the mat is added outside the 400x300 source.
+            let frameConfig = config.whiteFrame ?? WhiteFrameConfig()
             let framed = FrameGeometry(
-                config: config.whiteFrame ?? WhiteFrameConfig(),
-                sourceSize: CGSize(width: 400, height: 300)
+                config: frameConfig,
+                sourceSize: CGSize(width: 400, height: 300),
+                hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(
+                    config: frameConfig, metadata: sourceMetadata(inputURL))
             ).framedSize
             #expect((props[kCGImagePropertyPixelWidth] as? Int) == Int(framed.width))
             #expect((props[kCGImagePropertyPixelHeight] as? Int) == Int(framed.height))
@@ -988,9 +1000,12 @@ struct WatermarkEngineTests {
             // Verify dimensions preserved
             let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
             // Framed export: the mat is added outside the 500x400 source.
+            let frameConfig = config.whiteFrame ?? WhiteFrameConfig()
             let framed = FrameGeometry(
-                config: config.whiteFrame ?? WhiteFrameConfig(),
-                sourceSize: CGSize(width: 500, height: 400)
+                config: frameConfig,
+                sourceSize: CGSize(width: 500, height: 400),
+                hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(
+                    config: frameConfig, metadata: sourceMetadata(inputURL))
             ).framedSize
             #expect((props[kCGImagePropertyPixelWidth] as? Int) == Int(framed.width))
             #expect((props[kCGImagePropertyPixelHeight] as? Int) == Int(framed.height))

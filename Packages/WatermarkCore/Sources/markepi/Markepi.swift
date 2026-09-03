@@ -27,7 +27,7 @@ private let aliases: [String: String] = [
 
 private let boolFlags: Set<String> = [
     "--help", "--force", "--list-fonts",
-    "--border", "--border-no-text", "--border-keyline",
+    "--border", "--border-no-text", "--border-keyline", "--border-no-keyline",
     "--date-stamp",
 ]
 
@@ -303,7 +303,7 @@ struct Markepi {
                     try doubleValue($0, flag: "--border-text-size", in: 0.005...0.05)
                 } ?? 0.018),
                 style: try flags.value("--border-style").map { try enumValue($0, flag: "--border-style") }
-                    ?? .classic,
+                    ?? WhiteFrameConfig().style,
                 borderMillimetres: CGFloat(try flags.value("--border-mm").map {
                     try doubleValue($0, flag: "--border-mm", in: 0.5...50)
                 } ?? 5.0),
@@ -313,7 +313,9 @@ struct Markepi {
                 logoHeightMillimetres: CGFloat(try flags.value("--border-logo-mm").map {
                     try doubleValue($0, flag: "--border-logo-mm", in: 0.5...30)
                 } ?? 4.0),
-                keylineEnabled: flags.has("--border-keyline"),
+                keylineEnabled: flags.has("--border-no-keyline")
+                    ? false
+                    : (flags.has("--border-keyline") || WhiteFrameConfig().keylineEnabled),
                 logoVariant: try flags.value("--border-logo-variant").map {
                     try enumValue($0, flag: "--border-logo-variant")
                 } ?? .color,

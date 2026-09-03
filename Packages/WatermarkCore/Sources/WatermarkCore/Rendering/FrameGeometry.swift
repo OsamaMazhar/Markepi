@@ -98,9 +98,6 @@ public struct FrameGeometry: Equatable, Sendable {
 
         let shorter = min(sourceSize.width, sourceSize.height)
 
-        let keyline = config.keylineEnabled ? max(1, (shorter * 0.0015).rounded()) : 0
-        self.keylineWidth = keyline
-
         // The two styles mean different things by "border": classic is a
         // proportion of the photo, gallery is a physical size on paper.
         let mat: CGFloat
@@ -110,6 +107,12 @@ public struct FrameGeometry: Equatable, Sendable {
         case .gallery:
             mat = Self.pixels(millimetres: config.borderMillimetres, dpi: dpi)
         }
+
+        // The keyline is a proportion of the mat rather than of the photo, so
+        // it stays visible against the border it separates: tied to the photo
+        // it came out a hairline on small images and vanished entirely.
+        let keyline = config.keylineEnabled ? max(1, (mat * 0.06).rounded()) : 0
+        self.keylineWidth = keyline
 
         // Caption size follows whatever the style measures its mat in, so the
         // two cannot fight. Classic scales with the photo, like its mat does.

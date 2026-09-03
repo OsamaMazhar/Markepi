@@ -221,6 +221,12 @@ final class WatermarkViewModel: WatermarkConfigurable {
         hasAppliedDefaultTemplate = true
         if let defaultTemplate = TemplateStore.shared.defaultTemplate {
             config = defaultTemplate.config
+        } else if config.whiteFrame == nil {
+            // A freshly imported photo shows the frame immediately, already
+            // filled in from its own metadata — camera, date, lens, and the
+            // mark of whoever made the device. It is the app's headline
+            // output, so it should not have to be found behind a toggle.
+            config.whiteFrame = WhiteFrameConfig(isEnabled: true)
         }
     }
 

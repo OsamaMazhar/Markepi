@@ -13,6 +13,15 @@ import UIKit
 @Suite("Multi-Layer Compositing")
 struct MultiLayerCompositingTests {
 
+    /// The metadata the engine will read from a source file, so a test can
+    /// predict the framed size the same way the engine computes it.
+    private func sourceMetadata(_ url: URL) -> [String: Any] {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any]
+        else { return [:] }
+        return props
+    }
+
     private func createTempInputFile(data: Data, name: String) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(name)_\(UUID().uuidString).jpg")
@@ -89,9 +98,12 @@ struct MultiLayerCompositingTests {
             return
         }
         // Framed export: the mat is added outside the 800x600 source.
+        let frameConfig = config.whiteFrame ?? WhiteFrameConfig()
         let framed = FrameGeometry(
-            config: config.whiteFrame ?? WhiteFrameConfig(),
-            sourceSize: CGSize(width: 800, height: 600)
+            config: frameConfig,
+            sourceSize: CGSize(width: 800, height: 600),
+            hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(
+                config: frameConfig, metadata: sourceMetadata(inputURL))
         ).framedSize
         let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
         #expect((props[kCGImagePropertyPixelWidth] as? Int) == Int(framed.width))
@@ -310,9 +322,12 @@ struct MultiLayerCompositingTests {
             return
         }
         // Framed export: the mat is added outside the 500x400 source.
+        let frameConfig = config.whiteFrame ?? WhiteFrameConfig()
         let framed = FrameGeometry(
-            config: config.whiteFrame ?? WhiteFrameConfig(),
-            sourceSize: CGSize(width: 500, height: 400)
+            config: frameConfig,
+            sourceSize: CGSize(width: 500, height: 400),
+            hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(
+                config: frameConfig, metadata: sourceMetadata(inputURL))
         ).framedSize
         let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
         #expect((props[kCGImagePropertyPixelWidth] as? Int) == Int(framed.width))

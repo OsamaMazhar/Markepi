@@ -12,15 +12,26 @@ struct FrameStyleConfigTests {
 
     // MARK: - Defaults
 
-    @Test("A fresh config is classic, so existing users see the border they had")
-    func defaultStyleIsClassic() {
-        #expect(WhiteFrameConfig().style == .classic)
+    @Test("A fresh frame is the gallery style")
+    func defaultStyleIsGallery() {
+        #expect(WhiteFrameConfig().style == .gallery)
     }
 
-    @Test("Keyline is off and the mark is colour by default")
+    @Test("A template saved before styles existed still decodes to classic")
+    func legacyTemplateStaysClassic() throws {
+        // It was authored against the old look, so promoting it to gallery
+        // would silently restyle someone's saved work.
+        let legacy = """
+        {"isEnabled": true, "frameWidthRatio": 0.04, "metadataTextEnabled": true,
+         "textFontSizeRatio": 0.018, "textColorRGBA": [0.3, 0.3, 0.3, 1.0]}
+        """
+        #expect(try JSONDecoder().decode(WhiteFrameConfig.self, from: Data(legacy.utf8)).style == .classic)
+    }
+
+    @Test("Keyline is on and the mark is colour by default")
     func defaultKeylineAndVariant() {
         let config = WhiteFrameConfig()
-        #expect(config.keylineEnabled == false)
+        #expect(config.keylineEnabled)
         #expect(config.logoVariant == .color)
     }
 
@@ -114,6 +125,8 @@ struct FrameStyleConfigTests {
 
         #expect(config.isEnabled)
         #expect(config.style == .classic)
+        // Absent in the saved JSON, so it decodes to false rather than picking
+        // up today's default — the template was authored without one.
         #expect(config.keylineEnabled == false)
         #expect(config.logoVariant == .color)
         // The gallery slots come back at their defaults, ready if the user ever

@@ -215,8 +215,12 @@ public struct WhiteFrameConfig: Sendable, Codable {
     /// Default: 0.018
     public var textFontSizeRatio: CGFloat
 
-    /// Which frame look to render. Default: `.classic`, so a config that
-    /// predates styles keeps the border it always had.
+    /// Which frame look to render. Default: `.gallery` — the mat with the
+    /// device, date, brand mark and shooting details.
+    ///
+    /// A template saved before styles existed still decodes to `.classic`: it
+    /// was authored against that look, so changing it would silently restyle
+    /// someone's saved work. Only new frames get the gallery default.
     public var style: FrameStyle
 
     /// Mat thickness in millimetres, used by `gallery`.
@@ -246,7 +250,8 @@ public struct WhiteFrameConfig: Sendable, Codable {
     public var logoHeightMillimetres: CGFloat
 
     /// Thin black stroke between the photo and the mat. Applies to every
-    /// style, not just `gallery`. Default: false
+    /// style, not just `gallery`. Default: true — the reference layout has
+    /// one, and it is what separates a light photo edge from a light mat.
     public var keylineEnabled: Bool
 
     /// Colour or monochrome for the brand mark. The brand itself is never
@@ -304,11 +309,11 @@ public struct WhiteFrameConfig: Sendable, Codable {
         customAttributionText: String? = nil,
         textColor: CGColor = CGColor(gray: 0.333, alpha: 1.0),
         textFontSizeRatio: CGFloat = 0.018,
-        style: FrameStyle = .classic,
+        style: FrameStyle = .gallery,
         borderMillimetres: CGFloat = 5.0,
         captionTextMillimetres: CGFloat = 2.5,
         logoHeightMillimetres: CGFloat = 4.0,
-        keylineEnabled: Bool = false,
+        keylineEnabled: Bool = true,
         logoVariant: LogoVariant = .color,
         leftPrimary: CaptionSlot = WhiteFrameConfig.defaultLeftPrimary,
         leftSecondary: CaptionSlot = WhiteFrameConfig.defaultLeftSecondary,

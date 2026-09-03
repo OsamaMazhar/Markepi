@@ -33,9 +33,16 @@ struct WhiteFrameRendererTests {
     /// The canvas a frame renders into: source plus mat, from the same
     /// geometry the renderer uses. The mat is drawn outside the photo, so this
     /// is always larger than the source.
-    func framedRect(_ config: WhiteFrameConfig, _ source: CGRect) -> CGRect {
-        CGRect(origin: .zero,
-               size: FrameGeometry(config: config, sourceSize: source.size).framedSize)
+    func framedRect(_ config: WhiteFrameConfig, _ source: CGRect,
+                    metadata: [String: Any] = [:]) -> CGRect {
+        // Mirrors the renderer exactly — same DPI, same does-the-caption-say-
+        // anything question — or it predicts a band the render rightly omits.
+        CGRect(origin: .zero, size: FrameGeometry(
+            config: config,
+            sourceSize: source.size,
+            dpi: FrameGeometry.resolveDPI(from: metadata),
+            hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(config: config, metadata: metadata)
+        ).framedSize)
     }
 
     // MARK: - Border width tests
@@ -54,8 +61,8 @@ struct WhiteFrameRendererTests {
             config: config, sourceSize: extent.size, metadata: metadata
         )
         // Frame width = min(1000, 800) × 0.04 = 32pt
-        #expect(rendered.extent == framedRect(config, extent),
-                "Rendered extent should be the framed canvas \(framedRect(config, extent)), got \(rendered.extent)")
+        #expect(rendered.extent == framedRect(config, extent, metadata: metadata),
+                "Rendered extent should be the framed canvas \(framedRect(config, extent, metadata: metadata)), got \(rendered.extent)")
         #expect(!rendered.extent.isInfinite, "Rendered extent should not be infinite")
     }
 
@@ -158,7 +165,7 @@ struct WhiteFrameRendererTests {
         )
         // Rendered output should be valid (non-infinite extent)
         #expect(!rendered.extent.isInfinite)
-        #expect(rendered.extent == framedRect(config, extent))
+        #expect(rendered.extent == framedRect(config, extent, metadata: metadata))
     }
 
     @Test("Metadata text disabled produces pure white frame (no text pixels)")

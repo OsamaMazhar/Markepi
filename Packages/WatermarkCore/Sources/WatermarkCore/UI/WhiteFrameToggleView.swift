@@ -37,17 +37,17 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
                 set: { viewModel.setWhiteFrameEnabled($0) }
             )) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("White Frame")
+                    Text("Frame")
                         .markepiTypography(.controlLabel)
-                    Text("Adds a white border with an optional caption")
+                    Text("A mat around the photo with the camera, date and shooting details")
                         .markepiTypography(.metadata)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .accessibilityIdentifier("frame.enable")
-            .accessibilityLabel("White frame")
-            .accessibilityHint("Add a white border with device model text to your photo")
+            .accessibilityLabel("Frame")
+            .accessibilityHint("Add a mat around your photo with its camera and shooting details")
 
             if isEnabled {
                 Divider().padding(.leading, 16)
