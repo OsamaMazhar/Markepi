@@ -725,3 +725,59 @@ struct LayerSizeNumberTests {
         }
     }
 }
+
+@Suite("Dragging picks the layer under the finger")
+struct LayerHitTestTests {
+
+    /// Two layers, well apart: one top-left, one bottom-right.
+    private let layout = RenderLayout(
+        photoRect: CGRect(x: 0, y: 0, width: 1, height: 1),
+        layerFrames: [
+            0: CGRect(x: 0.05, y: 0.05, width: 0.20, height: 0.10),
+            1: CGRect(x: 0.60, y: 0.70, width: 0.30, height: 0.15),
+        ])
+
+    @Test("A point on a layer finds that layer")
+    func hitsTheLayerUnderIt() {
+        #expect(layout.layerIndex(at: CGPoint(x: 0.10, y: 0.08)) == 0)
+        #expect(layout.layerIndex(at: CGPoint(x: 0.70, y: 0.75)) == 1)
+    }
+
+    @Test("A point on bare photo finds nothing")
+    func missesWhenThereIsNothingThere() {
+        // The bug: this returned the selected layer, so a drag anywhere on the
+        // photo dragged the text.
+        #expect(layout.layerIndex(at: CGPoint(x: 0.45, y: 0.45)) == nil)
+        #expect(layout.layerIndex(at: CGPoint(x: 0.95, y: 0.05)) == nil)
+        #expect(layout.layerIndex(at: CGPoint(x: 0.02, y: 0.98)) == nil)
+    }
+
+    @Test("Overlapping layers hand the drag to the topmost")
+    func topmostWins() {
+        let stacked = RenderLayout(
+            photoRect: CGRect(x: 0, y: 0, width: 1, height: 1),
+            layerFrames: [
+                0: CGRect(x: 0.1, y: 0.1, width: 0.5, height: 0.5),
+                2: CGRect(x: 0.2, y: 0.2, width: 0.5, height: 0.5),
+                1: CGRect(x: 0.15, y: 0.15, width: 0.5, height: 0.5),
+            ])
+        #expect(stacked.layerIndex(at: CGPoint(x: 0.3, y: 0.3)) == 2)
+        // Outside the topmost, still inside the bottom one.
+        #expect(stacked.layerIndex(at: CGPoint(x: 0.12, y: 0.12)) == 0)
+    }
+
+    @Test("Slop makes a thin layer catchable without swallowing the photo")
+    func slopIsBounded() {
+        // Just outside the frame but within the 2% slop.
+        #expect(layout.layerIndex(at: CGPoint(x: 0.04, y: 0.04)) == 0)
+        // Beyond it, nothing.
+        #expect(layout.layerIndex(at: CGPoint(x: 0.01, y: 0.01)) == nil)
+    }
+
+    @Test("An empty layout is never a hit")
+    func emptyLayout() {
+        let empty = RenderLayout(photoRect: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                 layerFrames: [:])
+        #expect(empty.layerIndex(at: CGPoint(x: 0.5, y: 0.5)) == nil)
+    }
+}

@@ -78,6 +78,24 @@ public struct RenderLayout: Sendable, Equatable {
         self.layerFrames = layerFrames
     }
 
+    /// The topmost layer under `point`, or nil if the point is on bare photo.
+    ///
+    /// Nil genuinely means "nothing here": a drag that misses every layer must
+    /// move nothing. Treating a miss as "whichever layer is selected" meant a
+    /// drag across empty sky picked up the text and carried it off.
+    ///
+    /// `point` is normalised to the rendered canvas, the same space
+    /// `layerFrames` uses. `slop` widens each frame so a layer stays catchable
+    /// at the edges of thin glyphs, where the drawn frame is barely a line.
+    ///
+    /// Highest index wins, which is the layer drawn last and so the one on top.
+    public func layerIndex(at point: CGPoint, slop: CGFloat = 0.02) -> Int? {
+        layerFrames
+            .filter { $0.value.insetBy(dx: -slop, dy: -slop).contains(point) }
+            .keys
+            .max()
+    }
+
     /// The layer's placement expressed as `WatermarkPosition.custom` fractions:
     /// how far along the space it can travel inside the photo it sits, y DOWN.
     /// Nil when the layer was not rendered (hidden, or no preview yet).

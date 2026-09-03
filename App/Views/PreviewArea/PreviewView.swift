@@ -236,19 +236,21 @@ struct PreviewView: View {
         guard !layers.isEmpty else { return }
         let layout = viewModel.previewLayout
 
-        // Prefer the topmost layer under the finger; otherwise move the layer
-        // the tool panel is already editing.
-        var index = viewModel.activeLayerIndex
+        // The topmost layer under the finger, and only that. Falling back to
+        // whichever layer the tool panel was editing meant a drag anywhere on
+        // the photo — empty sky included — picked up the text and carried it
+        // off, whether or not the panel was open.
         let point = CGPoint(
             x: location.x / imageDisplaySize.width,
             y: location.y / max(imageDisplaySize.height, 1)
         )
-        if let hit = layout?.layerFrames
-            .filter({ $0.value.insetBy(dx: -0.02, dy: -0.02).contains(point) })
-            .keys.max() {
-            index = hit
+        guard let index = layout?.layerIndex(at: point),
+              layers.indices.contains(index) else {
+            #if DEBUG
+            dragLog.debug("no layer under \(point.debugDescription) — nothing to move")
+            #endif
+            return
         }
-        guard layers.indices.contains(index) else { return }
         viewModel.activeLayerIndex = index
 
         let layer = layers[index]
