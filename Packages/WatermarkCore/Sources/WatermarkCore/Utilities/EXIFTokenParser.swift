@@ -76,7 +76,14 @@ public struct EXIFTokenParser {
         case .lens:
             let exif = metadata[exifDictKey] as? [String: Any]
             if let lensModel = exif?["LensModel"] as? String, !lensModel.isEmpty {
-                return lensModel
+                // The string carries the optical focal ("6.765mm"); the Photos
+                // app — and the reader — expect the 35mm equivalent ("24mm").
+                // Only the number is swapped, so the lens keeps its own name.
+                guard let equivalent = equivalentFocalLength(exif: exif) else { return lensModel }
+                return lensModel.replacingOccurrences(
+                    of: #"[0-9]+(\.[0-9]+)?mm"#,
+                    with: "\(equivalent)mm",
+                    options: .regularExpression)
             }
             return "--"
 
@@ -87,14 +94,12 @@ public struct EXIFTokenParser {
 
         case .focal_length:
             let exif = metadata[exifDictKey] as? [String: Any]
-            // Photos app shows the 35mm-equivalent ("24mm"), not the optical
-            // focal ("6.765mm") — the number every user expects to see. Fall
-            // back to the optical focal for sources without the field.
-            if let equivalent = exif?["FocalLenIn35mmFilm"] as? Int, equivalent > 0 {
-                return "\(equivalent)mm"
-            }
-            guard let focal = exif?["FocalLength"] as? Double else { return "--" }
-            return String(format: "%.0fmm", focal)
+            if let equivalent = equivalentFocalLength(exif: exif) { return "\(equivalent)mm" }
+            // No equivalent to be had: show the optical focal, labelled as it
+            // is rather than dressed up as an equivalent.
+            guard let focal = exif?["FocalLength"] as? Double, focal > 0 else { return "--" }
+            return String(format: "%.2fmm", focal)
+                .replacingOccurrences(of: #"\.?0+mm$"#, with: "mm", options: .regularExpression)
 
         case .shutter_speed:
             let exif = metadata[exifDictKey] as? [String: Any]
@@ -192,6 +197,59 @@ public struct EXIFTokenParser {
     ///
     /// - Parameter exifDateString: EXIF-format date string
     /// - Returns: Locale-aware short date (e.g., "Jun 18, 2026") or "--" if parsing fails
+    // MARK: - Focal length
+
+    /// Physical focal length → 35mm equivalent, for Apple's camera modules.
+    ///
+    /// Consulted only when the file's own `FocalLenIn35mmFilm` cannot be
+    /// trusted (see `equivalentFocalLength`), never in place of a sound one.
+    /// Keyed on the optical focal length rather than the device name because
+    /// one module appears across several models, and the optical focal is what
+    /// identifies it.
+    private static let appleEquivalents: [(optical: Double, equivalent: Int)] = [
+        (1.54, 13), (2.22, 13),          // ultra-wide
+        (3.99, 28), (4.15, 29), (4.25, 26), (5.70, 26),
+        (6.765, 24), (6.86, 24),         // main
+        (6.00, 52), (9.00, 77), (15.66, 120), // telephoto
+    ]
+
+    /// The 35mm-equivalent focal length, as the Photos app reports it.
+    ///
+    /// `FocalLenIn35mmFilm` describes the *framing*, so on a cropped or
+    /// digitally-zoomed shot it climbs far above the lens's own equivalent —
+    /// a 15 Pro Max frame at 5x records 121mm while Photos still says 24mm,
+    /// because Photos names the lens. Where the recorded value implies a crop
+    /// factor no phone sensor has, it is treated as zoom-inflated: the optical
+    /// focal is matched against the known modules, and failing that the
+    /// recorded digital zoom is divided back out.
+    static func equivalentFocalLength(exif: [String: Any]?) -> Int? {
+        let optical = (exif?["FocalLength"] as? Double).flatMap { $0 > 0 ? $0 : nil }
+        let recorded = (exif?["FocalLenIn35mmFilm"] as? Int).flatMap { $0 > 0 ? $0 : nil }
+        let zoom = (exif?["DigitalZoomRatio"] as? Double).flatMap { $0 > 1 ? $0 : nil }
+
+        guard let optical else {
+            return recorded
+        }
+        guard let recorded else {
+            // Nothing recorded: the module may still be known, but the optical
+            // focal must not be passed off as an equivalent — rounding 6.86mm
+            // to "7mm" states a focal length the camera never had.
+            return appleEquivalents.first { abs($0.optical - optical) < 0.05 }?.equivalent
+        }
+
+        // No phone sensor has a crop factor past about 9; beyond that the
+        // recorded equivalent is describing a crop, not the lens.
+        let impliedCropFactor = Double(recorded) / optical
+        guard impliedCropFactor > 9 || zoom != nil else { return recorded }
+
+        if let match = appleEquivalents.first(where: { abs($0.optical - optical) < 0.05 }) {
+            return match.equivalent
+        }
+        // Unknown module: at least undo the zoom the file did record.
+        guard let zoom else { return recorded }
+        return Int((Double(recorded) / zoom).rounded())
+    }
+
     private static func formatDate(_ exifDateString: String) -> String? {
         let inputFormatter = DateFormatter()
         inputFormatter.dateFormat = "yyyy:MM:dd HH:mm:ss"

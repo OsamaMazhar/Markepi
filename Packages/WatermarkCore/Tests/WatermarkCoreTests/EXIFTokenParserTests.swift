@@ -24,7 +24,9 @@ struct EXIFTokenParserTests {
             lens: "iPhone 16 Pro back triple camera 6.86mm f/1.78"
         )
         let result = EXIFTokenParser.substitute("{lens}", metadata: metadata)
-        #expect(result == "iPhone 16 Pro back triple camera 6.86mm f/1.78",
+        // The lens keeps its name; only the focal is restated as the 35mm
+        // equivalent, which is the number the Photos app shows for this module.
+        #expect(result == "iPhone 16 Pro back triple camera 24mm f/1.78",
                 "Expected lens model but got '\(result)'")
     }
 
@@ -36,12 +38,16 @@ struct EXIFTokenParserTests {
                 "Expected 'f/1.8' but got '\(result)'")
     }
 
-    @Test("substitute({focal_length}) resolves EXIF FocalLength → 7mm format")
+    @Test("substitute({focal_length}) gives the 35mm equivalent, not the optical focal")
     func resolvesFocalLength() {
+        // 6.86mm is the optical focal of a known Apple module; its equivalent
+        // is 24mm, which is what the Photos app shows and what a reader of the
+        // caption expects. Rounding the optical to "7mm" named a focal length
+        // no camera has.
         let metadata = EXIFMetadataFactory.realisticMetadata(focalLength: 6.86)
         let result = EXIFTokenParser.substitute("{focal_length}", metadata: metadata)
-        #expect(result == "7mm",
-                "Expected '7mm' but got '\(result)'")
+        #expect(result == "24mm",
+                "Expected '24mm' but got '\(result)'")
     }
 
     @Test("substitute({shutter_speed}) resolves APEX 6.906 → 1/120")
@@ -147,7 +153,7 @@ struct EXIFTokenParserTests {
         )
         let input = "Shot on {camera_model}, {aperture}, {focal_length}, {iso}"
         let result = EXIFTokenParser.substitute(input, metadata: metadata)
-        #expect(result == "Shot on iPhone 16 Pro, f/1.8, 7mm, ISO 400",
+        #expect(result == "Shot on iPhone 16 Pro, f/1.8, 24mm, ISO 400",
                 "Multi-token substitution failed. Got: '\(result)'")
     }
 
@@ -270,5 +276,75 @@ struct EXIFTokenParserTests {
                 "Negative latitude should render as S, got: '\(result)'")
         #expect(result.contains("E"),
                 "Positive longitude should render as E, got: '\(result)'")
+    }
+}
+
+// MARK: - Focal length
+
+@Suite("35mm-equivalent focal length")
+struct EquivalentFocalLengthTests {
+
+    /// An unzoomed iPhone 6s frame: the file's own equivalent is sound and is
+    /// used as-is. Values are this photo's real EXIF.
+    private let unzoomed: [String: Any] = [
+        "FocalLength": 4.15,
+        "FocalLenIn35mmFilm": 29,
+        "LensModel": "iPhone 6s back camera 4.15mm f/2.2",
+    ]
+
+    /// An iPhone 15 Pro Max frame at 5x. `FocalLenIn35mmFilm` reads 121 —
+    /// the framing, not the lens — while Photos reports 24mm.
+    private let zoomed: [String: Any] = [
+        "FocalLength": 6.765,
+        "FocalLenIn35mmFilm": 121,
+        "DigitalZoomRatio": 2.539,
+        "LensModel": "iPhone 15 Pro Max back triple camera 6.765mm f/1.78",
+    ]
+
+    @Test("A sound recorded equivalent is used unchanged")
+    func trustsAGoodValue() {
+        #expect(EXIFTokenParser.equivalentFocalLength(exif: unzoomed) == 29)
+    }
+
+    @Test("A zoom-inflated equivalent resolves to the lens's own")
+    func correctsAnInflatedValue() {
+        // 121mm implies a crop factor of 17.9, which no phone sensor has.
+        #expect(EXIFTokenParser.equivalentFocalLength(exif: zoomed) == 24)
+    }
+
+    @Test("An unknown module falls back to dividing out the recorded zoom")
+    func unknownModuleUndoesZoom() {
+        let exif: [String: Any] = [
+            "FocalLength": 8.8,          // not an Apple module
+            "FocalLenIn35mmFilm": 200,
+            "DigitalZoomRatio": 4.0,
+        ]
+        #expect(EXIFTokenParser.equivalentFocalLength(exif: exif) == 50)
+    }
+
+    @Test("Missing fields degrade instead of failing")
+    func missingFields() {
+        #expect(EXIFTokenParser.equivalentFocalLength(exif: [:]) == nil)
+        #expect(EXIFTokenParser.equivalentFocalLength(exif: ["FocalLenIn35mmFilm": 35]) == 35)
+        // An unknown optical focal with nothing to convert it by yields no
+        // equivalent — the token then shows the optical focal as itself.
+        #expect(EXIFTokenParser.equivalentFocalLength(exif: ["FocalLength": 50.0]) == nil)
+        #expect(EXIFTokenParser.substitute("{focal_length}",
+                                          metadata: ["{Exif}": ["FocalLength": 50.0]]) == "50mm")
+    }
+
+    @Test("The lens string shows the equivalent, keeping the lens's name")
+    func lensStringIsRewritten() {
+        let rendered = EXIFTokenParser.substitute("{lens}", metadata: ["{Exif}": zoomed])
+        #expect(rendered == "iPhone 15 Pro Max back triple camera 24mm f/1.78")
+
+        let plain = EXIFTokenParser.substitute("{lens}", metadata: ["{Exif}": unzoomed])
+        #expect(plain == "iPhone 6s back camera 29mm f/2.2")
+    }
+
+    @Test("The focal-length token matches what the lens string shows")
+    func tokensAgree() {
+        #expect(EXIFTokenParser.substitute("{focal_length}", metadata: ["{Exif}": zoomed]) == "24mm")
+        #expect(EXIFTokenParser.substitute("{focal_length}", metadata: ["{Exif}": unzoomed]) == "29mm")
     }
 }
