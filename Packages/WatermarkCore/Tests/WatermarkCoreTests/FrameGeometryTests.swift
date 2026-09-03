@@ -93,8 +93,12 @@ struct FrameGeometryTests {
     func galleryCaptionFollowsItsMat() {
         // Text that kept scaling with pixels would outgrow a millimetre border
         // on a large photo and stop the band tracking the setting.
-        let small = FrameGeometry(config: Self.config(style: .gallery), sourceSize: CGSize(width: 1512, height: 2016))
-        let large = FrameGeometry(config: Self.config(style: .gallery), sourceSize: CGSize(width: 6048, height: 8064))
+        // At one pinned resolution, since that is what "physical" means: the
+        // same print resolution gives the same millimetres the same pixels.
+        let small = FrameGeometry(config: Self.config(style: .gallery),
+                                  sourceSize: CGSize(width: 1512, height: 2016), dpi: 300)
+        let large = FrameGeometry(config: Self.config(style: .gallery),
+                                  sourceSize: CGSize(width: 6048, height: 8064), dpi: 300)
         #expect(small.captionFontSize == large.captionFontSize)
         #expect(large.captionFontSize < large.bottom, "caption must fit its band")
     }
@@ -192,13 +196,35 @@ struct FrameGeometryMillimetreTests {
         #expect(FrameGeometry.pixels(millimetres: 10, dpi: 600) == 236)
     }
 
-    @Test("A millimetre border is the same pixel size regardless of photo size")
+    @Test("At one resolution, a millimetre border is the same pixel size on any photo")
     func mmIsPhysicalNotProportional() {
-        let small = FrameGeometry(config: Self.gallery(), sourceSize: CGSize(width: 1000, height: 800))
-        let large = FrameGeometry(config: Self.gallery(), sourceSize: CGSize(width: 8000, height: 6000))
+        let small = FrameGeometry(config: Self.gallery(),
+                                  sourceSize: CGSize(width: 1000, height: 800), dpi: 300)
+        let large = FrameGeometry(config: Self.gallery(),
+                                  sourceSize: CGSize(width: 8000, height: 6000), dpi: 300)
         // This is the point of a physical unit, and the opposite of how classic
-        // behaves: the same border measures the same on paper either way.
+        // behaves: printed at the same resolution, the same border measures the
+        // same on paper either way.
         #expect(small.left == large.left)
+    }
+
+    @Test("Left to itself, a millimetre border is the same share of any frame")
+    func mmIsProportionalWhenTheResolutionIsDerived() {
+        // What the user actually sees when they do not pin a resolution. A
+        // fixed fallback made the same setting 3.1% of a 12MP photo's short
+        // edge but 8.8% of 1080p footage's — the reason video came out framed
+        // so much more heavily than stills.
+        func share(_ size: CGSize) -> CGFloat {
+            FrameGeometry(config: Self.gallery(), sourceSize: size).left / min(size.width, size.height)
+        }
+        let photo = share(CGSize(width: 3024, height: 4032))
+        for other in [CGSize(width: 1080, height: 1920),      // 1080p video
+                      CGSize(width: 2160, height: 3840),      // 4K video
+                      CGSize(width: 1280, height: 960),       // a small photo
+                      CGSize(width: 8000, height: 6000)] {    // a big one
+            #expect(abs(share(other) - photo) < 0.002,
+                    "\(other) frames at \(share(other) * 100)% against the photo's \(photo * 100)%")
+        }
     }
 
     @Test("Classic honours the millimetre border too")
@@ -244,10 +270,12 @@ struct FrameGeometryMillimetreTests {
 
     // MARK: - Resolving DPI
 
+    static let twelveMP = CGSize(width: 3024, height: 4032)
+
     @Test("A print-intent resolution in the file is believed")
     func realDPIIsUsed() {
-        #expect(FrameGeometry.resolveDPI(from: ["DPIWidth": 600]) == 600)
-        #expect(FrameGeometry.resolveDPI(from: ["DPIWidth": 150]) == 150)
+        #expect(FrameGeometry.resolveDPI(from: ["DPIWidth": 600], sourceSize: Self.twelveMP) == 600)
+        #expect(FrameGeometry.resolveDPI(from: ["DPIWidth": 150], sourceSize: Self.twelveMP) == 150)
     }
 
     @Test("The JFIF default of 72 is not treated as a measurement")
@@ -255,13 +283,19 @@ struct FrameGeometryMillimetreTests {
         // Almost every phone JPEG says 72 because that is the format default,
         // not because anyone measured. Believing it would make a 5mm border
         // 14px on an 8000px photo — indistinguishable from no border.
-        #expect(FrameGeometry.resolveDPI(from: ["DPIWidth": 72]) == 300)
-        #expect(FrameGeometry.resolveDPI(from: [:]) == 300)
+        // The fallback is the source's own resolution over a ten-inch print,
+        // which for a 12MP photo is the 300 DPI it used to be hardcoded to.
+        #expect(abs(FrameGeometry.resolveDPI(
+            from: ["DPIWidth": 72], sourceSize: Self.twelveMP) - 302.4) < 0.1)
+        #expect(abs(FrameGeometry.resolveDPI(
+            from: [:], sourceSize: Self.twelveMP) - 302.4) < 0.1)
+        // Degenerate input must not divide by zero.
+        #expect(FrameGeometry.resolveDPI(from: [:], sourceSize: .zero) == 300)
     }
 
     @Test("Height resolution is used when width is missing")
     func fallsBackToHeightDPI() {
-        #expect(FrameGeometry.resolveDPI(from: ["DPIHeight": 400]) == 400)
+        #expect(FrameGeometry.resolveDPI(from: ["DPIHeight": 400], sourceSize: Self.twelveMP) == 400)
     }
 
     @Test("Resolution changes how many pixels a millimetre border takes")
@@ -290,16 +324,16 @@ struct GalleryMetricSizingTests {
 
     @Test("Caption text is the same physical size whatever the photo's pixels")
     func captionIsPhysical() {
-        let a = FrameGeometry(config: Self.gallery(), sourceSize: Self.small)
-        let b = FrameGeometry(config: Self.gallery(), sourceSize: Self.large)
+        let a = FrameGeometry(config: Self.gallery(), sourceSize: Self.small, dpi: 300)
+        let b = FrameGeometry(config: Self.gallery(), sourceSize: Self.large, dpi: 300)
         #expect(a.captionFontSize == b.captionFontSize)
         #expect(a.captionFontSize == FrameGeometry.pixels(millimetres: 2.5, dpi: 300))
     }
 
     @Test("The brand mark is the same physical size whatever the photo's pixels")
     func logoIsPhysical() {
-        let a = FrameGeometry(config: Self.gallery(), sourceSize: Self.small)
-        let b = FrameGeometry(config: Self.gallery(), sourceSize: Self.large)
+        let a = FrameGeometry(config: Self.gallery(), sourceSize: Self.small, dpi: 300)
+        let b = FrameGeometry(config: Self.gallery(), sourceSize: Self.large, dpi: 300)
         #expect(a.logoHeight == b.logoHeight)
         #expect(a.logoHeight == FrameGeometry.pixels(millimetres: 4, dpi: 300))
     }
@@ -427,11 +461,11 @@ struct OutputDPIGeometryTests {
     func explicitDPIWins() {
         let metadata: [String: Any] = [kCGImagePropertyDPIWidth as String: 600]
         let auto = WhiteFrameConfig(isEnabled: true, style: .gallery)
-        #expect(FrameGeometry.resolveDPI(from: metadata, config: auto) == 600)
+        #expect(FrameGeometry.resolveDPI(from: metadata, config: auto, sourceSize: source) == 600)
 
         var pinned = auto
         pinned.outputDPI = 150
-        #expect(FrameGeometry.resolveDPI(from: metadata, config: pinned) == 150)
+        #expect(FrameGeometry.resolveDPI(from: metadata, config: pinned, sourceSize: source) == 150)
     }
 
     @Test("Doubling the DPI doubles the mat, keyline, caption and mark")

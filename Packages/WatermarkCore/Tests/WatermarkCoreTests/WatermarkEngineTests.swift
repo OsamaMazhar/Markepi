@@ -421,7 +421,7 @@ struct WatermarkEngineTests {
 
     // MARK: - Padding
 
-    @Test("Configurable padding via WatermarkConfiguration.padding")
+    @Test("Configurable padding via WatermarkConfiguration.paddingMillimetres")
     func configurablePadding() async throws {
         let (_, jpegData) = TestImageFactory.solidColorImage(
             color: CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1),
@@ -437,7 +437,7 @@ struct WatermarkEngineTests {
                 .image(imageInput, position: .topLeft, scale: 0.5, opacity: 1.0, isVisible: true),
             ]
         )
-        config.padding = 50
+        config.paddingMillimetres = 20
 
         let engine = WatermarkEngine()
 
@@ -655,7 +655,6 @@ struct WatermarkEngineTests {
                     config: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false,
                                              style: .classic),
                     sourceSize: CGSize(width: 400, height: 300),
-                    dpi: 300,
                     hasCaptionContent: false)
                 let photo = geometry.photoRect
                 var foundInk = false

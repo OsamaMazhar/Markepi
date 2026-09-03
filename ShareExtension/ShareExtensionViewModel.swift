@@ -481,14 +481,27 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
                 watermarkImage = rendered
             }
 
+            // The same rule the engine and the video builder use — a fraction
+            // of the frame's shorter side. Applying `scale` raw made this
+            // preview a poor guide to what the export would look like.
+            let factor = WatermarkScaling.transformFactor(
+                for: watermark,
+                naturalSize: watermarkImage.extent.size,
+                baseSize: extent.size
+            )
             let scaled = watermarkImage.transformed(
-                by: CGAffineTransform(scaleX: watermark.scale, y: watermark.scale)
+                by: CGAffineTransform(scaleX: factor, y: factor)
             )
             let position = PositionCalculator.position(
                 for: watermark.position,
                 watermarkExtent: scaled.extent,
                 baseExtent: extent,
-                padding: config.padding
+                // The same metric rule the app and the video path use. This
+                // path took the raw value with no floor at all, so a shared
+                // photo placed its watermark differently from the same photo
+                // opened in the app.
+                padding: WatermarkScaling.padding(
+                    millimetres: config.paddingMillimetres, baseSize: extent.size)
             )
             layers.append((scaled, position))
         }

@@ -21,24 +21,52 @@ public struct ScaleStepperView<ViewModel: WatermarkConfigurable & Observable>: V
 
     public var body: some View {
         HStack {
-            Text("Scale")
-                .markepiTypography(.controlLabel)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Size")
+                    .markepiTypography(.controlLabel)
+                Text("Same size on photos and video")
+                    .markepiTypography(.metadata)
+            }
             Spacer()
-            Text("\(Int(currentScale * 100))%")
+            Text(String(format: "%.1f mm", currentMillimetres))
                 .markepiTypography(.value)
+                .monospacedDigit()
             Stepper(
                 "",
-                value: scaleBinding,
-                in: 0.01...0.90,
-                step: 0.01
+                value: millimetreBinding,
+                in: Self.range,
+                step: 0.5
             )
             .labelsHidden()
             .frame(width: 100)
+            .accessibilityIdentifier("layer.size.mm")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .accessibilityLabel("Watermark scale")
-        .accessibilityHint("Adjust watermark size. Current value: \(Int(currentScale * 100)) percent")
+        .accessibilityLabel("Watermark size")
+        .accessibilityValue(String(format: "%.1f millimetres", currentMillimetres))
+        .accessibilityHint("Adjusts the watermark's size, measured on a standard print")
+    }
+
+    /// The same 1%–90% of the frame the stepper always allowed, stated in the
+    /// millimetres the user now sets it in.
+    private static var range: ClosedRange<CGFloat> {
+        WatermarkScaling.millimetres(forScale: 0.01)...WatermarkScaling.millimetres(forScale: 0.90)
+    }
+
+    /// Millimetres on a reference print, which is a fixed share of the frame —
+    /// so one setting is the same size on a still and on footage, whatever
+    /// either one's resolution.
+    private var currentMillimetres: CGFloat {
+        WatermarkScaling.millimetres(forScale: currentScale)
+    }
+
+    private var millimetreBinding: Binding<CGFloat> {
+        Binding(
+            get: { currentMillimetres },
+            set: { viewModel.updateLayerScale(
+                at: layerIndex, scale: WatermarkScaling.scale(forMillimetres: $0)) }
+        )
     }
 
     private var currentScale: CGFloat {

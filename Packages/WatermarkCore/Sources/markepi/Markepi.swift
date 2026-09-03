@@ -226,9 +226,9 @@ struct Markepi {
         config.outputQuality = Float(try flags.value("--quality").map {
             try doubleValue($0, flag: "--quality", in: 0...1)
         } ?? 1.0)
-        config.padding = CGFloat(try flags.value("--padding").map {
-            try doubleValue($0, flag: "--padding", in: 0...10_000)
-        } ?? 20)
+        config.paddingMillimetres = CGFloat(try flags.value("--padding").map {
+            try doubleValue($0, flag: "--padding", in: 0...100)
+        } ?? Double(WatermarkConfiguration.defaultPaddingMillimetres))
 
         if let text = flags.value("--text") {
             config.watermarks.append(.text(

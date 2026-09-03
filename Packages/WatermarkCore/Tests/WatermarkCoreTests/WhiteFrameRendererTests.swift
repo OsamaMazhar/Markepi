@@ -34,13 +34,14 @@ struct WhiteFrameRendererTests {
     /// geometry the renderer uses. The mat is drawn outside the photo, so this
     /// is always larger than the source.
     func framedRect(_ config: WhiteFrameConfig, _ source: CGRect,
-                    metadata: [String: Any] = [:]) -> CGRect {
+                    metadata: [String: Any] = [:], dpi: CGFloat? = nil) -> CGRect {
         // Mirrors the renderer exactly — same DPI, same does-the-caption-say-
         // anything question — or it predicts a band the render rightly omits.
         CGRect(origin: .zero, size: FrameGeometry(
             config: config,
             sourceSize: source.size,
-            dpi: FrameGeometry.resolveDPI(from: metadata),
+            dpi: dpi ?? FrameGeometry.resolveDPI(
+                from: metadata, config: config, sourceSize: source.size),
             hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(config: config, metadata: metadata)
         ).framedSize)
     }
@@ -49,10 +50,14 @@ struct WhiteFrameRendererTests {
 
     @Test("An 8mm border at 300dpi is a 94pt mat, whatever the photo's size")
     func borderIsPhysical() throws {
+        // Pinned to 300, because that is what makes the claim meaningful:
+        // left to itself the resolution is derived from the photo, and then a
+        // millimetre is a constant *share* rather than a constant pixel count.
         let config = WhiteFrameConfig(
             isEnabled: true,
             metadataTextEnabled: false,
-            borderMillimetres: 8
+            borderMillimetres: 8,
+            outputDPI: 300
         )
         let small = CGRect(x: 0, y: 0, width: 1000, height: 800)
         let large = CGRect(x: 0, y: 0, width: 6000, height: 4000)

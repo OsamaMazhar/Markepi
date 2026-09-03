@@ -250,7 +250,8 @@ public actor WatermarkEngine {
             guard let frame = config.whiteFrame, frame.isEnabled else { return 0 }
             let shorter = min(normalized.extent.width, normalized.extent.height)
             guard shorter > 0 else { return 0 }
-            let dpi = FrameGeometry.resolveDPI(from: loaded.metadata, config: frame)
+            let dpi = FrameGeometry.resolveDPI(
+                from: loaded.metadata, config: frame, sourceSize: normalized.extent.size)
             return FrameGeometry.pixels(millimetres: frame.borderMillimetres, dpi: dpi) / shorter
         }()
         let alignedGainMap = renderScale < 1 ? nil : GainMapProcessor.aligned(
@@ -639,10 +640,11 @@ public actor WatermarkEngine {
         // outside the photo, so there is nothing to dodge.
         let positioningExtent = extent
 
-        // Edge padding scales with the image instead of being a fixed 20px,
-        // which was invisible on multi-thousand-pixel photos. ~4% of the shorter
-        // dimension gives a comfortable, resolution-independent margin.
-        let effectivePadding = max(config.padding, min(extent.width, extent.height) * 0.04)
+        // Edge padding is a millimetre measurement like everything else, so it
+        // is the same share of the frame on any resolution — and, crucially,
+        // the same on video, which used to take a raw pixel count.
+        let effectivePadding = WatermarkScaling.padding(
+            millimetres: config.paddingMillimetres, baseSize: extent.size)
 
         // Where each layer landed, in the composited photo's own coordinates.
         // Converted to normalized output coordinates once the mat (which moves
@@ -668,25 +670,13 @@ public actor WatermarkEngine {
                 watermarkImage = try SignatureRenderer.render(input: signatureInput)
             }
 
-            // Scale watermark relative to the base image (resolution-independent).
-            // Text scales by HEIGHT so editing the text — which changes its width —
-            // does not change the apparent font size (scale == font height as a
-            // fraction of image height). Image/signature scale by WIDTH, where the
-            // aspect ratio is fixed so width is the natural control.
-            let factor: CGFloat
-            if case .text = watermark {
-                factor = WatermarkScaling.transformFactor(
-                    layerScale: watermark.scale,
-                    naturalWidth: watermarkImage.extent.height,
-                    baseWidth: extent.height
-                )
-            } else {
-                factor = WatermarkScaling.transformFactor(
-                    layerScale: watermark.scale,
-                    naturalWidth: watermarkImage.extent.width,
-                    baseWidth: extent.width
-                )
-            }
+            // Scale relative to the frame's shorter side, so one setting means
+            // the same size on a 4:3 photo and on 16:9 or 9:16 video.
+            let factor = WatermarkScaling.transformFactor(
+                for: watermark,
+                naturalSize: watermarkImage.extent.size,
+                baseSize: extent.size
+            )
             var scaled = watermarkImage.transformed(
                 by: CGAffineTransform(scaleX: factor, y: factor)
             )
@@ -738,7 +728,7 @@ public actor WatermarkEngine {
             let factor = WatermarkScaling.transformFactor(
                 layerScale: dateConfig.sizeRatio,
                 naturalWidth: stampImage.extent.height,
-                baseWidth: extent.height
+                baseWidth: WatermarkScaling.reference(extent.size)
             )
             let scaled = stampImage.transformed(by: CGAffineTransform(scaleX: factor, y: factor))
             var position = PositionCalculator.position(
@@ -763,7 +753,14 @@ public actor WatermarkEngine {
                 // The mat is specified in millimetres, so a downscaled preview
                 // has to scale the DPI with it or the border comes out
                 // proportionally too thick.
-                dpi: FrameGeometry.resolveDPI(from: metadata, config: frameConfig) * renderScale,
+                // Derived from the FULL-resolution size, then scaled: a
+                // preview must not also shrink the resolution it derives from.
+                dpi: FrameGeometry.resolveDPI(
+                    from: metadata, config: frameConfig,
+                    sourceSize: renderScale > 0
+                        ? CGSize(width: watermarkedResult.extent.width / renderScale,
+                                 height: watermarkedResult.extent.height / renderScale)
+                        : watermarkedResult.extent.size) * renderScale,
                 hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(
                     config: frameConfig, metadata: metadata)
             )

@@ -50,16 +50,34 @@ public struct FrameGeometry: Equatable, Sendable {
     /// A great many JPEGs carry 72 DPI because that is the JFIF default, not
     /// because anyone measured anything — taking that literally would turn a
     /// 5mm border into 14px on an 8000px photo, which reads as no border at
-    /// all. So only a print-intent resolution is believed; anything lower
-    /// falls back to 300.
+    /// all. So only a print-intent resolution is believed; anything lower is
+    /// derived from the source's own resolution instead.
     /// When `config` carries an explicit `outputDPI`, that is the answer —
     /// a resolution the user set is not a guess to be second-guessed.
-    public static func resolveDPI(from metadata: [String: Any], config: WhiteFrameConfig) -> CGFloat {
+    public static func resolveDPI(
+        from metadata: [String: Any],
+        config: WhiteFrameConfig,
+        sourceSize: CGSize
+    ) -> CGFloat {
         if let chosen = config.outputDPI { return chosen }
-        return resolveDPI(from: metadata)
+        return resolveDPI(from: metadata, sourceSize: sourceSize)
     }
 
-    public static func resolveDPI(from metadata: [String: Any]) -> CGFloat {
+    /// The short edge of the print a source is treated as, when nothing says
+    /// otherwise: ten inches, about a sheet of A4.
+    ///
+    /// A flat fallback cannot work across media. 300 DPI was calibrated on a
+    /// 12MP photo, where an 8mm border is 3.1% of the short edge — the
+    /// reference card's proportion. Applied to a 1080p video the same 8mm
+    /// becomes 8.8%, nearly three times as heavy, which is why footage came
+    /// out looking so much more heavily framed than stills. Ten inches is what
+    /// "300 DPI on a 12MP photo" always meant (3024 / 300 = 10.08"); saying it
+    /// directly makes every medium agree.
+    public static let referencePrintShortEdgeInches: CGFloat = 10
+
+    /// Resolution to convert millimetres against, from the source's own
+    /// metadata where it is a real print measurement, else from its size.
+    public static func resolveDPI(from metadata: [String: Any], sourceSize: CGSize) -> CGFloat {
         let candidates = [
             metadata[kCGImagePropertyDPIWidth as String],
             metadata[kCGImagePropertyDPIHeight as String],
@@ -69,7 +87,31 @@ public struct FrameGeometry: Equatable, Sendable {
                 return CGFloat(dpi)
             }
         }
-        return 300
+        let shortEdge = min(sourceSize.width, sourceSize.height)
+        guard shortEdge > 0 else { return 300 }
+        return shortEdge / referencePrintShortEdgeInches
+    }
+
+    /// Resolution for a video frame.
+    ///
+    /// DPI is a print idea and a video is never printed, so neither its own
+    /// metadata nor a print resolution the user chose for their photos means
+    /// anything here — honouring a 600 DPI setting would frame 1080p footage
+    /// like a contact print. Video always uses the reference print, which
+    /// makes a millimetre a fixed share of the frame and so identical to what
+    /// the same setting gives on a photo.
+    public static func videoDPI(videoSize: CGSize) -> CGFloat {
+        let shortEdge = min(videoSize.width, videoSize.height)
+        guard shortEdge > 0 else { return 300 }
+        return shortEdge / referencePrintShortEdgeInches
+    }
+
+    /// The source's short edge in millimetres at `dpi` — the span every
+    /// millimetre setting is a fraction of, and what lets a layer sized in
+    /// millimetres mean the same thing on a photo and on a video.
+    public static func shortEdgeMillimetres(sourceSize: CGSize, dpi: CGFloat) -> CGFloat {
+        guard dpi > 0 else { return 0 }
+        return min(sourceSize.width, sourceSize.height) / dpi * 25.4
     }
 
     /// Converts millimetres to pixels at `dpi`.
@@ -83,7 +125,10 @@ public struct FrameGeometry: Equatable, Sendable {
     ///   - config: the frame configuration; `style` selects the mat shape.
     ///   - sourceSize: the unframed source size in pixels.
     ///   - dpi: resolution used to turn a millimetre border into pixels.
-    ///     Only `gallery` uses it; `classic` sizes proportionally.
+    ///     Only `gallery` uses it; `classic` sizes proportionally. Omit it to
+    ///     derive one from `sourceSize` — a fixed default silently assumed a
+    ///     12MP photo, and on anything smaller (a test fixture, a video frame)
+    ///     produced a border several times too heavy.
     ///   - hasCaptionContent: whether the caption will actually draw anything.
     ///     A gallery frame whose slots all resolve to nothing — a photo with no
     ///     metadata and no typed handle — collapses its bottom band to a
@@ -93,12 +138,13 @@ public struct FrameGeometry: Equatable, Sendable {
     public init(
         config: WhiteFrameConfig,
         sourceSize: CGSize,
-        dpi: CGFloat = 300,
+        dpi: CGFloat? = nil,
         hasCaptionContent: Bool = true,
         metrics: FrameMetrics = .reference
     ) {
         self.sourceSize = sourceSize
         self.metrics = metrics
+        let dpi = dpi ?? Self.resolveDPI(from: [:], sourceSize: sourceSize)
 
         // Both styles measure the border the same way: a physical size on
         // paper. Classic used to take a percentage of the photo, so the printed

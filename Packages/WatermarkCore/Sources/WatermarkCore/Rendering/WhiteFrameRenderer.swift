@@ -183,7 +183,7 @@ public struct WhiteFrameRenderer {
             geometry: FrameGeometry(
                 config: config,
                 sourceSize: sourceSize,
-                dpi: FrameGeometry.resolveDPI(from: metadata, config: config),
+                dpi: FrameGeometry.resolveDPI(from: metadata, config: config, sourceSize: sourceSize),
                 hasCaptionContent: hasCaptionContent(config: config, metadata: metadata)
             ),
             metadata: metadata,

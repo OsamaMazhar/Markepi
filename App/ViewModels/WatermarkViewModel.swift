@@ -406,7 +406,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
         // force a redraw. Include the photo's identity (not just currentIndex)
         // so a fresh import at index 0 also re-triggers the preview.
         var parts: [String] = ["\(currentIndex)", currentPhoto?.id.uuidString ?? "none"]
-        parts.append("pad:\(String(format: "%.1f", config.padding))")
+        parts.append("pad:\(String(format: "%.2f", config.paddingMillimetres))")
         // Video scrub position — re-extracts the previewed frame when scrubbed.
         parts.append("vf:\(String(format: "%.4f", videoPreviewFraction))")
         for layer in config.watermarks {

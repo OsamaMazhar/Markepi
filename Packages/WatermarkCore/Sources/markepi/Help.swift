@@ -15,8 +15,10 @@ GENERAL
       --format <fmt>           preserve | heic | jpeg | png | tiff
                                (default: preserve — keeps the source format)
       --quality <0–1>          Quality for lossy formats (default: 1.0)
-      --padding <points>       Minimum edge padding for watermark layers.
-                               The engine uses max(padding, 4% of the short edge).
+      --padding <mm>           Edge padding for watermark layers, in
+                               millimetres of a standard print — the same
+                               share of the frame at any resolution, and the
+                               same on photos and video (default: 10.16).
                                (default: 20)
       --privacy <profile>      preserveAll | stripSensitive | minimalPublic
                                stripSensitive drops GPS and serial numbers;

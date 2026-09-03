@@ -255,7 +255,9 @@ struct ToolPanelView: View {
     /// The DPI the render will actually use, so the print size below never
     /// disagrees with the frame above.
     private var effectiveDPI: CGFloat {
-        selectedDPI ?? FrameGeometry.resolveDPI(from: viewModel.sourceMetadata)
+        selectedDPI ?? FrameGeometry.resolveDPI(
+            from: viewModel.sourceMetadata,
+            sourceSize: viewModel.sourcePixelSize ?? .zero)
     }
 
     private func setDPI(_ dpi: CGFloat?) {

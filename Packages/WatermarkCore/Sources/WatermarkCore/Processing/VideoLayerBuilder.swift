@@ -41,7 +41,7 @@ public struct VideoLayerBuilder {
         let frameConfig = config.whiteFrame?.isEnabled == true ? config.whiteFrame : nil
         let geometry = frameConfig.map {
             FrameGeometry(config: $0, sourceSize: videoSize,
-                          dpi: FrameGeometry.resolveDPI(from: metadata, config: $0),
+                          dpi: FrameGeometry.videoDPI(videoSize: videoSize),
                           hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(
                               config: $0, metadata: metadata))
         }
@@ -85,7 +85,9 @@ public struct VideoLayerBuilder {
                 watermark: watermark,
                 videoSize: videoSize,
                 positioningExtent: positioningExtent,
-                padding: config.padding,
+                padding: WatermarkScaling.padding(
+                    millimetres: config.paddingMillimetres, baseSize: videoSize),
+                metadata: metadata,
                 format: overlayFormat
             )
             parentLayer.addSublayer(watermarkLayer)
@@ -100,7 +102,7 @@ public struct VideoLayerBuilder {
             let factor = WatermarkScaling.transformFactor(
                 layerScale: dateConfig.sizeRatio,
                 naturalWidth: CGFloat(cgImage.height),
-                baseWidth: videoSize.height
+                baseWidth: WatermarkScaling.reference(videoSize)
             )
             let scaledWidth = CGFloat(cgImage.width) * factor
             let scaledHeight = CGFloat(cgImage.height) * factor
@@ -110,7 +112,8 @@ public struct VideoLayerBuilder {
                 for: dateConfig.position,
                 watermarkExtent: scaledExtent,
                 baseExtent: positioningExtent,
-                padding: config.padding
+                padding: WatermarkScaling.padding(
+                    millimetres: config.paddingMillimetres, baseSize: videoSize)
             )
             ciPosition.x += positioningExtent.origin.x
             ciPosition.y += positioningExtent.origin.y
@@ -135,6 +138,7 @@ public struct VideoLayerBuilder {
         videoSize: CGSize,
         positioningExtent: CGRect,
         padding: CGFloat,
+        metadata: [String: Any],
         format: CIFormat
     ) throws -> CALayer {
         let cgImage: CGImage
@@ -147,7 +151,10 @@ public struct VideoLayerBuilder {
         switch watermark {
         case .text(let textConfig, _, let s, _, _):
             scale = s
-            let ciImage = TextWatermarkRenderer.render(config: textConfig)
+            // With the metadata, as the photo path does. Without it an EXIF
+            // token stayed literal, so a video captioned "{camera_model}" —
+            // different words from the photo, and a wider block of them.
+            let ciImage = TextWatermarkRenderer.render(config: textConfig, metadata: metadata)
             cgImage = try renderToCGImage(ciImage, format: format)
             scaleNaturalWidth = CGFloat(cgImage.height)
 
@@ -169,34 +176,15 @@ public struct VideoLayerBuilder {
         wmLayer.contents = cgImage
         wmLayer.contentsGravity = .resizeAspect
 
-        // Scale watermark relative to the video, matching the photo path in
-        // WatermarkEngine.buildFilterGraph for full parity.
-        //
-        // Text scales by HEIGHT so editing the text — which changes its width —
-        // does not change the apparent font size (scale == font height as a
-        // fraction of video height; see WatermarkConfiguration.defaultTextScale).
-        // Image/signature scale by WIDTH, where the aspect ratio is fixed so
-        // width is the natural control.
-        //
-        // IMPORTANT: this used to scale EVERY layer (text included) by width.
-        // Because text's `scale` semantically means "fraction of height", that
-        // made the font render far too small on landscape video AND shifted the
-        // corner-placement geometry (PositionCalculator keys off the scaled
-        // extent), so a `.bottomRight` text watermark could land at the top.
-        let factor: CGFloat
-        if case .text = watermark {
-            factor = WatermarkScaling.transformFactor(
-                layerScale: scale,
-                naturalWidth: scaleNaturalWidth,
-                baseWidth: videoSize.height
-            )
-        } else {
-            factor = WatermarkScaling.transformFactor(
-                layerScale: scale,
-                naturalWidth: scaleNaturalWidth,
-                baseWidth: videoSize.width
-            )
-        }
+        // Sized by the same rule as photos, from the same type: a fraction of
+        // the frame's shorter side. Video is wider (or taller) than a photo, so
+        // measuring against a specific edge made the same setting come out
+        // about 45% heavier on video — right on stills, oversized on footage.
+        let factor = WatermarkScaling.transformFactor(
+            layerScale: scale,
+            naturalWidth: scaleNaturalWidth,
+            baseWidth: WatermarkScaling.reference(videoSize)
+        )
         let scaledWidth = CGFloat(cgImage.width) * factor
         let scaledHeight = CGFloat(cgImage.height) * factor
         let scaledExtent = CGRect(x: 0, y: 0, width: scaledWidth, height: scaledHeight)

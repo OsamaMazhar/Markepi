@@ -7,9 +7,9 @@ import CoreImage
 ///
 /// Consumed by `WatermarkEngine.process(url:config:)` to build the filter graph.
 public struct WatermarkConfiguration: Sendable, Codable {
-    /// Default scale for a newly-added text layer — the font height as a fraction
-    /// of the image height (see `WatermarkEngine`). ~4.5% reads as a tasteful
-    /// signature; 10% rendered far too large.
+    /// Default scale for a newly-added text layer — the font height as a
+    /// fraction of the frame's shorter side (see `WatermarkScaling`). ~4.5%
+    /// reads as a tasteful signature; 10% rendered far too large.
     public static let defaultTextScale: CGFloat = 0.045
 
     /// PostScript name of the font new text layers start with. Pacifico is a
@@ -19,8 +19,14 @@ public struct WatermarkConfiguration: Sendable, Codable {
     /// Ordered array of watermark layers composited from bottom to top (per D-01)
     public var watermarks: [WatermarkLayer]
 
-    /// Padding between watermark and image edges, in points (default: 20)
-    public var padding: CGFloat = 20
+    /// Gap between a watermark and the frame's edge, in millimetres of the
+    /// reference print (default: 10.16mm — the 4% of the short edge the photo
+    /// path already used, now stated in the same unit as everything else and
+    /// applied to video too).
+    public var paddingMillimetres: CGFloat = WatermarkConfiguration.defaultPaddingMillimetres
+
+    /// 4% of the short edge, in reference-print millimetres.
+    public static let defaultPaddingMillimetres: CGFloat = 10.16
 
     /// Optional white frame configuration (full implementation in Plan 03)
     public var whiteFrame: WhiteFrameConfig?
@@ -70,7 +76,7 @@ public struct WatermarkConfiguration: Sendable, Codable {
     // MARK: CodingKeys
 
     enum CodingKeys: String, CodingKey {
-        case watermarks, padding, whiteFrame, dateStamp, outputFormat, outputQuality
+        case watermarks, padding, paddingMillimetres, whiteFrame, dateStamp, outputFormat, outputQuality
         case rightsMetadata, metadataPrivacyProfile, provenanceEnabled, includeC2PAManifest
         case sourceDeclaration, invisibleProtectionEnabled
     }
@@ -99,7 +105,12 @@ public struct WatermarkConfiguration: Sendable, Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.watermarks = try container.decode([WatermarkLayer].self, forKey: .watermarks)
-        self.padding = try container.decodeIfPresent(CGFloat.self, forKey: .padding) ?? 20
+        // A legacy `padding` was a raw pixel count, which meant a different
+        // margin on every resolution; there is no size here to convert it
+        // against, and the photo path overrode it with its 4% floor in all but
+        // the largest settings, so it is dropped for the metric default.
+        self.paddingMillimetres = try container.decodeIfPresent(
+            CGFloat.self, forKey: .paddingMillimetres) ?? WatermarkConfiguration.defaultPaddingMillimetres
         self.whiteFrame = try container.decodeIfPresent(WhiteFrameConfig.self, forKey: .whiteFrame)
         self.dateStamp = try container.decodeIfPresent(DateStampConfig.self, forKey: .dateStamp)
         self.outputFormat = try container.decodeIfPresent(OutputFormat.self, forKey: .outputFormat) ?? .preserveSource
@@ -115,7 +126,7 @@ public struct WatermarkConfiguration: Sendable, Codable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(watermarks, forKey: .watermarks)
-        try container.encode(padding, forKey: .padding)
+        try container.encode(paddingMillimetres, forKey: .paddingMillimetres)
         try container.encodeIfPresent(whiteFrame, forKey: .whiteFrame)
         try container.encodeIfPresent(dateStamp, forKey: .dateStamp)
         try container.encode(outputFormat, forKey: .outputFormat)
@@ -182,7 +193,8 @@ public enum WatermarkLayer: Sendable {
         }
     }
 
-    /// The scale factor relative to base image shorter dimension (0.01–0.90)
+    /// Size as a fraction of the frame's shorter side (0.01–0.90): font height
+    /// for text, width for a logo or signature. See `WatermarkScaling`.
     public var scale: CGFloat {
         switch self {
         case .text(_, _, let scale, _, _): return scale

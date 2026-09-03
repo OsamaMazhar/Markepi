@@ -300,12 +300,21 @@ struct PreviewView: View {
         // ghost's pixel aspect has to be converted through the canvas aspect.
         let canvasAspect = imageDisplaySize.width / imageDisplaySize.height
         let ghostAspect = CGFloat(ghost.height) / CGFloat(ghost.width)
+        // `scale` is a fraction of the photo's SHORTER side, whichever that is
+        // (WatermarkScaling.reference), expressed here in normalized units.
+        let photoPixels = CGSize(width: photo.width * imageDisplaySize.width,
+                                 height: photo.height * imageDisplaySize.height)
+        let shorterIsWidth = photoPixels.width <= photoPixels.height
         let size: CGSize
         if case .text = layer {
-            let height = layer.scale * photo.height
+            let height = shorterIsWidth
+                ? layer.scale * photo.width * canvasAspect
+                : layer.scale * photo.height
             size = CGSize(width: height / ghostAspect / canvasAspect, height: height)
         } else {
-            let width = layer.scale * photo.width
+            let width = shorterIsWidth
+                ? layer.scale * photo.width
+                : layer.scale * photo.height / canvasAspect
             size = CGSize(width: width, height: width * ghostAspect * canvasAspect)
         }
         let placement = layer.position.fraction

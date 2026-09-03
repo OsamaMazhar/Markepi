@@ -433,10 +433,101 @@ struct PrintSizeAccuracyTests {
     func automaticResolution() {
         let frame = WhiteFrameConfig(isEnabled: true, style: .gallery)
         // 72 DPI is what a JPEG writes when nobody measured anything.
+        let twelveMP = CGSize(width: 3024, height: 4032)
+        // 72 is the JFIF default, so the source's own resolution decides: a
+        // ten-inch print of a 12MP photo, which is the 300 DPI that used to be
+        // hardcoded here.
+        #expect(abs(FrameGeometry.resolveDPI(
+            from: [kCGImagePropertyDPIWidth as String: 72],
+            config: frame, sourceSize: twelveMP) - 302.4) < 0.1)
         #expect(FrameGeometry.resolveDPI(
-            from: [kCGImagePropertyDPIWidth as String: 72], config: frame) == 300)
-        #expect(FrameGeometry.resolveDPI(
-            from: [kCGImagePropertyDPIWidth as String: 600], config: frame) == 600)
-        #expect(FrameGeometry.resolveDPI(from: [:], config: frame) == 300)
+            from: [kCGImagePropertyDPIWidth as String: 600],
+            config: frame, sourceSize: twelveMP) == 600)
+        #expect(abs(FrameGeometry.resolveDPI(
+            from: [:], config: frame, sourceSize: twelveMP) - 302.4) < 0.1)
+    }
+}
+
+/// One setting has to look the same on a still and on footage. It did not:
+/// every size was converted at a flat 300 DPI, which is a sensible print
+/// resolution for a 12MP photo and nonsense for a 1080p video, so the same
+/// numbers came out nearly three times heavier on video.
+@Suite("Photos and video are sized alike")
+struct CrossMediumConsistencyTests {
+
+    static let media: [(String, CGSize)] = [
+        ("12MP photo", CGSize(width: 3024, height: 4032)),
+        ("48MP photo", CGSize(width: 8064, height: 6048)),
+        ("small photo", CGSize(width: 1280, height: 960)),
+        ("1080p video", CGSize(width: 1080, height: 1920)),
+        ("4K video", CGSize(width: 3840, height: 2160)),
+        ("square crop", CGSize(width: 2000, height: 2000)),
+    ]
+
+    /// Share of the short edge, which is the axis every size is measured
+    /// against and so the only fair comparison across shapes.
+    private func share(_ value: CGFloat, of size: CGSize) -> CGFloat {
+        value / min(size.width, size.height)
+    }
+
+    @Test("The mat is the same share of the frame on every medium")
+    func matShareIsConstant() {
+        let config = WhiteFrameConfig(isEnabled: true, style: .gallery)
+        var shares: [(String, CGFloat)] = []
+        for (name, size) in Self.media {
+            let dpi = FrameGeometry.resolveDPI(from: [:], config: config, sourceSize: size)
+            shares.append((name, share(FrameGeometry(config: config, sourceSize: size, dpi: dpi).left, of: size)))
+        }
+        let reference = shares[0].1
+        for (name, value) in shares {
+            #expect(abs(value - reference) < 0.002,
+                    "\(name) mats at \(value * 100)% against the 12MP photo's \(reference * 100)%")
+        }
+        // And it is the reference card's proportion, not some new number:
+        // its 38px mat plus 13px keyline over a 1210px short edge is 4.2%.
+        #expect(abs(reference - 0.042) < 0.003)
+    }
+
+    @Test("Video takes the reference print, never a DPI meant for paper")
+    func videoIgnoresPrintResolution() {
+        let size = CGSize(width: 1080, height: 1920)
+        var pinned = WhiteFrameConfig(isEnabled: true, style: .gallery)
+        pinned.outputDPI = 600
+
+        // A print resolution the user chose for their photos must not reach
+        // video: at 600 DPI an 8mm mat would be 189px on a 1080-wide frame.
+        let videoDPI = FrameGeometry.videoDPI(videoSize: size)
+        #expect(videoDPI == 108)
+        let mat = FrameGeometry(config: pinned, sourceSize: size, dpi: videoDPI).left
+        #expect(share(mat, of: size) < 0.05)
+    }
+
+    @Test("Edge padding is the same share of the frame on every medium")
+    func paddingShareIsConstant() {
+        let config = WatermarkConfiguration(watermarks: [])
+        var shares: [(String, CGFloat)] = []
+        for (name, size) in Self.media {
+            let padding = WatermarkScaling.padding(
+                millimetres: config.paddingMillimetres, baseSize: size)
+            shares.append((name, share(padding, of: size)))
+        }
+        let reference = shares[0].1
+        for (name, value) in shares {
+            #expect(abs(value - reference) < 0.0001, "\(name) pads at \(value * 100)%")
+        }
+        // The 4% the photo path used to floor it at, now applied to video too.
+        #expect(abs(reference - 0.04) < 0.001)
+    }
+
+    @Test("A layer's millimetre size is the same share of the frame on every medium")
+    func layerShareIsConstant() {
+        // 20mm on the reference print, whatever the medium.
+        let scale = WatermarkScaling.scale(forMillimetres: 20)
+        for (name, size) in Self.media {
+            let drawn = WatermarkScaling.reference(size) * scale
+            #expect(abs(share(drawn, of: size) - scale) < 0.0001, "\(name)")
+        }
+        // And the conversion round-trips, so the stepper cannot drift.
+        #expect(abs(WatermarkScaling.millimetres(forScale: scale) - 20) < 0.001)
     }
 }
