@@ -16,8 +16,11 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    // Section switching state
-    @State private var section: ControlsSection = .watermark
+    // Section switching state. Style is the landing section: it holds the
+    // frame, which is applied the moment a photo is imported and is the
+    // headline output, so the controls that shape it are what the user should
+    // meet first.
+    @State private var section: ControlsSection = .style
 
     // Export Options state
     @State private var showHDRLossWarning = false
