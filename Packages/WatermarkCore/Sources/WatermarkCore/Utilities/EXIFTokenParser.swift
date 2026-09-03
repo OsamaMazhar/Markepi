@@ -86,6 +86,12 @@ public struct EXIFTokenParser {
 
         case .focal_length:
             let exif = metadata[exifDictKey] as? [String: Any]
+            // Photos app shows the 35mm-equivalent ("24mm"), not the optical
+            // focal ("6.765mm") — the number every user expects to see. Fall
+            // back to the optical focal for sources without the field.
+            if let equivalent = exif?["FocalLenIn35mmFilm"] as? Int, equivalent > 0 {
+                return "\(equivalent)mm"
+            }
             guard let focal = exif?["FocalLength"] as? Double else { return "--" }
             return String(format: "%.0fmm", focal)
 

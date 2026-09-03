@@ -19,6 +19,16 @@ public struct AppGroupConfigSync {
 
     /// Key used to store the serialized `WatermarkConfiguration` JSON data.
     private static let configKey = "watermarkConfiguration"
+    private static let schemaVersionKey = "watermarkConfigurationSchemaVersion"
+
+    /// Bump when a change to `WatermarkConfiguration`'s defaults should not be
+    /// outlived by configs saved under the old defaults. A saved config is
+    /// restored on every launch, so without this a test device keeps rendering
+    /// last week's sizes no matter what the new defaults are — exactly the
+    /// "still small" report that prompted this.
+    ///
+    /// 2: frame styles — gallery default, millimetre sizing, measured metrics.
+    private static let schemaVersion = 2
 
     // MARK: - Save
 
@@ -39,6 +49,7 @@ public struct AppGroupConfigSync {
         do {
             let data = try JSONEncoder().encode(config)
             defaults.set(data, forKey: configKey)
+            defaults.set(schemaVersion, forKey: schemaVersionKey)
         } catch {
             #if DEBUG
             os_log(.error, "[AppGroupConfigSync] Failed to encode config: %@", error.localizedDescription)
@@ -57,6 +68,14 @@ public struct AppGroupConfigSync {
             #if DEBUG
             os_log(.error, "[AppGroupConfigSync] Failed to open UserDefaults suite '%@'", suiteName)
             #endif
+            return nil
+        }
+
+        // A config saved by an older schema is dropped rather than restored:
+        // it would otherwise pin the render to the old defaults forever.
+        guard defaults.integer(forKey: schemaVersionKey) == schemaVersion else {
+            defaults.removeObject(forKey: configKey)
+            defaults.removeObject(forKey: schemaVersionKey)
             return nil
         }
 
