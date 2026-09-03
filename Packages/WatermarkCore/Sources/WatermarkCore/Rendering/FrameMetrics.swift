@@ -126,7 +126,13 @@ public struct FrameMetrics: Sendable, Equatable {
     // MARK: Derived defaults
 
     /// Default border, in millimetres. Everything else keys off it.
-    public static let defaultBorderMillimetres: CGFloat = 5.0
+    ///
+    /// Calibrated so a typical 12MP phone photo (3024x4032) frames with the
+    /// reference card's proportions: 8mm at print resolution is ~3.3% of the
+    /// photo's width, which is what the reference measures. The earlier 5mm
+    /// was physically consistent but read half the reference's visual weight —
+    /// the complaint that "everything is small".
+    public static let defaultBorderMillimetres: CGFloat = 8.0
 
     /// Caption text default, in millimetres — the reference's ratio applied to
     /// the default border, so the two arrive in proportion.

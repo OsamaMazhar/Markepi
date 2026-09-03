@@ -33,7 +33,7 @@ enum EditorTool: String, CaseIterable, Identifiable {
         case .text: return "Text Watermark"
         case .logo: return "Logo"
         case .signature: return "Signature"
-        case .frame: return "White Frame"
+        case .frame: return "Frame"
         case .layers: return "Layers"
         case .output: return "More Settings"
         }

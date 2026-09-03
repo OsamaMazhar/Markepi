@@ -25,7 +25,9 @@ struct ContentView: View {
     @State private var photoPendingRemoval: PhotoItem? = nil
 
     // Editor tool-dock state. Starts on Text so controls are visible on launch.
-    @State private var activeTool: EditorTool? = .text
+    // Frame is the landing tool: the frame is applied the moment a photo is
+    // imported, so the controls that shape it are what the user should meet.
+    @State private var activeTool: EditorTool? = .frame
 
     /// Settings pane (gear icon) presentation state.
     @State private var showSettings = false
