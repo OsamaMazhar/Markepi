@@ -87,7 +87,9 @@ struct FramedExportGeometryTests {
             Issue.record("no output"); cleanup(inputURL); return
         }
 
-        let geometry = FrameGeometry(config: frame, sourceSize: source)
+        let geometry = FrameGeometry(
+            config: frame, sourceSize: source,
+            hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(config: frame, metadata: [:]))
         #expect(output.width == Int(geometry.framedSize.width))
         #expect(output.height == Int(geometry.framedSize.height))
 
@@ -239,8 +241,9 @@ struct FramedExportGeometryTests {
             let frame = WhiteFrameConfig(isEnabled: true, style: style,
                                          rightPrimary: .text("@test"))
             let config = WatermarkConfiguration(watermarks: [], whiteFrame: frame)
-            let geometry = FrameGeometry(config: frame, sourceSize: videoSize,
-                                         hasCaptionContent: true)
+            let geometry = FrameGeometry(
+                config: frame, sourceSize: videoSize,
+                hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(config: frame, metadata: [:]))
 
             let tree = try VideoLayerBuilder.buildLayers(
                 config: config, videoSize: videoSize, metadata: [:], isHDR: false)

@@ -45,9 +45,10 @@ struct FrameGeometryTests {
 
     // MARK: - Style differences
 
-    @Test("Classic mats are uniform on all four edges")
+    @Test("Classic mats are uniform when there is no caption to hold")
     func classicIsUniform() {
-        let g = FrameGeometry(config: Self.config(style: .classic), sourceSize: Self.portrait)
+        let g = FrameGeometry(config: Self.config(style: .classic), sourceSize: Self.portrait,
+                              hasCaptionContent: false)
         #expect(g.top == g.left)
         #expect(g.left == g.right)
         #expect(g.bottom == g.top)
@@ -74,23 +75,18 @@ struct FrameGeometryTests {
 
     // MARK: - Resolution independence
 
-    @Test("Classic proportions hold when the same photo is exported at two sizes")
-    func classicProportionsHoldAcrossResolutions() {
-        // Classic measures its mat as a proportion of the photo, so a frame
-        // looks the same at any export size. Gallery deliberately does not —
-        // it measures in millimetres, covered in the millimetre suite.
+    @Test("Classic measures the same on paper at any export size")
+    func classicIsPhysicalAcrossResolutions() {
+        // Both styles are millimetre-measured now. Classic used to take a
+        // percentage of the photo, so the same settings printed a different
+        // border for every camera.
         let small = CGSize(width: 1512, height: 2016)
         let large = CGSize(width: 6048, height: 8064)
-        let a = FrameGeometry(config: Self.config(style: .classic), sourceSize: small)
-        let b = FrameGeometry(config: Self.config(style: .classic), sourceSize: large)
+        let a = FrameGeometry(config: Self.config(style: .classic), sourceSize: small, dpi: 300)
+        let b = FrameGeometry(config: Self.config(style: .classic), sourceSize: large, dpi: 300)
 
-        let matRatioA = a.left / min(small.width, small.height)
-        let matRatioB = b.left / min(large.width, large.height)
-        #expect(abs(matRatioA - matRatioB) < 0.001, "mat ratio drifted")
-
-        let fontRatioA = a.captionFontSize / min(small.width, small.height)
-        let fontRatioB = b.captionFontSize / min(large.width, large.height)
-        #expect(abs(fontRatioA - fontRatioB) < 0.0001, "font ratio drifted")
+        #expect(a.left == b.left, "mat drifted with the pixel count")
+        #expect(a.captionFontSize == b.captionFontSize, "caption drifted with the pixel count")
     }
 
     @Test("Gallery's caption is sized from its physical mat, so the two stay in step")
@@ -138,12 +134,13 @@ struct FrameGeometryTests {
         #expect(FrameGeometry(config: Self.config(keyline: false), sourceSize: Self.portrait).keylineWidth == 0)
     }
 
-    @Test("The keyline scales with the source and is at least a pixel")
+    @Test("The keyline scales with the border and is at least a pixel")
     func keylineScales() {
-        let big = FrameGeometry(config: Self.config(keyline: true), sourceSize: Self.portrait)
-        let tiny = FrameGeometry(config: Self.config(keyline: true), sourceSize: CGSize(width: 80, height: 60))
-        #expect(big.keylineWidth > tiny.keylineWidth)
-        #expect(tiny.keylineWidth >= 1, "a keyline thinner than a pixel would vanish")
+        let thick = FrameGeometry(config: Self.config(keyline: true), sourceSize: Self.portrait, dpi: 600)
+        let thin = FrameGeometry(config: Self.config(keyline: true), sourceSize: Self.portrait, dpi: 72)
+        // Tied to the photo instead, it came out a hairline on small images.
+        #expect(thick.keylineWidth > thin.keylineWidth)
+        #expect(thin.keylineWidth >= 1, "a keyline thinner than a pixel would vanish")
     }
 
     @Test("The keyline is stroked outside the photo, so it covers none of it")
@@ -204,12 +201,12 @@ struct FrameGeometryMillimetreTests {
         #expect(small.left == large.left)
     }
 
-    @Test("Classic stays proportional and ignores the millimetre setting")
-    func classicIsUnaffected() {
+    @Test("Classic honours the millimetre border too")
+    func classicFollowsMillimetres() {
         let a = WhiteFrameConfig(isEnabled: true, style: .classic, borderMillimetres: 5)
         let b = WhiteFrameConfig(isEnabled: true, style: .classic, borderMillimetres: 40)
         #expect(FrameGeometry(config: a, sourceSize: Self.portrait).left
-                == FrameGeometry(config: b, sourceSize: Self.portrait).left)
+                < FrameGeometry(config: b, sourceSize: Self.portrait).left)
     }
 
     @Test("A wider millimetre border widens every edge")
@@ -346,13 +343,43 @@ struct GalleryMetricSizingTests {
         #expect(bigText.captionBand.height > bigText.captionFontSize * 2.75)
     }
 
-    @Test("Classic draws no mark and keeps proportional text")
-    func classicIsUnaffectedByMetricSettings() {
+    @Test("Classic measures its border and text in millimetres, and draws no mark")
+    func classicIsMetricToo() {
         let config = WhiteFrameConfig(isEnabled: true, style: .classic,
-                                      captionTextMillimetres: 15, logoHeightMillimetres: 25)
-        let g = FrameGeometry(config: config, sourceSize: Self.large)
-        #expect(g.logoHeight == 0)
-        #expect(g.captionFontSize == Self.large.height * config.textFontSizeRatio)
+                                      borderMillimetres: 10, captionTextMillimetres: 4,
+                                      logoHeightMillimetres: 25)
+        let g = FrameGeometry(config: config, sourceSize: Self.large, dpi: 300)
+        #expect(g.logoHeight == 0, "only gallery carries a brand mark")
+        #expect(g.captionFontSize == FrameGeometry.pixels(millimetres: 4, dpi: 300))
+        // A uniform border: the same millimetres on every edge.
+        #expect(g.top == g.left)
+        #expect(g.left == g.right)
+        #expect(g.top == FrameGeometry.pixels(millimetres: 10, dpi: 300)
+                + g.keylineWidth)
+    }
+
+    @Test("Classic's border stays put when the photo's pixel count changes")
+    func classicBorderIsPhysical() {
+        let config = WhiteFrameConfig(isEnabled: true, style: .classic, borderMillimetres: 8)
+        let small = FrameGeometry(config: config, sourceSize: CGSize(width: 1600, height: 1200), dpi: 300)
+        let large = FrameGeometry(config: config, sourceSize: CGSize(width: 6000, height: 4000), dpi: 300)
+        // Same millimetres, same pixels — what used to be 4% of the short edge
+        // printed a different border for every camera.
+        #expect(small.left == large.left)
+    }
+
+    @Test("Classic's bottom grows only when the caption outgrows the border")
+    func classicBottomHoldsItsCaption() {
+        let modest = WhiteFrameConfig(isEnabled: true, style: .classic,
+                                      borderMillimetres: 10, captionTextMillimetres: 3)
+        let uniform = FrameGeometry(config: modest, sourceSize: Self.large, dpi: 300)
+        #expect(uniform.bottom == uniform.top, "a caption that fits leaves the border uniform")
+
+        let oversized = WhiteFrameConfig(isEnabled: true, style: .classic,
+                                         borderMillimetres: 3, captionTextMillimetres: 12)
+        let stretched = FrameGeometry(config: oversized, sourceSize: Self.large, dpi: 300)
+        #expect(stretched.bottom > stretched.top, "the band has to hold the line it is given")
+        #expect(stretched.bottom > stretched.captionFontSize)
     }
 
     @Test("Metric settings are clamped and survive a round trip")
@@ -369,6 +396,8 @@ struct GalleryMetricSizingTests {
         #expect(decoded.logoHeightMillimetres == 6)
     }
 
+    /// Templates saved before the frame was measured in millimetres carry
+    /// `frameWidthRatio`/`textFontSizeRatio`, which nothing reads any more.
     @Test("A pre-metric template gets the metric defaults")
     func legacyTemplateGetsDefaults() throws {
         let legacy = """
@@ -379,7 +408,10 @@ struct GalleryMetricSizingTests {
         // The defaults are derived from the measured reference proportions,
         // so they move together if those are retuned.
         #expect(config.borderMillimetres == FrameMetrics.defaultBorderMillimetres)
-        #expect(config.captionTextMillimetres == FrameMetrics.defaultCaptionMillimetres)
+        // No style key means a classic template, whose caption sits inside the
+        // border rather than in gallery's taller band.
+        #expect(config.style == .classic)
+        #expect(config.captionTextMillimetres == FrameMetrics.defaultClassicCaptionMillimetres)
         #expect(config.logoHeightMillimetres == FrameMetrics.defaultMarkMillimetres)
     }
 }
@@ -522,5 +554,57 @@ struct LogoOptOutTests {
         json.removeValue(forKey: "logoEnabled")
         let data = try JSONSerialization.data(withJSONObject: json)
         #expect(try JSONDecoder().decode(WhiteFrameConfig.self, from: data).logoEnabled)
+    }
+}
+
+// MARK: - Classic in millimetres
+
+/// Classic used to size its border and caption as percentages of the photo, so
+/// the same settings printed a different frame for every camera. Both are
+/// physical now; these pin what that means.
+@Suite("Classic frame metrics")
+struct ClassicMetricTests {
+
+    private let source = CGSize(width: 4032, height: 3024)
+
+    @Test("A classic frame is even at its default settings")
+    func defaultsAreEven() {
+        let config = WhiteFrameConfig(isEnabled: true, style: .classic)
+        let g = FrameGeometry(config: config, sourceSize: source, dpi: 300)
+        #expect(g.top == g.left)
+        #expect(g.left == g.right)
+        #expect(g.bottom == g.top, "the default caption has to fit inside the border")
+    }
+
+    @Test("A new classic frame's caption fits its border; gallery's suits its band")
+    func captionDefaultFollowsStyle() {
+        #expect(WhiteFrameConfig(style: .classic).captionTextMillimetres
+                == FrameMetrics.defaultClassicCaptionMillimetres)
+        #expect(WhiteFrameConfig(style: .gallery).captionTextMillimetres
+                == FrameMetrics.defaultCaptionMillimetres)
+        // An explicit size is always taken as given.
+        #expect(WhiteFrameConfig(style: .classic, captionTextMillimetres: 9).captionTextMillimetres == 9)
+    }
+
+    @Test("The same millimetres print the same border at every export size")
+    func borderIsPhysical() {
+        let config = WhiteFrameConfig(isEnabled: true, style: .classic, borderMillimetres: 6)
+        let phone = FrameGeometry(config: config, sourceSize: CGSize(width: 4032, height: 3024), dpi: 300)
+        let medium = FrameGeometry(config: config, sourceSize: CGSize(width: 8000, height: 6000), dpi: 300)
+        #expect(phone.left == medium.left)
+        #expect(phone.captionFontSize == medium.captionFontSize)
+        #expect(phone.left == FrameGeometry.pixels(millimetres: 6, dpi: 300) + phone.keylineWidth)
+    }
+
+    @Test("Raising the export DPI puts the same millimetres on more pixels")
+    func dpiScalesEverything() {
+        let config = WhiteFrameConfig(isEnabled: true, style: .classic, borderMillimetres: 8,
+                                      captionTextMillimetres: 4)
+        let low = FrameGeometry(config: config, sourceSize: source, dpi: 150)
+        let high = FrameGeometry(config: config, sourceSize: source, dpi: 300)
+        #expect(high.left > low.left)
+        // Doubling the resolution doubles the pixels, give or take the rounding
+        // of a millimetre onto a pixel grid.
+        #expect(abs(high.captionFontSize - low.captionFontSize * 2) <= 1)
     }
 }

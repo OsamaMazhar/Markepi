@@ -47,75 +47,44 @@ struct WhiteFrameRendererTests {
 
     // MARK: - Border width tests
 
-    @Test("Frame width ratio 0.04 on 1000x800 produces 32pt border")
-    func frameWidthRatio040On1000x800() throws {
+    @Test("An 8mm border at 300dpi is a 94pt mat, whatever the photo's size")
+    func borderIsPhysical() throws {
         let config = WhiteFrameConfig(
             isEnabled: true,
-            frameWidthRatio: 0.04,
-            metadataTextEnabled: false
+            metadataTextEnabled: false,
+            borderMillimetres: 8
         )
-        let extent = CGRect(x: 0, y: 0, width: 1000, height: 800)
-        let metadata = emptyMetadata()
+        let small = CGRect(x: 0, y: 0, width: 1000, height: 800)
+        let large = CGRect(x: 0, y: 0, width: 6000, height: 4000)
 
-        let rendered = try WhiteFrameRenderer.render(
-            config: config, sourceSize: extent.size, metadata: metadata
+        let renderedSmall = try WhiteFrameRenderer.render(
+            config: config, sourceSize: small.size, metadata: emptyMetadata()
         )
-        // Frame width = min(1000, 800) × 0.04 = 32pt
-        #expect(rendered.extent == framedRect(config, extent, metadata: metadata),
-                "Rendered extent should be the framed canvas \(framedRect(config, extent, metadata: metadata)), got \(rendered.extent)")
-        #expect(!rendered.extent.isInfinite, "Rendered extent should not be infinite")
+        let renderedLarge = try WhiteFrameRenderer.render(
+            config: config, sourceSize: large.size, metadata: emptyMetadata()
+        )
+        #expect(renderedSmall.extent == framedRect(config, small))
+        #expect(renderedLarge.extent == framedRect(config, large))
+
+        // The same edge on both: 8mm at 300dpi plus the keyline. Sized as a
+        // percentage of the photo, this setting printed 32px of mat on the
+        // small photo and 160px on the large one.
+        let edge = FrameGeometry(config: config, sourceSize: small.size, dpi: 300).left
+        #expect(renderedSmall.extent.width - small.width == edge * 2)
+        #expect(renderedLarge.extent.width - large.width == edge * 2)
     }
 
-    @Test("Frame width ratio 0.03 (minimum per D-05) produces valid border")
-    func frameWidthRatioMinimum003() throws {
-        let config = WhiteFrameConfig(
-            isEnabled: true,
-            frameWidthRatio: 0.03,
-            metadataTextEnabled: false
-        )
-        let extent = CGRect(x: 0, y: 0, width: 1000, height: 800)
-
-        let rendered = try WhiteFrameRenderer.render(
-            config: config, sourceSize: extent.size, metadata: emptyMetadata()
-        )
-        // Frame width = min(1000, 800) × 0.03 = 24pt
-        #expect(rendered.extent == framedRect(config, extent))
-    }
-
-    @Test("Frame width ratio 0.05 (maximum per D-05) produces valid border")
-    func frameWidthRatioMaximum005() throws {
-        let config = WhiteFrameConfig(
-            isEnabled: true,
-            frameWidthRatio: 0.05,
-            metadataTextEnabled: false
-        )
-        let extent = CGRect(x: 0, y: 0, width: 1000, height: 800)
-
-        let rendered = try WhiteFrameRenderer.render(
-            config: config, sourceSize: extent.size, metadata: emptyMetadata()
-        )
-        // Frame width = min(1000, 800) × 0.05 = 40pt
-        #expect(rendered.extent == framedRect(config, extent))
-    }
-
-    @Test("Frame width ratio out-of-range values are clamped (0.02 → 0.03, 0.06 → 0.05)")
-    func frameWidthRatioClamping() {
-        // Init-time clamping per D-05: ratio must be in 0.03–0.05
-        let lowConfig = WhiteFrameConfig(frameWidthRatio: 0.02)
-        #expect(lowConfig.frameWidthRatio == 0.03, "0.02 should clamp to 0.03")
-
-        let highConfig = WhiteFrameConfig(frameWidthRatio: 0.06)
-        #expect(highConfig.frameWidthRatio == 0.05, "0.06 should clamp to 0.05")
-
-        let validConfig = WhiteFrameConfig(frameWidthRatio: 0.04)
-        #expect(validConfig.frameWidthRatio == 0.04, "0.04 should remain unchanged")
+    @Test("Border millimetres are clamped to something printable")
+    func borderMillimetreClamping() {
+        #expect(WhiteFrameConfig(borderMillimetres: 0).borderMillimetres == 0.5)
+        #expect(WhiteFrameConfig(borderMillimetres: 500).borderMillimetres == 50)
+        #expect(WhiteFrameConfig(borderMillimetres: 8).borderMillimetres == 8)
     }
 
     @Test("Frame width on square image (500x500) has equal border on all sides")
     func squareImageBorder() throws {
         let config = WhiteFrameConfig(
             isEnabled: true,
-            frameWidthRatio: 0.04,
             metadataTextEnabled: false
         )
         let extent = CGRect(x: 0, y: 0, width: 500, height: 500)
@@ -154,7 +123,6 @@ struct WhiteFrameRendererTests {
     func metadataTextEnabled() throws {
         let config = WhiteFrameConfig(
             isEnabled: true,
-            frameWidthRatio: 0.05,
             metadataTextEnabled: true
         )
         let extent = CGRect(x: 0, y: 0, width: 800, height: 600)
@@ -172,7 +140,6 @@ struct WhiteFrameRendererTests {
     func metadataTextDisabled() throws {
         let config = WhiteFrameConfig(
             isEnabled: true,
-            frameWidthRatio: 0.04,
             metadataTextEnabled: false
         )
         let extent = CGRect(x: 0, y: 0, width: 600, height: 400)
@@ -189,7 +156,6 @@ struct WhiteFrameRendererTests {
     func attributionPrefix() throws {
         let config = WhiteFrameConfig(
             isEnabled: true,
-            frameWidthRatio: 0.04,
             metadataTextEnabled: true
         )
         let extent = CGRect(x: 0, y: 0, width: 600, height: 400)
@@ -209,7 +175,6 @@ struct WhiteFrameRendererTests {
         let customText = "Custom Camera v2.0"
         let config = WhiteFrameConfig(
             isEnabled: true,
-            frameWidthRatio: 0.04,
             metadataTextEnabled: true,
             customAttributionText: customText
         )
@@ -229,7 +194,6 @@ struct WhiteFrameRendererTests {
     func nilCustomAttributionUsesAutoGeneration() throws {
         let config = WhiteFrameConfig(
             isEnabled: true,
-            frameWidthRatio: 0.04,
             metadataTextEnabled: true,
             customAttributionText: nil
         )
@@ -249,7 +213,6 @@ struct WhiteFrameRendererTests {
     func emptyMetadataFallback() throws {
         let config = WhiteFrameConfig(
             isEnabled: true,
-            frameWidthRatio: 0.04,
             metadataTextEnabled: true
         )
         let extent = CGRect(x: 0, y: 0, width: 600, height: 400)
@@ -268,7 +231,6 @@ struct WhiteFrameRendererTests {
     func hdrPreferredRange() throws {
         let config = WhiteFrameConfig(
             isEnabled: true,
-            frameWidthRatio: 0.04,
             metadataTextEnabled: false
         )
         let extent = CGRect(x: 0, y: 0, width: 400, height: 300)
@@ -303,7 +265,6 @@ struct WhiteFrameRendererTests {
     func transparentInnerArea() throws {
         let config = WhiteFrameConfig(
             isEnabled: true,
-            frameWidthRatio: 0.05,
             metadataTextEnabled: false
         )
         let extent = CGRect(x: 0, y: 0, width: 400, height: 300)
@@ -322,10 +283,10 @@ struct WhiteFrameRendererTests {
     func defaultConfigValues() {
         let config = WhiteFrameConfig()
         #expect(config.isEnabled == false, "Default isEnabled should be false")
-        #expect(config.frameWidthRatio == 0.04, "Default frameWidthRatio should be 0.04")
         #expect(config.metadataTextEnabled == true, "Default metadataTextEnabled should be true")
         #expect(config.customAttributionText == nil, "Default customAttributionText should be nil")
-        #expect(config.textFontSizeRatio == 0.018, "Default textFontSizeRatio should be 0.018")
+        #expect(config.borderMillimetres == FrameMetrics.defaultBorderMillimetres)
+        #expect(config.captionTextMillimetres == FrameMetrics.defaultCaptionMillimetres)
     }
 
     @Test("WhiteFrameConfig full initialization with all properties")
@@ -333,16 +294,16 @@ struct WhiteFrameRendererTests {
         let customColor = CGColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)
         let config = WhiteFrameConfig(
             isEnabled: true,
-            frameWidthRatio: 0.045,
             metadataTextEnabled: true,
             customAttributionText: "Shot on My Phone",
             textColor: customColor,
-            textFontSizeRatio: 0.5
+            borderMillimetres: 12,
+            captionTextMillimetres: 4
         )
         #expect(config.isEnabled == true)
-        #expect(config.frameWidthRatio == 0.045)
         #expect(config.metadataTextEnabled == true)
         #expect(config.customAttributionText == "Shot on My Phone")
-        #expect(config.textFontSizeRatio == 0.5)
+        #expect(config.borderMillimetres == 12)
+        #expect(config.captionTextMillimetres == 4)
     }
 }

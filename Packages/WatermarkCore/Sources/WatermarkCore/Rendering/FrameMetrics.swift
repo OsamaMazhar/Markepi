@@ -150,6 +150,17 @@ public struct FrameMetrics: Sendable, Equatable {
         (defaultBorderMillimetres * reference.captionToBorder * 100).rounded() / 100
     }
 
+    /// Caption default for `classic`, in millimetres.
+    ///
+    /// Classic's caption sits inside the border itself, not in a band three
+    /// times its thickness, so gallery's default would push the bottom edge out
+    /// of even. This is the proportion of border to text classic has always
+    /// had — the mat stays uniform at the default settings, and a caption set
+    /// larger than its border widens the bottom to hold it.
+    public static var defaultClassicCaptionMillimetres: CGFloat {
+        (defaultBorderMillimetres * 0.45 * 100).rounded() / 100
+    }
+
     /// Mark height default, in millimetres.
     public static var defaultMarkMillimetres: CGFloat {
         (defaultBorderMillimetres * reference.markToBorder * 100).rounded() / 100

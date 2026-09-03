@@ -244,12 +244,21 @@ public actor WatermarkEngine {
         // the opaque SDR-white frame doesn't glow with residual HDR boost.
         // A downscaled preview's base no longer matches the source-sized gain
         // map, and a preview never needs one.
+        // The mat is a millimetre measurement now, so the band the gain map has
+        // to neutralize is derived the same way the geometry derives it.
+        let frameBandRatio: CGFloat = {
+            guard let frame = config.whiteFrame, frame.isEnabled else { return 0 }
+            let shorter = min(normalized.extent.width, normalized.extent.height)
+            guard shorter > 0 else { return 0 }
+            let dpi = FrameGeometry.resolveDPI(from: loaded.metadata, config: frame)
+            return FrameGeometry.pixels(millimetres: frame.borderMillimetres, dpi: dpi) / shorter
+        }()
         let alignedGainMap = renderScale < 1 ? nil : GainMapProcessor.aligned(
             auxData: loaded.gainMapAuxData,
             type: loaded.gainMapType ?? .appleHDR,
             sourceOrientation: loaded.sourceOrientation,
             frameEnabled: config.whiteFrame?.isEnabled == true,
-            frameWidthRatio: config.whiteFrame?.frameWidthRatio ?? 0
+            frameWidthRatio: frameBandRatio
         )
 
         try ImageWriter.write(

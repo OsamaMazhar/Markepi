@@ -37,10 +37,7 @@ public struct FrameGeometry: Equatable, Sendable {
     /// never covers any of the photo.
     public let keylineWidth: CGFloat
 
-    /// Font size for caption text, in pixels.
-    ///
-    /// `gallery` derives it from a millimetre setting, like everything else it
-    /// measures; `classic` keeps its proportion of the source.
+    /// Font size for caption text, in pixels, from the millimetre setting.
     public let captionFontSize: CGFloat
 
     /// Height the brand mark is drawn at, in pixels. Zero for styles that draw
@@ -103,17 +100,10 @@ public struct FrameGeometry: Equatable, Sendable {
         self.sourceSize = sourceSize
         self.metrics = metrics
 
-        let shorter = min(sourceSize.width, sourceSize.height)
-
-        // The two styles mean different things by "border": classic is a
-        // proportion of the photo, gallery is a physical size on paper.
-        let mat: CGFloat
-        switch config.style {
-        case .classic:
-            mat = (shorter * config.frameWidthRatio).rounded()
-        case .gallery:
-            mat = Self.pixels(millimetres: config.borderMillimetres, dpi: dpi)
-        }
+        // Both styles measure the border the same way: a physical size on
+        // paper. Classic used to take a percentage of the photo, so the printed
+        // border moved with the camera's megapixels and no two exports matched.
+        let mat = Self.pixels(millimetres: config.borderMillimetres, dpi: dpi)
 
         // The keyline is a proportion of the mat rather than of the photo, so
         // it stays visible against the border it separates: tied to the photo
@@ -121,21 +111,15 @@ public struct FrameGeometry: Equatable, Sendable {
         let keyline = config.keylineEnabled ? max(1, (mat * metrics.keylineToBorder).rounded()) : 0
         self.keylineWidth = keyline
 
-        // Caption size follows whatever the style measures its mat in, so the
-        // two cannot fight. Classic scales with the photo, like its mat does.
-        // Gallery ties the text to its physical mat: if the caption kept
-        // scaling with pixels, a 48MP photo would have text taller than a 5mm
+        // Caption text is physical too, so it cannot fight the mat it sits in:
+        // sized in pixels, a 48MP photo would grow text taller than an 8mm
         // border, and the band would stop tracking the millimetre setting.
-        let fontSize: CGFloat
-        switch config.style {
-        case .classic:
-            fontSize = shorter * config.textFontSizeRatio
-            self.logoHeight = 0
-        case .gallery:
-            fontSize = Self.pixels(millimetres: config.captionTextMillimetres, dpi: dpi)
-            self.logoHeight = Self.pixels(millimetres: config.logoHeightMillimetres, dpi: dpi)
-        }
+        let fontSize = Self.pixels(millimetres: config.captionTextMillimetres, dpi: dpi)
         self.captionFontSize = fontSize
+        // Only gallery draws a brand mark.
+        self.logoHeight = config.style == .gallery
+            ? Self.pixels(millimetres: config.logoHeightMillimetres, dpi: dpi)
+            : 0
 
         // The keyline lives in the innermost part of the mat, so a mat has to
         // be at least thick enough to hold it and still read as a mat.
@@ -144,9 +128,12 @@ public struct FrameGeometry: Equatable, Sendable {
         let bottomEdge: CGFloat
         switch config.style {
         case .classic:
-            // A uniform border. Its single centred caption already fits the
-            // mat at the existing proportions, so the bottom is not special.
-            bottomEdge = edge
+            // A uniform border — but the caption is now sized independently of
+            // it, so the bottom has to be able to hold the line it is given.
+            // Only a caption set larger than its border pushes it out of
+            // uniform, which is the user asking for exactly that.
+            let line = (fontSize * metrics.linePitchToFont * 1.5).rounded() + keyline
+            bottomEdge = hasCaptionContent ? max(edge, line) : edge
         case .gallery where !hasCaptionContent:
             // Nothing to say, so no bar to say it in.
             bottomEdge = edge

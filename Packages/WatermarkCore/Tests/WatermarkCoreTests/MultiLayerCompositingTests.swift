@@ -81,7 +81,7 @@ struct MultiLayerCompositingTests {
                 .image(try ImageWatermarkInput(pngData: pngData, scale: 0.15, opacity: 1.0),
                        position: .bottomRight, scale: 0.15, opacity: 1.0, isVisible: true),
             ],
-            whiteFrame: WhiteFrameConfig(isEnabled: true, frameWidthRatio: 0.04,
+            whiteFrame: WhiteFrameConfig(isEnabled: true,
                                           metadataTextEnabled: true)
         )
 
@@ -198,7 +198,7 @@ struct MultiLayerCompositingTests {
                 .text(TextWatermarkInput(text: "Watermark", fontSize: 48, opacity: 1.0),
                       position: .center, scale: 0.15, opacity: 1.0, isVisible: true),
             ],
-            whiteFrame: WhiteFrameConfig(isEnabled: true, frameWidthRatio: 0.04,
+            whiteFrame: WhiteFrameConfig(isEnabled: true,
                                           metadataTextEnabled: true)
         )
 
@@ -306,7 +306,7 @@ struct MultiLayerCompositingTests {
                 .image(try ImageWatermarkInput(pngData: pngData, scale: 0.15, opacity: 0.8),
                        position: .bottomRight, scale: 0.12, opacity: 1.0, isVisible: true),
             ],
-            whiteFrame: WhiteFrameConfig(isEnabled: true, frameWidthRatio: 0.04,
+            whiteFrame: WhiteFrameConfig(isEnabled: true,
                                           metadataTextEnabled: true)
         )
 

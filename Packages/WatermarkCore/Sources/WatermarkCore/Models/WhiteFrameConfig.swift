@@ -179,11 +179,6 @@ public struct WhiteFrameConfig: Sendable, Codable {
     /// Whether the white frame overlay is enabled
     public var isEnabled: Bool
 
-    /// Proportion of shorter image dimension used as frame width.
-    /// Clamped to 0.03–0.05 per D-05 at init time (warning-level tolerance).
-    /// Default: 0.04 (4% of shorter dimension)
-    public var frameWidthRatio: CGFloat
-
     /// Master switch for the bottom-frame caption. When false, no text is
     /// rendered regardless of `captionPrefix`/`captionFields`.
     /// Default: true
@@ -210,11 +205,6 @@ public struct WhiteFrameConfig: Sendable, Codable {
     /// Default: dark gray (CGColor(gray: 0.333, alpha: 1.0))
     public var textColor: CGColor
 
-    /// Text font size as proportion of the image's shorter dimension.
-    /// 0.018 = 1.8% of shorter dimension (e.g., 54pt for a 3000px image).
-    /// Default: 0.018
-    public var textFontSizeRatio: CGFloat
-
     /// Which frame look to render. Default: `.gallery` — the mat with the
     /// device, date, brand mark and shooting details.
     ///
@@ -240,23 +230,32 @@ public struct WhiteFrameConfig: Sendable, Codable {
     /// raising it makes the same millimetres land on more pixels.
     public var outputDPI: CGFloat?
 
-    /// Mat thickness in millimetres, used by `gallery`.
+    /// Mat thickness in millimetres — every style measures its border this way.
     ///
-    /// A physical size rather than a proportion: 5mm is 5mm on paper whatever
-    /// the photo's pixel dimensions. `classic` keeps `frameWidthRatio`, which
-    /// is proportional — the two styles genuinely mean different things by
-    /// "border", and existing templates keep the ratio they were saved with.
+    /// A physical size rather than a proportion: 8mm is 8mm on paper whatever
+    /// the photo's pixel dimensions, so the same settings print the same frame
+    /// from a 12MP phone shot and a 60MP raw. Classic used to size its border
+    /// as a percentage of the photo instead, which meant the printed border
+    /// changed with the camera.
     ///
     /// Converted to pixels against the photo's own resolution; see
     /// `FrameGeometry.resolveDPI`.
     public var borderMillimetres: CGFloat
 
-    /// Caption text size in millimetres, used by `gallery`.
+    /// The caption size a new frame of this style starts at.
+    public static func defaultCaptionMillimetres(for style: FrameStyle) -> CGFloat {
+        switch style {
+        case .classic: return FrameMetrics.defaultClassicCaptionMillimetres
+        case .gallery: return FrameMetrics.defaultCaptionMillimetres
+        }
+    }
+
+    /// Caption text size in millimetres — every style measures its text this
+    /// way.
     ///
-    /// Physical like the border it sits in. If the text were sized as a
-    /// proportion of the photo instead, a large photo would grow text that a
-    /// millimetre border could not hold — the two units would fight.
-    /// `classic` keeps `textFontSizeRatio`.
+    /// Physical like the border it sits in. Sized as a proportion of the photo
+    /// instead, a large photo would grow text that a millimetre border could
+    /// not hold — the two units would fight.
     public var captionTextMillimetres: CGFloat
 
     /// Brand mark height in millimetres, used by `gallery`.
@@ -310,26 +309,23 @@ public struct WhiteFrameConfig: Sendable, Codable {
     ///
     /// - Parameters:
     ///   - isEnabled: Whether to apply the white frame (default: false)
-    ///   - frameWidthRatio: Proportion of shorter image dimension 0.03–0.05 (default: 0.04)
     ///   - metadataTextEnabled: Whether to render the caption (default: true)
     ///   - captionPrefix: Free text shown before the fields (default: "")
     ///   - captionFields: Metadata fields to include (default: camera + shooting details)
     ///   - customAttributionText: Legacy verbatim override, nil = use prefix+fields (default: nil)
     ///   - textColor: CGColor for the metadata text (nil = per-style default:
     ///     black on a gallery mat, dark grey on a classic one)
-    ///   - textFontSizeRatio: Font size as proportion of image shorter dimension (default: 0.018)
+
     public init(
         isEnabled: Bool = false,
-        frameWidthRatio: CGFloat = 0.04,
         metadataTextEnabled: Bool = true,
         captionPrefix: String = "",
         captionFields: [CaptionField] = WhiteFrameConfig.defaultCaptionFields,
         customAttributionText: String? = nil,
         textColor: CGColor? = nil,
-        textFontSizeRatio: CGFloat = 0.018,
         style: FrameStyle = .gallery,
         borderMillimetres: CGFloat = FrameMetrics.defaultBorderMillimetres,
-        captionTextMillimetres: CGFloat = FrameMetrics.defaultCaptionMillimetres,
+        captionTextMillimetres: CGFloat? = nil,
         logoHeightMillimetres: CGFloat = FrameMetrics.defaultMarkMillimetres,
         keylineEnabled: Bool = true,
         logoEnabled: Bool = true,
@@ -342,7 +338,6 @@ public struct WhiteFrameConfig: Sendable, Codable {
     ) {
         self.isEnabled = isEnabled
         // Clamp to 0.03–0.05 per D-05 (warning-level tolerance, not a throw)
-        self.frameWidthRatio = min(0.05, max(0.03, frameWidthRatio))
         self.metadataTextEnabled = metadataTextEnabled
         self.captionPrefix = captionPrefix
         self.captionFields = captionFields
@@ -353,12 +348,14 @@ public struct WhiteFrameConfig: Sendable, Codable {
         self.textColor = textColor ?? (style == .gallery
             ? CGColor(gray: 0.0, alpha: 1.0)
             : CGColor(gray: 0.333, alpha: 1.0))
-        self.textFontSizeRatio = textFontSizeRatio
         self.style = style
         // A hairline mat is a rendering bug waiting to happen, and nobody
         // frames a print with a 10cm border; clamp rather than throw.
         self.borderMillimetres = min(50, max(0.5, borderMillimetres))
-        self.captionTextMillimetres = min(20, max(0.5, captionTextMillimetres))
+        // Each style's caption default suits the space it sits in; an explicit
+        // size is always taken as given.
+        self.captionTextMillimetres = min(20, max(0.5,
+            captionTextMillimetres ?? Self.defaultCaptionMillimetres(for: style)))
         self.logoHeightMillimetres = min(30, max(0.5, logoHeightMillimetres))
         self.keylineEnabled = keylineEnabled
         self.logoEnabled = logoEnabled
@@ -375,9 +372,9 @@ public struct WhiteFrameConfig: Sendable, Codable {
     // MARK: - Codable (CGColor)
 
     enum CodingKeys: String, CodingKey {
-        case isEnabled, frameWidthRatio, metadataTextEnabled
+        case isEnabled, metadataTextEnabled
         case captionPrefix, captionFields
-        case customAttributionText, textColorRGBA, textFontSizeRatio
+        case customAttributionText, textColorRGBA
         case style, borderMillimetres, captionTextMillimetres, logoHeightMillimetres
         case keylineEnabled, logoVariant, outputDPI, logoEnabled
         case leftPrimary, leftSecondary, rightPrimary, rightSecondary
@@ -386,7 +383,6 @@ public struct WhiteFrameConfig: Sendable, Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
-        frameWidthRatio = try container.decode(CGFloat.self, forKey: .frameWidthRatio)
         metadataTextEnabled = try container.decode(Bool.self, forKey: .metadataTextEnabled)
         // New fields are optional so older saved configs keep decoding: absent
         // captionFields fall back to the default shooting-details set, matching
@@ -395,7 +391,6 @@ public struct WhiteFrameConfig: Sendable, Codable {
         captionFields = try container.decodeIfPresent([CaptionField].self, forKey: .captionFields)
             ?? WhiteFrameConfig.defaultCaptionFields
         customAttributionText = try container.decodeIfPresent(String.self, forKey: .customAttributionText)
-        textFontSizeRatio = try container.decode(CGFloat.self, forKey: .textFontSizeRatio)
         let rgba = try container.decode([CGFloat].self, forKey: .textColorRGBA)
         guard rgba.count == 4,
               let cgColor = CGColor(colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
@@ -411,7 +406,8 @@ public struct WhiteFrameConfig: Sendable, Codable {
         borderMillimetres = min(50, max(0.5,
             try container.decodeIfPresent(CGFloat.self, forKey: .borderMillimetres) ?? FrameMetrics.defaultBorderMillimetres))
         captionTextMillimetres = min(20, max(0.5,
-            try container.decodeIfPresent(CGFloat.self, forKey: .captionTextMillimetres) ?? FrameMetrics.defaultCaptionMillimetres))
+            try container.decodeIfPresent(CGFloat.self, forKey: .captionTextMillimetres)
+                ?? Self.defaultCaptionMillimetres(for: style)))
         logoHeightMillimetres = min(30, max(0.5,
             try container.decodeIfPresent(CGFloat.self, forKey: .logoHeightMillimetres) ?? FrameMetrics.defaultMarkMillimetres))
         keylineEnabled = try container.decodeIfPresent(Bool.self, forKey: .keylineEnabled) ?? false
@@ -432,12 +428,10 @@ public struct WhiteFrameConfig: Sendable, Codable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(isEnabled, forKey: .isEnabled)
-        try container.encode(frameWidthRatio, forKey: .frameWidthRatio)
         try container.encode(metadataTextEnabled, forKey: .metadataTextEnabled)
         try container.encode(captionPrefix, forKey: .captionPrefix)
         try container.encode(captionFields, forKey: .captionFields)
         try container.encodeIfPresent(customAttributionText, forKey: .customAttributionText)
-        try container.encode(textFontSizeRatio, forKey: .textFontSizeRatio)
         // Convert first: `CGColor(gray:alpha:)` has two components, so reading
         // `.components` straight off a grey colour fell through to the 0.333
         // fallback and silently rewrote the caption tone on every save.

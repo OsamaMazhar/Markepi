@@ -21,7 +21,8 @@ private let frameLog = Logger(subsystem: "com.watermark.core", category: "WhiteF
 /// "Taken by: [Device Model]" attribution text on the bottom frame (D-06).
 ///
 /// Pipeline:
-///   1. Calculate frame width from baseExtent shorter dimension × frameWidthRatio
+///   1. Take the mat thickness from `FrameGeometry` (millimetres at the
+///      export's resolution)
 ///   2. Draw full white rect over entire extent, then cut transparent inner area
 ///      using `.clear` blend mode (per D-04: uniform border, not solid fill)
 ///   3. Optionally render metadata attribution text centered on bottom frame

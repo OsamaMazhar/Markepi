@@ -35,7 +35,7 @@ private let valueFlags: Set<String> = [
     "--output", "--format", "--quality", "--padding", "--privacy",
     "--text", "--text-position", "--text-size", "--text-font", "--text-color", "--text-opacity",
     "--logo", "--logo-position", "--logo-size", "--logo-opacity", "--logo-rotation",
-    "--border-width", "--border-caption", "--border-fields", "--border-text-color", "--border-text-size",
+    "--border-caption", "--border-fields", "--border-text-color",
     "--border-style", "--border-mm", "--border-caption-mm", "--border-logo-mm", "--border-dpi", "--border-logo-variant",
     "--border-left-primary", "--border-left-secondary",
     "--border-right-primary", "--border-right-secondary",
@@ -289,9 +289,6 @@ struct Markepi {
         if flags.has("--border") || flags.touched(prefix: "--border-") {
             config.whiteFrame = WhiteFrameConfig(
                 isEnabled: true,
-                frameWidthRatio: CGFloat(try flags.value("--border-width").map {
-                    try doubleValue($0, flag: "--border-width", in: 0.03...0.05)
-                } ?? 0.04),
                 metadataTextEnabled: !flags.has("--border-no-text"),
                 captionPrefix: flags.value("--border-caption") ?? "",
                 captionFields: try flags.value("--border-fields").map(captionFields) 
@@ -299,9 +296,6 @@ struct Markepi {
                 textColor: try flags.value("--border-text-color").map {
                     try colorValue($0, flag: "--border-text-color")
                 },
-                textFontSizeRatio: CGFloat(try flags.value("--border-text-size").map {
-                    try doubleValue($0, flag: "--border-text-size", in: 0.005...0.05)
-                } ?? 0.018),
                 style: try flags.value("--border-style").map { try enumValue($0, flag: "--border-style") }
                     ?? WhiteFrameConfig().style,
                 // Defer to the model's defaults rather than restating them,

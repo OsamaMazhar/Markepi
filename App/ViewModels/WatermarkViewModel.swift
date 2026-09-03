@@ -436,10 +436,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
         }
         if let wf = config.whiteFrame {
             parts.append(
-                "wf:\(wf.isEnabled ? 1 : 0)|fw:\(String(format: "%.4f", wf.frameWidthRatio))"
+                "wf:\(wf.isEnabled ? 1 : 0)"
                 + "|mt:\(wf.metadataTextEnabled ? 1 : 0)|at:\(wf.customAttributionText ?? "auto")"
                 + "|cpfx:\(wf.captionPrefix)|cf:\(wf.captionFields.map(\.rawValue).joined(separator: ","))"
-                + "|tc:\(Self.colorKey(wf.textColor))|tfs:\(String(format: "%.4f", wf.textFontSizeRatio))"
+                + "|tc:\(Self.colorKey(wf.textColor))"
                 + "|st:\(wf.style.rawValue)|kl:\(wf.keylineEnabled ? 1 : 0)|lv:\(wf.logoVariant.rawValue)"
                 + "|bmm:\(String(format: "%.2f", wf.borderMillimetres))"
                 + "|cmm:\(String(format: "%.2f", wf.captionTextMillimetres))"

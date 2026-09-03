@@ -56,13 +56,9 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
                 keylineRow
                 Divider().padding(.leading, 16)
 
-                // Each style measures its border in its own unit: classic as a
-                // proportion of the photo, gallery in millimetres on paper.
-                if styleBinding.wrappedValue == .classic {
-                    thicknessRow
-                } else {
-                    borderMillimetresRow
-                }
+                // Every style measures its border the same way: millimetres on
+                // paper, at the export's resolution.
+                borderMillimetresRow
 
                 Divider().padding(.leading, 16)
                 captionToggleRow
@@ -74,7 +70,7 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
                         Divider().padding(.leading, 16)
                         captionFieldsRow
                         Divider().padding(.leading, 16)
-                        captionSizeRow
+                        captionMillimetresRow
                     } else {
                         Divider().padding(.leading, 16)
                         slotGroupHeader("Caption, left side")
@@ -178,8 +174,11 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
     }
 
     private var captionMillimetresRow: some View {
-        millimetreRow("Text size", identifier: "caption",
-                      binding: captionMMBinding, range: 1...10, step: 0.25)
+        millimetreRow(
+            "Text size", identifier: "caption",
+            subtitle: styleBinding.wrappedValue == .classic
+                ? "The bottom of the border widens to hold it" : nil,
+            binding: captionMMBinding, range: 1...10, step: 0.25)
     }
 
     private var logoMillimetresRow: some View {
@@ -279,24 +278,6 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
         }
     }
 
-    private var thicknessRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Thickness")
-                    .markepiTypography(.controlLabel)
-                Spacer()
-                Text("\(Int((frameWidthBinding.wrappedValue * 100).rounded()))%")
-                    .markepiTypography(.value)
-                    .monospacedDigit()
-            }
-            // D-05 keeps the border within 3–5% of the shorter dimension.
-            Slider(value: frameWidthBinding, in: 0.03...0.05)
-                .accessibilityLabel("Frame thickness")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
     private var captionToggleRow: some View {
         Toggle(isOn: metadataTextBinding) {
             VStack(alignment: .leading, spacing: 2) {
@@ -372,24 +353,6 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
         .accessibilityHint("Double tap to \(isOn ? "remove from" : "add to") the caption")
     }
 
-    private var captionSizeRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Caption Size")
-                    .markepiTypography(.controlLabel)
-                Spacer()
-                Text("\(String(format: "%.1f", captionSizeBinding.wrappedValue * 100))%")
-                    .markepiTypography(.value)
-                    .monospacedDigit()
-            }
-            // Caption font size as a fraction of the shorter image dimension.
-            Slider(value: captionSizeBinding, in: 0.010...0.030)
-                .accessibilityLabel("Caption text size")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
     private var captionColorRow: some View {
         HStack {
             Text("Caption Color")
@@ -414,17 +377,24 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
         viewModel.config.whiteFrame = frame
     }
 
-    private var frameWidthBinding: Binding<CGFloat> {
-        Binding(
-            get: { viewModel.config.whiteFrame?.frameWidthRatio ?? 0.04 },
-            set: { newValue in mutateFrame { $0.frameWidthRatio = newValue } }
-        )
-    }
-
     private var styleBinding: Binding<FrameStyle> {
         Binding(
             get: { viewModel.config.whiteFrame?.style ?? .classic },
-            set: { newValue in mutateFrame { $0.style = newValue } }
+            set: { newValue in
+                mutateFrame { frame in
+                    // A caption still at its style's default follows the style
+                    // — classic's sits inside the border, gallery's in a band
+                    // three times as thick, so they want different sizes. A
+                    // size the user actually chose is left alone.
+                    let untouched = frame.captionTextMillimetres
+                        == WhiteFrameConfig.defaultCaptionMillimetres(for: frame.style)
+                    frame.style = newValue
+                    if untouched {
+                        frame.captionTextMillimetres =
+                            WhiteFrameConfig.defaultCaptionMillimetres(for: newValue)
+                    }
+                }
+            }
         )
     }
 
@@ -507,13 +477,6 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
                 frame.captionFields = CaptionField.allCases.filter { frame.captionFields.contains($0) }
             }
         }
-    }
-
-    private var captionSizeBinding: Binding<CGFloat> {
-        Binding(
-            get: { viewModel.config.whiteFrame?.textFontSizeRatio ?? 0.018 },
-            set: { newValue in mutateFrame { $0.textFontSizeRatio = newValue } }
-        )
     }
 
     private var captionColorBinding: Binding<Color> {

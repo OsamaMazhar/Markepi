@@ -645,23 +645,36 @@ struct WatermarkEngineTests {
             #expect(pixelData != nil)
 
             if let data = pixelData {
-                let width = 400
-                // Sample top-left region — should show text watermark, not pure white frame
-                // (text is dark "TOP" on white frame at topLeft)
-                let tlOffset = (20 * width + 30) * 4
-                guard tlOffset + 3 < data.count else {
-                    Issue.record("Top-left pixel offset out of bounds")
-                    cleanup(inputURL, outputURL)
-                    return
+                // The watermark sits INSIDE the photo, which the mat surrounds —
+                // so look for it in the photo's top-left quadrant rather than at
+                // a fixed offset, which lands in the mat as soon as the border
+                // changes size. White "TOP" on a mid-grey photo: the proof the
+                // watermark composited on top is a near-white pixel in there.
+                let width = cgImage.width
+                let geometry = FrameGeometry(
+                    config: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false,
+                                             style: .classic),
+                    sourceSize: CGSize(width: 400, height: 300),
+                    dpi: 300,
+                    hasCaptionContent: false)
+                let photo = geometry.photoRect
+                var foundInk = false
+                var y = Int(photo.minY)
+                while y < Int(photo.midY), !foundInk {
+                    var x = Int(photo.minX)
+                    while x < Int(photo.midX) {
+                        let offset = (y * width + x) * 4
+                        guard offset + 3 < data.count else { break }
+                        if data[offset] > 240, data[offset + 1] > 240, data[offset + 2] > 240 {
+                            foundInk = true
+                            break
+                        }
+                        x += 1
+                    }
+                    y += 1
                 }
-                let r = data[tlOffset], g = data[tlOffset + 1], b = data[tlOffset + 2]
-
-                // RED: frame not rendered, only watermark on base color
-                // GREEN: frame rendered, watermark composited on top of frame
-                // The watermark at topLeft should be visible (not pure white from frame)
-                // With text "TOP" in dark color on white background → some pixels dark
-                #expect(r < 240 || g < 240 || b < 240,
-                        "Top-left region should show watermark, not pure white frame (got r=\(r), g=\(g), b=\(b))")
+                #expect(foundInk,
+                        "the watermark should be visible on the photo, inside the mat")
             }
 
             cleanup(inputURL, outputURL)
@@ -683,7 +696,6 @@ struct WatermarkEngineTests {
             watermarks: [],
             whiteFrame: WhiteFrameConfig(
                 isEnabled: true,
-                frameWidthRatio: 0.05,
                 metadataTextEnabled: true,
                 // Predates frame styles: asserts classic's centred caption.
                 style: .classic
@@ -694,7 +706,6 @@ struct WatermarkEngineTests {
             watermarks: [],
             whiteFrame: WhiteFrameConfig(
                 isEnabled: true,
-                frameWidthRatio: 0.05,
                 metadataTextEnabled: false,
                 // Predates frame styles: asserts classic's centred caption.
                 style: .classic
@@ -812,7 +823,6 @@ struct WatermarkEngineTests {
             watermarks: [],
             whiteFrame: WhiteFrameConfig(
                 isEnabled: true,
-                frameWidthRatio: 0.05,
                 metadataTextEnabled: true,
                 customAttributionText: customText,
                 // Predates frame styles: asserts classic's centred caption.
@@ -824,7 +834,6 @@ struct WatermarkEngineTests {
             watermarks: [],
             whiteFrame: WhiteFrameConfig(
                 isEnabled: true,
-                frameWidthRatio: 0.05,
                 metadataTextEnabled: false,
                 // Predates frame styles: asserts classic's centred caption.
                 style: .classic
@@ -986,7 +995,6 @@ struct WatermarkEngineTests {
             ],
             whiteFrame: WhiteFrameConfig(
                 isEnabled: true,
-                frameWidthRatio: 0.04,
                 metadataTextEnabled: true
             )
         )

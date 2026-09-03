@@ -53,9 +53,6 @@ LOGO WATERMARK                 (applied when --logo is given)
 
 BORDER / WHITE FRAME           (applied when --border or any --border-* is given)
       --border                 Draw the white frame.
-      --border-width <0.03–0.05>
-                               Frame width as a fraction of the short edge
-                               (default: 0.04)
       --border-caption <text>  Free text before the metadata fields, e.g.
                                "Shot on". EXIF tokens work here too.
       --border-fields <list>   Comma-separated metadata fields printed in the
@@ -68,17 +65,14 @@ BORDER / WHITE FRAME           (applied when --border or any --border-* is given
       --border-text-color <hex>
                                Caption colour (default: black on a gallery
                                mat, #555555 on a classic one)
-      --border-text-size <0.005–0.05>
-                               Caption size as a fraction of the short edge
-                               (default: 0.018, classic only)
       --border-style <style>   classic | gallery (default: gallery)
 
-  Gallery style is measured in millimetres, converted at --border-dpi:
+  The frame is measured in millimetres, converted at --border-dpi:
       --border-mm <0.5–50>     Mat thickness (default: 8)
       --border-caption-mm <0.5–20>
                                Caption text height (default: 5.84)
       --border-logo-mm <0.5–30>
-                               Brand mark height (default: 13.6)
+                               Brand mark height, gallery only (default: 13.6)
       --border-dpi <36–2400>   Resolution the millimetres convert against.
                                Omit to use the photo's own resolution when it
                                is a real print measurement, else 300.
