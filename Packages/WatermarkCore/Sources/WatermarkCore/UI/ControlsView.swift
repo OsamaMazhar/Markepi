@@ -268,6 +268,7 @@ private struct ControlSection<Content: View>: View {
             content()
         }
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("controls.section.\(label.lowercased())")
         .accessibilityLabel(label)
         .markepiGlass(
             shape: RoundedRectangle(cornerRadius: 12, style: .continuous),

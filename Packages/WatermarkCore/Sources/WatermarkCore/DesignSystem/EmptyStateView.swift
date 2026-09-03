@@ -148,6 +148,7 @@ public struct EmptyStateView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(FilledAccentButtonStyle())
+                .accessibilityIdentifier("empty.choosePhoto")
             }
             if let onImportFiles {
                 Button(action: onImportFiles) {
@@ -155,6 +156,7 @@ public struct EmptyStateView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(FilledAccentButtonStyle())
+                .accessibilityIdentifier("empty.importFiles")
             }
         }
         .frame(maxWidth: 360)

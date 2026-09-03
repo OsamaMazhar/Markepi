@@ -299,6 +299,7 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "chevron.backward")
                     }
+                    .accessibilityIdentifier("chrome.back")
                     .accessibilityLabel("Back to start")
                 } else {
                     // First page: upgrade to Premium. A metallic-gold crown with
@@ -318,6 +319,7 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "gearshape")
                 }
+                .accessibilityIdentifier("chrome.settings")
                 .accessibilityLabel("Settings")
 
                 // Add / import / reset / export only matter once media is loaded;
@@ -328,6 +330,7 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "photo.badge.plus")
                     }
+                    .accessibilityIdentifier("chrome.addPhotos")
                     .accessibilityLabel("Add photos")
 
                     Button {
@@ -335,6 +338,7 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "folder.badge.plus")
                     }
+                    .accessibilityIdentifier("chrome.importFiles")
                     .accessibilityLabel("Import from Files")
 
                     if viewModel.hasBatchOverrides {

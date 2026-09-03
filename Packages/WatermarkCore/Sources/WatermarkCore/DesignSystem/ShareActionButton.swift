@@ -47,6 +47,7 @@ public struct ShareActionButton<ViewModel: WatermarkConfigurable & Observable>: 
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.markepiPrimary())
+                .accessibilityIdentifier("share.render")
 
             case .rendering:
                 HStack(spacing: 8) {
@@ -82,6 +83,7 @@ public struct ShareActionButton<ViewModel: WatermarkConfigurable & Observable>: 
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.markepiPrimary())
+                .accessibilityIdentifier("share.present")
 
             case .error:
                 Button {
@@ -91,6 +93,7 @@ public struct ShareActionButton<ViewModel: WatermarkConfigurable & Observable>: 
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.markepiSecondary())
+                .accessibilityIdentifier("share.retry")
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.renderingState)

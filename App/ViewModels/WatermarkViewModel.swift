@@ -378,6 +378,12 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 + "|mt:\(wf.metadataTextEnabled ? 1 : 0)|at:\(wf.customAttributionText ?? "auto")"
                 + "|cpfx:\(wf.captionPrefix)|cf:\(wf.captionFields.map(\.rawValue).joined(separator: ","))"
                 + "|tc:\(Self.colorKey(wf.textColor))|tfs:\(String(format: "%.4f", wf.textFontSizeRatio))"
+                + "|st:\(wf.style.rawValue)|kl:\(wf.keylineEnabled ? 1 : 0)|lv:\(wf.logoVariant.rawValue)"
+                + "|bmm:\(String(format: "%.2f", wf.borderMillimetres))"
+                + "|cmm:\(String(format: "%.2f", wf.captionTextMillimetres))"
+                + "|lmm:\(String(format: "%.2f", wf.logoHeightMillimetres))"
+                + "|lp:\(Self.slotKey(wf.leftPrimary))|ls:\(Self.slotKey(wf.leftSecondary))"
+                + "|rp:\(Self.slotKey(wf.rightPrimary))|rs:\(Self.slotKey(wf.rightSecondary))"
             )
         } else {
             parts.append("wf:none")
@@ -391,6 +397,16 @@ final class WatermarkViewModel: WatermarkConfigurable {
             parts.append("ds:none")
         }
         return parts.joined(separator: "~")
+    }
+
+    /// Compact, stable key for a caption slot, so editing one refreshes the
+    /// preview instead of leaving it stale.
+    private static func slotKey(_ slot: CaptionSlot) -> String {
+        switch slot {
+        case .empty: return "none"
+        case .field(let field): return "f:\(field.rawValue)"
+        case .text(let text): return "t:\(text)"
+        }
     }
 
     /// Compact, stable string key for a CGColor's components, used to make

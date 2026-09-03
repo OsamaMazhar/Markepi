@@ -45,22 +45,52 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+            .accessibilityIdentifier("frame.enable")
             .accessibilityLabel("White frame")
             .accessibilityHint("Add a white border with device model text to your photo")
 
             if isEnabled {
                 Divider().padding(.leading, 16)
-                thicknessRow
+                styleRow
+                Divider().padding(.leading, 16)
+                keylineRow
+                Divider().padding(.leading, 16)
+
+                // Each style measures its border in its own unit: classic as a
+                // proportion of the photo, gallery in millimetres on paper.
+                if styleBinding.wrappedValue == .classic {
+                    thicknessRow
+                } else {
+                    borderMillimetresRow
+                }
+
                 Divider().padding(.leading, 16)
                 captionToggleRow
 
                 if viewModel.config.whiteFrame?.metadataTextEnabled == true {
-                    Divider().padding(.leading, 16)
-                    captionPrefixRow
-                    Divider().padding(.leading, 16)
-                    captionFieldsRow
-                    Divider().padding(.leading, 16)
-                    captionSizeRow
+                    if styleBinding.wrappedValue == .classic {
+                        Divider().padding(.leading, 16)
+                        captionPrefixRow
+                        Divider().padding(.leading, 16)
+                        captionFieldsRow
+                        Divider().padding(.leading, 16)
+                        captionSizeRow
+                    } else {
+                        Divider().padding(.leading, 16)
+                        slotRow("Top left", identifier: "leftPrimary", binding: slotBinding(\.leftPrimary))
+                        Divider().padding(.leading, 16)
+                        slotRow("Bottom left", identifier: "leftSecondary", binding: slotBinding(\.leftSecondary))
+                        Divider().padding(.leading, 16)
+                        slotRow("Top right", identifier: "rightPrimary", binding: slotBinding(\.rightPrimary))
+                        Divider().padding(.leading, 16)
+                        slotRow("Bottom right", identifier: "rightSecondary", binding: slotBinding(\.rightSecondary))
+                        Divider().padding(.leading, 16)
+                        captionMillimetresRow
+                        Divider().padding(.leading, 16)
+                        logoMillimetresRow
+                        Divider().padding(.leading, 16)
+                        logoVariantRow
+                    }
                     Divider().padding(.leading, 16)
                     captionColorRow
                 }
@@ -69,6 +99,153 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
     }
 
     // MARK: - Rows
+
+    private var styleRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Style")
+                .markepiTypography(.controlLabel)
+            Picker("Style", selection: styleBinding) {
+                ForEach(FrameStyle.allCases) { style in
+                    Text(style.displayName).tag(style)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("frame.style")
+            .accessibilityLabel("Frame style")
+            Text(styleBinding.wrappedValue.summary)
+                .markepiTypography(.metadata)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var keylineRow: some View {
+        Toggle(isOn: keylineBinding) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Keyline")
+                    .markepiTypography(.controlLabel)
+                Text("A thin black line between the photo and the border")
+                    .markepiTypography(.metadata)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .accessibilityIdentifier("frame.keyline")
+        .accessibilityHint("Adds a thin black outline around the photo")
+    }
+
+    /// A millimetre control. Physical sizes, so the same setting prints the
+    /// same whatever the photo's pixel dimensions.
+    private func millimetreRow(
+        _ title: String,
+        identifier: String,
+        subtitle: String? = nil,
+        binding: Binding<CGFloat>,
+        range: ClosedRange<CGFloat>,
+        step: CGFloat
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).markepiTypography(.controlLabel)
+                    if let subtitle {
+                        Text(subtitle).markepiTypography(.metadata)
+                    }
+                }
+                Spacer()
+                Text(String(format: "%.1f mm", binding.wrappedValue))
+                    .markepiTypography(.value)
+                    .monospacedDigit()
+            }
+            Slider(value: binding, in: range, step: step)
+                .accessibilityIdentifier("frame.mm.\(identifier)")
+                .accessibilityLabel(title)
+                .accessibilityValue(String(format: "%.1f millimetres", binding.wrappedValue))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var borderMillimetresRow: some View {
+        millimetreRow("Border", identifier: "border", subtitle: "The bottom widens with it",
+                      binding: borderMMBinding, range: 1...25, step: 0.5)
+    }
+
+    private var captionMillimetresRow: some View {
+        millimetreRow("Text size", identifier: "caption",
+                      binding: captionMMBinding, range: 1...10, step: 0.25)
+    }
+
+    private var logoMillimetresRow: some View {
+        millimetreRow("Logo size", identifier: "logo",
+                      subtitle: "Set by the camera in the photo's metadata",
+                      binding: logoMMBinding, range: 1...15, step: 0.25)
+    }
+
+    private var logoVariantRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Logo")
+                .markepiTypography(.controlLabel)
+            Picker("Logo", selection: logoVariantBinding) {
+                ForEach(LogoVariant.allCases) { variant in
+                    Text(variant.displayName).tag(variant)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("frame.logoVariant")
+            .accessibilityLabel("Logo colour")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    /// One caption line: a metadata field, free text, or nothing.
+    private func slotRow(_ title: String, identifier: String, binding: Binding<CaptionSlot>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title).markepiTypography(.controlLabel)
+                Spacer()
+                Menu {
+                    Button("None") { binding.wrappedValue = .empty }
+                    Button("Custom text…") {
+                        if case .text = binding.wrappedValue {} else {
+                            binding.wrappedValue = .text("")
+                        }
+                    }
+                    Divider()
+                    ForEach(CaptionField.allCases) { field in
+                        Button(field.displayName) { binding.wrappedValue = .field(field) }
+                    }
+                } label: {
+                    Text(slotLabel(binding.wrappedValue))
+                        .markepiTypography(.value)
+                }
+                .accessibilityIdentifier("frame.slot.\(identifier)")
+                .accessibilityLabel("\(title) content")
+                .accessibilityValue(slotLabel(binding.wrappedValue))
+            }
+            if case .text(let text) = binding.wrappedValue {
+                TextField("Your name or handle", text: Binding(
+                    get: { text },
+                    set: { binding.wrappedValue = .text($0) }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("frame.slotText.\(identifier)")
+                .accessibilityLabel("\(title) text")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func slotLabel(_ slot: CaptionSlot) -> String {
+        switch slot {
+        case .empty: return "None"
+        case .field(let field): return field.displayName
+        case .text(let text): return text.isEmpty ? "Custom text" : text
+        }
+    }
 
     private var thicknessRow: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -209,6 +386,55 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
         Binding(
             get: { viewModel.config.whiteFrame?.frameWidthRatio ?? 0.04 },
             set: { newValue in mutateFrame { $0.frameWidthRatio = newValue } }
+        )
+    }
+
+    private var styleBinding: Binding<FrameStyle> {
+        Binding(
+            get: { viewModel.config.whiteFrame?.style ?? .classic },
+            set: { newValue in mutateFrame { $0.style = newValue } }
+        )
+    }
+
+    private var keylineBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.config.whiteFrame?.keylineEnabled ?? false },
+            set: { newValue in mutateFrame { $0.keylineEnabled = newValue } }
+        )
+    }
+
+    private var borderMMBinding: Binding<CGFloat> {
+        Binding(
+            get: { viewModel.config.whiteFrame?.borderMillimetres ?? 5 },
+            set: { newValue in mutateFrame { $0.borderMillimetres = newValue } }
+        )
+    }
+
+    private var captionMMBinding: Binding<CGFloat> {
+        Binding(
+            get: { viewModel.config.whiteFrame?.captionTextMillimetres ?? 2.5 },
+            set: { newValue in mutateFrame { $0.captionTextMillimetres = newValue } }
+        )
+    }
+
+    private var logoMMBinding: Binding<CGFloat> {
+        Binding(
+            get: { viewModel.config.whiteFrame?.logoHeightMillimetres ?? 4 },
+            set: { newValue in mutateFrame { $0.logoHeightMillimetres = newValue } }
+        )
+    }
+
+    private var logoVariantBinding: Binding<LogoVariant> {
+        Binding(
+            get: { viewModel.config.whiteFrame?.logoVariant ?? .color },
+            set: { newValue in mutateFrame { $0.logoVariant = newValue } }
+        )
+    }
+
+    private func slotBinding(_ keyPath: WritableKeyPath<WhiteFrameConfig, CaptionSlot>) -> Binding<CaptionSlot> {
+        Binding(
+            get: { viewModel.config.whiteFrame?[keyPath: keyPath] ?? .empty },
+            set: { newValue in mutateFrame { $0[keyPath: keyPath] = newValue } }
         )
     }
 
