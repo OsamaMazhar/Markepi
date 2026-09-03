@@ -70,13 +70,18 @@ struct EXIFTokenParserTests {
                 "Expected 'ISO 400' but got '\(result)'")
     }
 
-    @Test("substitute({date}) resolves DateTimeOriginal → locale-aware short date")
+    @Test("substitute({date}) resolves DateTimeOriginal → locale-aware date and time")
     func resolvesDate() {
         let metadata = EXIFMetadataFactory.realisticMetadata(dateTime: "2026:06:18 14:30:00")
         let result = EXIFTokenParser.substitute("{date}", metadata: metadata)
-        // Locale-aware short date — should contain year digits and not raw EXIF format
-        #expect(!result.contains(":"),
+        // Formatted, not the raw EXIF string. The time now carries a colon, so
+        // the tell is the date part: EXIF writes "2026:06:18", a formatter never does.
+        #expect(!result.hasPrefix("2026:06:18"),
                 "Date should be formatted, not raw EXIF 'yyyy:MM:dd HH:mm:ss'. Got: '\(result)'")
+        #expect(result.contains("2026"), "Date should carry the year. Got: '\(result)'")
+        // Time to the minute, never seconds.
+        #expect(result.filter { $0 == ":" }.count == 1,
+                "Time should be hours and minutes only, no seconds. Got: '\(result)'")
         #expect(!result.isEmpty && result != "--",
                 "Date should resolve to formatted date, not fallback. Got: '\(result)'")
     }

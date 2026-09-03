@@ -177,9 +177,12 @@ public struct EXIFTokenParser {
         inputFormatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
         guard let date = inputFormatter.date(from: exifDateString) else { return "--" }
 
+        // Medium date plus the time, without seconds — "16 Dec 2018 at 09:50".
+        // Styles rather than a fixed pattern, so month names and time order
+        // follow the reader's locale instead of being hardcoded English.
         let outputFormatter = DateFormatter()
-        outputFormatter.dateStyle = .short
-        outputFormatter.timeStyle = .none
+        outputFormatter.dateStyle = .medium
+        outputFormatter.timeStyle = .short
         return outputFormatter.string(from: date)
     }
 
