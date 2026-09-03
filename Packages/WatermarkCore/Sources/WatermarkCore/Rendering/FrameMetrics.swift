@@ -57,10 +57,12 @@ public struct FrameMetrics: Sendable, Equatable {
 
     // MARK: Ink
 
-    /// Keyline thickness ÷ mat thickness.
+    /// Keyline thickness ÷ mat thickness. Measured: 14 ÷ 40.
     ///
     /// Of the mat, not the photo: tied to the photo it came out a hairline on
-    /// small images and vanished.
+    /// small images and vanished. The reference line is heavier than it looks
+    /// — better than a third of the border — which is what lets it read as a
+    /// deliberate edge rather than a rendering artefact.
     public var keylineToBorder: CGFloat
 
     /// How far the secondary caption tone moves from the primary toward the
@@ -96,7 +98,7 @@ public struct FrameMetrics: Sendable, Equatable {
         columnGapToFont: CGFloat = 0.80,
         dividerWidthToFont: CGFloat = 0.05,
         dividerHeightToBlock: CGFloat = 1.0,
-        keylineToBorder: CGFloat = 0.10,
+        keylineToBorder: CGFloat = 0.35,
         secondaryToneMix: CGFloat = 0.45,
         emphasiseRightPrimary: Bool = false,
         matTopWhite: CGFloat = 1.0,

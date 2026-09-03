@@ -175,7 +175,7 @@ Where a resolved brand ships both a colour and a monochrome mark, the user SHALL
 
 ### Requirement: Optional keyline
 
-The system SHALL offer an optional thin black keyline stroked between the edge of the photo and the surrounding mat. The keyline SHALL be available to every frame style, not only `gallery`, and SHALL default to disabled. Its thickness SHALL scale with the exported image's shorter dimension.
+The system SHALL offer a black keyline stroked between the edge of the photo and the surrounding mat. The keyline SHALL be available to every frame style, not only `gallery`, and SHALL be enabled by default. Its thickness SHALL be a proportion of the mat, so that it stays legible against the border it separates rather than thinning away on a small image.
 
 #### Scenario: Keyline enabled
 - **WHEN** the keyline is enabled
@@ -186,9 +186,13 @@ The system SHALL offer an optional thin black keyline stroked between the edge o
 - **WHEN** the keyline is enabled and the style is switched between `classic` and `gallery`
 - **THEN** the keyline is drawn in both styles
 
-#### Scenario: Keyline disabled by default
+#### Scenario: Keyline enabled by default
 - **WHEN** a frame is enabled without the user touching the keyline option
-- **THEN** no keyline is drawn
+- **THEN** the keyline is drawn, as it is in the reference layout
+
+#### Scenario: Keyline stays legible as the border changes
+- **WHEN** the border is widened
+- **THEN** the keyline thickens in proportion, keeping its weight relative to the mat
 
 ### Requirement: Style parity across render paths and media types
 

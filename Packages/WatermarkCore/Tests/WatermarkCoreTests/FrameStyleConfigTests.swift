@@ -55,7 +55,7 @@ struct FrameStyleConfigTests {
         let cases: [CaptionSlot] = [
             .field(.cameraModel),
             .field(.gps),
-            .text("@the_casual_iphonographer"),
+            .text("@a_handle"),
             .text("{lens} {focal_length} {aperture}"),
             .text(""),
             .empty,
