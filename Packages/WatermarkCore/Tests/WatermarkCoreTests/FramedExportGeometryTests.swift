@@ -294,3 +294,146 @@ struct FramedExportGeometryTests {
         #expect(tree.videoLayer.frame == CGRect(origin: .zero, size: videoSize))
     }
 }
+
+/// The print size shown in More is a promise about the exported file: this
+/// many millimetres, at this resolution. These pin that promise to what the
+/// engine actually writes, at each DPI the panel offers.
+///
+/// The panel computes it from the source's pixel size and `FrameGeometry`,
+/// while the engine builds its geometry from the composited image's extent —
+/// two different routes to the same number, and nothing else checks they agree.
+@Suite("Print size matches the exported file")
+struct PrintSizeAccuracyTests {
+
+    private func inputFile(_ size: CGSize) throws -> URL {
+        let (_, data) = TestImageFactory.solidColorImage(
+            color: CGColor(red: 0.2, green: 0.4, blue: 0.8, alpha: 1), size: size)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("printsize_\(UUID().uuidString).jpg")
+        try data.write(to: url)
+        return url
+    }
+
+    private func exportedSize(_ url: URL) -> CGSize? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        return CGSize(width: image.width, height: image.height)
+    }
+
+    @Test("Every DPI setting exports exactly the size the panel predicts",
+          arguments: [72, 150, 300, 600] as [CGFloat])
+    func panelPredictsTheExport(dpi: CGFloat) async throws {
+        let source = CGSize(width: 1200, height: 900)
+        let url = try inputFile(source)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        var frame = WhiteFrameConfig(isEnabled: true, style: .gallery)
+        frame.outputDPI = dpi
+        let config = WatermarkConfiguration(watermarks: [], whiteFrame: frame)
+
+        // What the More panel would display for this photo.
+        let predicted = FrameGeometry(
+            config: frame, sourceSize: source, dpi: dpi,
+            hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(config: frame, metadata: [:])
+        ).framedSize
+
+        let result = try await WatermarkEngine().process(sourceURL: url, config: config)
+        guard let outputURL = result.url, let exported = exportedSize(outputURL) else {
+            Issue.record("no output at \(dpi) DPI"); return
+        }
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+
+        #expect(exported == predicted,
+                "at \(dpi) DPI the panel predicts \(predicted) but the export is \(exported)")
+
+        // And the millimetres the panel prints are that size at that resolution.
+        let mmWidth = predicted.width / dpi * 25.4
+        let expectedBorderMM = frame.borderMillimetres
+        // Source width plus a mat and keyline on each side, back in millimetres.
+        let sourceMM = source.width / dpi * 25.4
+        let keylineMM = FrameGeometry(config: frame, sourceSize: source, dpi: dpi)
+            .keylineWidth / dpi * 25.4
+        let expected = sourceMM + (expectedBorderMM + keylineMM) * 2
+        // The mat and keyline are each rounded to a whole pixel, so the stated
+        // size is exact to within a pixel — 0.09mm at 300 DPI, 0.35mm at 72.
+        let onePixelInMM = 25.4 / dpi
+        #expect(abs(mmWidth - expected) < onePixelInMM,
+                "\(dpi) DPI: width reads \(mmWidth)mm, but the parts sum to \(expected)mm")
+    }
+
+    @Test("An 8mm border really measures 8mm on the exported file")
+    func borderIsTheStatedMillimetres() async throws {
+        let source = CGSize(width: 1200, height: 900)
+        let url = try inputFile(source)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        for dpi in [150, 300, 600] as [CGFloat] {
+            var frame = WhiteFrameConfig(isEnabled: true, style: .gallery)
+            frame.outputDPI = dpi
+            let geometry = FrameGeometry(config: frame, sourceSize: source, dpi: dpi)
+            // The mat is the framed width less the photo and the two keylines,
+            // halved — measured off the geometry the renderer actually uses.
+            let matPixels = (geometry.framedSize.width - source.width) / 2 - geometry.keylineWidth
+            let matMM = matPixels / dpi * 25.4
+            #expect(abs(matMM - frame.borderMillimetres) < 25.4 / dpi,
+                    "at \(dpi) DPI an \(frame.borderMillimetres)mm border measures \(matMM)mm")
+        }
+    }
+
+    /// A portrait phone photo is stored landscape with an orientation tag, so
+    /// the panel has to state the size of the image as *seen*, not as stored —
+    /// otherwise a portrait photo advertises a landscape print.
+    @Test("A rotated source is measured upright, matching the export")
+    func rotatedSourceIsMeasuredUpright() async throws {
+        let stored = CGSize(width: 1200, height: 900)
+        let upright = CGSize(width: 900, height: 1200)
+        let (_, data) = TestImageFactory.solidColorImage(
+            color: CGColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1), size: stored)
+
+        // Re-encode carrying orientation 6: stored landscape, displayed portrait.
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("rotated_\(UUID().uuidString).jpg")
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              let destination = CGImageDestinationCreateWithURL(
+                url as CFURL, "public.jpeg" as CFString, 1, nil) else {
+            Issue.record("could not build the rotated fixture"); return
+        }
+        CGImageDestinationAddImage(destination, image, [
+            kCGImagePropertyOrientation as String: 6,
+        ] as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        var frame = WhiteFrameConfig(isEnabled: true, style: .gallery)
+        frame.outputDPI = 300
+        let config = WatermarkConfiguration(watermarks: [], whiteFrame: frame)
+
+        let predicted = FrameGeometry(
+            config: frame, sourceSize: upright, dpi: 300,
+            hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(config: frame, metadata: [:])
+        ).framedSize
+
+        let result = try await WatermarkEngine().process(sourceURL: url, config: config)
+        guard let outputURL = result.url,
+              let out = CGImageSourceCreateWithURL(outputURL as CFURL, nil),
+              let exported = CGImageSourceCreateImageAtIndex(out, 0, nil) else {
+            Issue.record("no output"); return
+        }
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+
+        #expect(CGSize(width: exported.width, height: exported.height) == predicted,
+                "export is \(exported.width)x\(exported.height), panel predicts \(predicted)")
+    }
+
+    @Test("Automatic believes a real print resolution and ignores a JFIF default")
+    func automaticResolution() {
+        let frame = WhiteFrameConfig(isEnabled: true, style: .gallery)
+        // 72 DPI is what a JPEG writes when nobody measured anything.
+        #expect(FrameGeometry.resolveDPI(
+            from: [kCGImagePropertyDPIWidth as String: 72], config: frame) == 300)
+        #expect(FrameGeometry.resolveDPI(
+            from: [kCGImagePropertyDPIWidth as String: 600], config: frame) == 600)
+        #expect(FrameGeometry.resolveDPI(from: [:], config: frame) == 300)
+    }
+}

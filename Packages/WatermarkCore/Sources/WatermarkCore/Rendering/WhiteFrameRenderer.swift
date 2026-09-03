@@ -95,9 +95,11 @@ public struct WhiteFrameRenderer {
             leftSecondary: trimmed(config.leftSecondary),
             rightPrimary: resolveSlot(config.rightPrimary, metadata: metadata),
             rightSecondary: trimmed(config.rightSecondary),
-            mark: BrandMarkRegistry.mark(metadata: metadata,
+            mark: config.logoEnabled
+                ? BrandMarkRegistry.mark(metadata: metadata,
                                          variant: config.logoVariant,
                                          matIsLight: matIsLight)
+                : nil
         )
     }
 

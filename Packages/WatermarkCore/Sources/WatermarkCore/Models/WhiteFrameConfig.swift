@@ -223,6 +223,14 @@ public struct WhiteFrameConfig: Sendable, Codable {
     /// someone's saved work. Only new frames get the gallery default.
     public var style: FrameStyle
 
+    /// Whether the maker's brand mark is drawn in the caption band.
+    ///
+    /// The mark is chosen from the photo's own metadata, never picked by the
+    /// user — but not everyone wants a manufacturer's logo on their picture,
+    /// so it can be turned off. Off, the caption keeps its two columns and
+    /// the divider goes with the mark.
+    public var logoEnabled: Bool
+
     /// Resolution the millimetre sizes are converted against, in pixels per
     /// inch. `nil` means automatic: believe the photo's own resolution when it
     /// looks like a real print measurement, else 300.
@@ -324,6 +332,7 @@ public struct WhiteFrameConfig: Sendable, Codable {
         captionTextMillimetres: CGFloat = FrameMetrics.defaultCaptionMillimetres,
         logoHeightMillimetres: CGFloat = FrameMetrics.defaultMarkMillimetres,
         keylineEnabled: Bool = true,
+        logoEnabled: Bool = true,
         outputDPI: CGFloat? = nil,
         logoVariant: LogoVariant = .color,
         leftPrimary: CaptionSlot = WhiteFrameConfig.defaultLeftPrimary,
@@ -352,6 +361,7 @@ public struct WhiteFrameConfig: Sendable, Codable {
         self.captionTextMillimetres = min(20, max(0.5, captionTextMillimetres))
         self.logoHeightMillimetres = min(30, max(0.5, logoHeightMillimetres))
         self.keylineEnabled = keylineEnabled
+        self.logoEnabled = logoEnabled
         // A print is not made below ~36 DPI and no consumer pipeline needs
         // above 2400; clamp rather than let a stray value blow up the canvas.
         self.outputDPI = outputDPI.map { min(2400, max(36, $0)) }
@@ -369,7 +379,7 @@ public struct WhiteFrameConfig: Sendable, Codable {
         case captionPrefix, captionFields
         case customAttributionText, textColorRGBA, textFontSizeRatio
         case style, borderMillimetres, captionTextMillimetres, logoHeightMillimetres
-        case keylineEnabled, logoVariant, outputDPI
+        case keylineEnabled, logoVariant, outputDPI, logoEnabled
         case leftPrimary, leftSecondary, rightPrimary, rightSecondary
     }
 
@@ -408,6 +418,7 @@ public struct WhiteFrameConfig: Sendable, Codable {
         logoVariant = try container.decodeIfPresent(LogoVariant.self, forKey: .logoVariant) ?? .color
         outputDPI = try container.decodeIfPresent(CGFloat.self, forKey: .outputDPI)
             .map { min(2400, max(36, $0)) }
+        logoEnabled = try container.decodeIfPresent(Bool.self, forKey: .logoEnabled) ?? true
         leftPrimary = try container.decodeIfPresent(CaptionSlot.self, forKey: .leftPrimary)
             ?? WhiteFrameConfig.defaultLeftPrimary
         leftSecondary = try container.decodeIfPresent(CaptionSlot.self, forKey: .leftSecondary)
@@ -439,6 +450,7 @@ public struct WhiteFrameConfig: Sendable, Codable {
             : [0.333, 0.333, 0.333, 1.0]
         try container.encode(rgba, forKey: .textColorRGBA)
         try container.encodeIfPresent(outputDPI, forKey: .outputDPI)
+        try container.encode(logoEnabled, forKey: .logoEnabled)
         try container.encode(style, forKey: .style)
         try container.encode(borderMillimetres, forKey: .borderMillimetres)
         try container.encode(captionTextMillimetres, forKey: .captionTextMillimetres)

@@ -27,7 +27,7 @@ private let aliases: [String: String] = [
 
 private let boolFlags: Set<String> = [
     "--help", "--force", "--list-fonts",
-    "--border", "--border-no-text", "--border-keyline", "--border-no-keyline",
+    "--border", "--border-no-text", "--border-keyline", "--border-no-keyline", "--border-no-logo",
     "--date-stamp",
 ]
 
@@ -318,6 +318,7 @@ struct Markepi {
                 keylineEnabled: flags.has("--border-no-keyline")
                     ? false
                     : (flags.has("--border-keyline") || WhiteFrameConfig().keylineEnabled),
+                logoEnabled: !flags.has("--border-no-logo"),
                 outputDPI: try flags.value("--border-dpi").map {
                     CGFloat(try doubleValue($0, flag: "--border-dpi", in: 36...2400))
                 },

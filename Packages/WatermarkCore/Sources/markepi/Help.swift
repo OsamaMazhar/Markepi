@@ -84,6 +84,7 @@ BORDER / WHITE FRAME           (applied when --border or any --border-* is given
                                is a real print measurement, else 300.
       --border-keyline / --border-no-keyline
                                Black rule between photo and mat (default: on)
+      --border-no-logo         Leave the maker's brand mark out entirely.
       --border-logo-variant <v>
                                color | monochrome (default: color)
       --border-left-primary <slot>, --border-left-secondary <slot>,

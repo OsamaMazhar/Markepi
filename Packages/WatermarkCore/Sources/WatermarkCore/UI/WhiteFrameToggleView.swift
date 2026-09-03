@@ -77,19 +77,25 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
                         captionSizeRow
                     } else {
                         Divider().padding(.leading, 16)
-                        slotRow("Top left", identifier: "leftPrimary", binding: slotBinding(\.leftPrimary))
+                        slotGroupHeader("Caption, left side")
+                        slotRow("Top line", identifier: "leftPrimary", binding: slotBinding(\.leftPrimary))
                         Divider().padding(.leading, 16)
-                        slotRow("Bottom left", identifier: "leftSecondary", binding: slotBinding(\.leftSecondary))
+                        slotRow("Bottom line", identifier: "leftSecondary", binding: slotBinding(\.leftSecondary))
                         Divider().padding(.leading, 16)
-                        slotRow("Top right", identifier: "rightPrimary", binding: slotBinding(\.rightPrimary))
+                        slotGroupHeader("Caption, right side")
+                        slotRow("Top line", identifier: "rightPrimary", binding: slotBinding(\.rightPrimary))
                         Divider().padding(.leading, 16)
-                        slotRow("Bottom right", identifier: "rightSecondary", binding: slotBinding(\.rightSecondary))
+                        slotRow("Bottom line", identifier: "rightSecondary", binding: slotBinding(\.rightSecondary))
                         Divider().padding(.leading, 16)
                         captionMillimetresRow
                         Divider().padding(.leading, 16)
-                        logoMillimetresRow
-                        Divider().padding(.leading, 16)
-                        logoVariantRow
+                        logoRow
+                        if viewModel.config.whiteFrame?.logoEnabled != false {
+                            Divider().padding(.leading, 16)
+                            logoMillimetresRow
+                            Divider().padding(.leading, 16)
+                            logoVariantRow
+                        }
                     }
                     Divider().padding(.leading, 16)
                     captionColorRow
@@ -180,6 +186,32 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
         millimetreRow("Logo size", identifier: "logo",
                       subtitle: "Set by the camera in the photo's metadata",
                       binding: logoMMBinding, range: 1...15, step: 0.25)
+    }
+
+    /// Names which half of the caption bar the rows beneath it drive, so the
+    /// slots read as the thing on screen rather than as compass directions.
+    private func slotGroupHeader(_ title: String) -> some View {
+        Text(title)
+            .markepiTypography(.sectionHeader)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 2)
+    }
+
+    private var logoRow: some View {
+        Toggle(isOn: logoEnabledBinding) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Brand logo")
+                    .markepiTypography(.controlLabel)
+                Text("The maker's mark, read from the photo's metadata")
+                    .markepiTypography(.metadata)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .accessibilityIdentifier("frame.logoEnabled")
+        .accessibilityHint("Shows the camera maker's logo in the caption")
     }
 
     private var logoVariantRow: some View {
@@ -421,6 +453,13 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
         Binding(
             get: { viewModel.config.whiteFrame?.logoHeightMillimetres ?? 4 },
             set: { newValue in mutateFrame { $0.logoHeightMillimetres = newValue } }
+        )
+    }
+
+    private var logoEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.config.whiteFrame?.logoEnabled ?? true },
+            set: { newValue in mutateFrame { $0.logoEnabled = newValue } }
         )
     }
 

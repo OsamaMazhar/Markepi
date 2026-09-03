@@ -474,3 +474,53 @@ struct GalleryCaptionToneTests {
         #expect(value! > 0.2 && value! < 0.4)
     }
 }
+
+// MARK: - Brand mark opt-out
+
+@Suite("The brand mark can be turned off")
+struct LogoOptOutTests {
+
+    private let metadata: [String: Any] = [
+        "{TIFF}": ["Make": "Apple", "Model": "iPhone 15 Pro Max"],
+        "{Exif}": ["LensModel": "iPhone 15 Pro Max back triple camera 6.765mm f/1.78",
+                   "FocalLength": 6.765, "FocalLenIn35mmFilm": 24],
+    ]
+
+    @Test("On by default, and a known maker resolves a mark")
+    func markIsOnByDefault() {
+        let config = WhiteFrameConfig(isEnabled: true, style: .gallery)
+        #expect(config.logoEnabled)
+        let caption = WhiteFrameRenderer.resolveGalleryCaption(config: config, metadata: metadata)
+        #expect(caption.mark != nil)
+    }
+
+    @Test("Off drops the mark but keeps the caption")
+    func offDropsOnlyTheMark() {
+        var config = WhiteFrameConfig(isEnabled: true, style: .gallery)
+        config.logoEnabled = false
+        let caption = WhiteFrameRenderer.resolveGalleryCaption(config: config, metadata: metadata)
+        #expect(caption.mark == nil)
+        #expect(caption.leftPrimary == "iPhone 15 Pro Max")
+        #expect(!caption.isEmpty)
+    }
+
+    @Test("The choice survives a save and reload")
+    func survivesARoundTrip() throws {
+        var config = WhiteFrameConfig(isEnabled: true, style: .gallery)
+        config.logoEnabled = false
+        let restored = try JSONDecoder().decode(
+            WhiteFrameConfig.self, from: JSONEncoder().encode(config))
+        #expect(restored.logoEnabled == false)
+    }
+
+    @Test("A config written before the toggle existed keeps its mark")
+    func legacyConfigsDefaultToOn() throws {
+        var config = WhiteFrameConfig(isEnabled: true, style: .gallery)
+        config.logoEnabled = false
+        var json = try JSONSerialization.jsonObject(
+            with: try JSONEncoder().encode(config)) as! [String: Any]
+        json.removeValue(forKey: "logoEnabled")
+        let data = try JSONSerialization.data(withJSONObject: json)
+        #expect(try JSONDecoder().decode(WhiteFrameConfig.self, from: data).logoEnabled)
+    }
+}

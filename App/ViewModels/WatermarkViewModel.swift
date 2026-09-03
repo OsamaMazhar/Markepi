@@ -430,6 +430,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 + "|cmm:\(String(format: "%.2f", wf.captionTextMillimetres))"
                 + "|lmm:\(String(format: "%.2f", wf.logoHeightMillimetres))"
                 + "|dpi:\(wf.outputDPI.map { String(format: "%.0f", $0) } ?? "auto")"
+                + "|le:\(wf.logoEnabled ? 1 : 0)"
                 + "|lp:\(Self.slotKey(wf.leftPrimary))|ls:\(Self.slotKey(wf.leftSecondary))"
                 + "|rp:\(Self.slotKey(wf.rightPrimary))|rs:\(Self.slotKey(wf.rightSecondary))"
             )
