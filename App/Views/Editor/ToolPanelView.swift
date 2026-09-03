@@ -209,10 +209,12 @@ struct ToolPanelView: View {
                 .markepiTypography(.controlLabel)
             Spacer()
             Menu {
-                ForEach(WatermarkPosition.allCases, id: \.rawValue) { position in
-                    Button(position.displayName) {
-                        viewModel.updateLayerPosition(at: safeLayerIndex, position: position)
-                    }
+                PositionMenuContent(
+                    current: currentPosition,
+                    layerIndex: safeLayerIndex,
+                    layout: viewModel.previewLayout
+                ) { position in
+                    viewModel.updateLayerPosition(at: safeLayerIndex, position: position)
                 }
             } label: {
                 HStack(spacing: 4) {

@@ -129,6 +129,33 @@ public struct WatermarkConfiguration: Sendable, Codable {
     }
 }
 
+// MARK: - Placement Defaults
+
+extension WatermarkConfiguration {
+    /// Preference order for auto-placing a new element: corners first (where a
+    /// signature or logo belongs), then edges, then dead centre.
+    private static let placementOrder: [WatermarkPosition] = [
+        .bottomRight, .bottomLeft, .topRight, .topLeft,
+        .bottomCenter, .topCenter, .middleRight, .middleLeft, .center
+    ]
+
+    /// Where a newly added element should go: the first preset no existing
+    /// element already occupies, so a new element never lands on top of one
+    /// that is already there.
+    ///
+    /// A text layer with nothing typed in it yet still holds its spot — it is a
+    /// placeholder the user is about to fill, and skipping it piled every new
+    /// text layer into the same corner. Hidden layers (deliberately switched
+    /// off) hold nothing, and dragged (`.custom`) elements block no preset.
+    /// Past nine elements everything overlaps regardless, so it keeps cycling
+    /// the order rather than stacking them all bottom-right.
+    public var nextFreePosition: WatermarkPosition {
+        let taken = Set(watermarks.filter(\.isVisible).map(\.position))
+        return Self.placementOrder.first { !taken.contains($0) }
+            ?? Self.placementOrder[watermarks.count % Self.placementOrder.count]
+    }
+}
+
 // MARK: - WatermarkLayer
 
 /// Discriminated union representing a single watermark layer in the layer stack.

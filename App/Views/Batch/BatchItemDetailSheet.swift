@@ -245,11 +245,13 @@ public struct BatchItemDetailSheet: View {
                 .markepiTypography(.controlLabel)
             Spacer()
             Menu {
-                ForEach(WatermarkPosition.allCases, id: \.rawValue) { position in
-                    Button(position.displayName) {
-                        let safeIdx = max(0, min(idx, proxy.config.watermarks.count - 1))
-                        proxy.updateLayerPosition(at: safeIdx, position: position)
-                    }
+                PositionMenuContent(
+                    current: currentPos,
+                    layerIndex: idx,
+                    layout: proxy.previewLayout
+                ) { position in
+                    let safeIdx = max(0, min(idx, proxy.config.watermarks.count - 1))
+                    proxy.updateLayerPosition(at: safeIdx, position: position)
                 }
             } label: {
                 HStack(spacing: 4) {

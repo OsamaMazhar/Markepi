@@ -181,7 +181,10 @@ struct ContentView: View {
             } else {
                 PreviewView(viewModel: viewModel)
                     .background(MarkepiColors.photoCanvasBackground.ignoresSafeArea())
-                    .overlay { tapToDismissOverlay }
+                    .simultaneousGesture(
+                        TapGesture().onEnded { closeActiveTool() },
+                        including: dismissesToolOnTap
+                    )
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         VStack(spacing: 0) {
                             mediaControls(includeStrip: true)
@@ -385,7 +388,10 @@ struct ContentView: View {
             PreviewView(viewModel: viewModel)
                 .background(MarkepiColors.photoCanvasBackground)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay { tapToDismissOverlay }
+                .simultaneousGesture(
+                    TapGesture().onEnded { closeActiveTool() },
+                    including: dismissesToolOnTap
+                )
 
             // Landscape moves the batch strip into the right rail (vertical), so
             // only the video scrub bar remains under the photo here.
@@ -694,19 +700,18 @@ struct ContentView: View {
         }
     }
 
-    /// Tap-anywhere-on-the-canvas dismiss layer for the open tool panel. Shown
-    /// only while a tool is open (and not mid-render), it covers the photo so a
-    /// tap outside the panel/dock closes the panel — replacing the old
-    /// swipe-down-to-dismiss gesture on the panel itself. The panel and dock
-    /// render above this layer, so taps on them aren't intercepted.
-    @ViewBuilder
-    private var tapToDismissOverlay: some View {
-        if activeTool != nil && !isBusy {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { closeActiveTool() }
-                .accessibilityHidden(true)
-        }
+    /// Tapping the photo closes an open tool panel — the replacement for the
+    /// old swipe-down-to-dismiss gesture. Active only while a tool is open and
+    /// nothing is rendering; the panel and dock sit above the photo, so taps on
+    /// them are never intercepted.
+    ///
+    /// This has to be a SIMULTANEOUS gesture rather than an overlay. An overlay
+    /// hit-tests the whole preview, so with a panel open it swallowed every
+    /// touch on the photo — including the drag that places a watermark, which
+    /// then only worked with all the panels closed. A simultaneous tap coexists
+    /// with the drag: movement makes the tap fail, and a still tap dismisses.
+    private var dismissesToolOnTap: GestureMask {
+        activeTool != nil && !isBusy ? .all : .none
     }
 
     private func editorControls(_ geometry: GeometryProxy) -> some View {

@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Output result from the watermark processing pipeline.
@@ -35,13 +36,18 @@ public struct ProcessingResult: Sendable {
     /// no IPTC merge, no C2PA signing).
     public let provenanceReceipt: ExportReceipt?
 
+    /// Where the photo and each watermark layer landed in the rendered output.
+    /// Lets the editor drag a layer around the preview with exact geometry.
+    public let previewLayout: RenderLayout?
+
     public init(
         url: URL?,
         data: Data?,
         outputUTI: String,
         videoValidation: ExportValidator.ExportValidationResult? = nil,
         livePhotoVideoURL: URL? = nil,
-        provenanceReceipt: ExportReceipt? = nil
+        provenanceReceipt: ExportReceipt? = nil,
+        previewLayout: RenderLayout? = nil
     ) {
         self.url = url
         self.data = data
@@ -49,6 +55,40 @@ public struct ProcessingResult: Sendable {
         self.videoValidation = videoValidation
         self.livePhotoVideoURL = livePhotoVideoURL
         self.provenanceReceipt = provenanceReceipt
+        self.previewLayout = previewLayout
+    }
+}
+
+// MARK: - RenderLayout
+
+/// Geometry of a rendered composite, in normalized coordinates of the whole
+/// output image: origin top-left, y running DOWN, sizes as fractions of the
+/// output's width/height.
+///
+/// The photo is not always the whole output — a white frame mats it — so
+/// `photoRect` is what watermark positions are relative to, and `layerFrames`
+/// says where each layer actually landed. `layerFrames` is keyed by the layer's
+/// index in `WatermarkConfiguration.watermarks`; hidden layers are absent.
+public struct RenderLayout: Sendable, Equatable {
+    public var photoRect: CGRect
+    public var layerFrames: [Int: CGRect]
+
+    public init(photoRect: CGRect, layerFrames: [Int: CGRect]) {
+        self.photoRect = photoRect
+        self.layerFrames = layerFrames
+    }
+
+    /// The layer's placement expressed as `WatermarkPosition.custom` fractions:
+    /// how far along the space it can travel inside the photo it sits, y DOWN.
+    /// Nil when the layer was not rendered (hidden, or no preview yet).
+    public func travelFraction(ofLayer index: Int) -> CGPoint? {
+        guard let frame = layerFrames[index] else { return nil }
+        let travelX = photoRect.width - frame.width
+        let travelY = photoRect.height - frame.height
+        return CGPoint(
+            x: travelX > 0 ? min(max((frame.minX - photoRect.minX) / travelX, 0), 1) : 0.5,
+            y: travelY > 0 ? min(max((frame.minY - photoRect.minY) / travelY, 0), 1) : 0.5
+        )
     }
 }
 

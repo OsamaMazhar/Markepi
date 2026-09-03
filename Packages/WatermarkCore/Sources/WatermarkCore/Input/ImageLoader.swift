@@ -189,6 +189,13 @@ public struct ImageLoader {
         )
     }
 
+    /// The image-properties dictionary in the `[String: Any]` shape the caption
+    /// builders and renderers read. Used by the live-preview path, which reads
+    /// properties without decoding the image.
+    public static func metadata(from properties: [CFString: Any]) -> [String: Any] {
+        convertCFDictionary(properties)
+    }
+
     /// Converts a [CFString: Any] dictionary to [String: Any] for Sendable conformance.
     private static func convertCFDictionary(_ dict: [CFString: Any]) -> [String: Any] {
         var result: [String: Any] = [:]

@@ -150,16 +150,12 @@ public struct LayerListView<ViewModel: WatermarkConfigurable & Observable>: View
                             .markepiTypography(.controlLabel)
                         Spacer()
                         Menu {
-                            ForEach(WatermarkPosition.allCases, id: \.rawValue) { position in
-                                Button {
-                                    viewModel.updateLayerPosition(at: index, position: position)
-                                } label: {
-                                    if layer.position == position {
-                                        Label(position.displayName, systemImage: "checkmark")
-                                    } else {
-                                        Text(position.displayName)
-                                    }
-                                }
+                            PositionMenuContent(
+                                current: layer.position,
+                                layerIndex: index,
+                                layout: viewModel.previewLayout
+                            ) { position in
+                                viewModel.updateLayerPosition(at: index, position: position)
                             }
                         } label: {
                             HStack(spacing: 4) {

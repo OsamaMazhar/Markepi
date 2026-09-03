@@ -90,6 +90,21 @@ final class WatermarkViewModel: WatermarkConfigurable {
     }
 
     var previewImage: UIImage?
+
+    /// Where the photo and each layer landed in `previewImage` (normalized,
+    /// y-down). Drives dragging a layer around the preview. Runtime-only.
+    var previewLayout: RenderLayout?
+
+    /// Bumped whenever a preview render settles — a new image, or a failure.
+    /// The editor's drag overlay watches it to know the composite has caught up
+    /// with where the element was dropped, so it can stop drawing the element
+    /// itself without a flash.
+    var previewRevision: Int = 0
+
+    /// Longest side, in pixels, a preview is rendered at. Previews only ever
+    /// fill a phone screen, and the source is decoded straight to this size.
+    private static let previewMaxPixelDimension: CGFloat = 1800
+
     var originalSourceImage: UIImage?
     var isGeneratingPreview: Bool = false
 
@@ -762,7 +777,9 @@ final class WatermarkViewModel: WatermarkConfigurable {
             }
         }
 
-        let debounce = shouldShowProgress ? Duration.milliseconds(250) : .milliseconds(90)
+        // A preview render is now tens of milliseconds, so the coalescing wait
+        // is what would be felt: keep it short enough to read as immediate.
+        let debounce = shouldShowProgress ? Duration.milliseconds(250) : .milliseconds(40)
         try? await Task.sleep(for: debounce)
         guard !Task.isCancelled else { return }
         let previewConfig = config
@@ -790,18 +807,18 @@ final class WatermarkViewModel: WatermarkConfigurable {
             }
             guard !Task.isCancelled else { return }
 
-            let result = try await engine.process(
-                sourceURL: imageURL, config: previewConfig, metadataOverride: metadataOverride
+            let result = try await engine.renderPreview(
+                sourceURL: imageURL,
+                config: previewConfig,
+                metadataOverride: metadataOverride,
+                maxPixelDimension: Self.previewMaxPixelDimension
             )
             // The .task may have been cancelled (e.g. config changed) while the
             // engine was running; don't clobber state for a stale render.
             guard !Task.isCancelled else { return }
-            guard let url = result.url else { throw PipelineError.renderFailed }
-            let data = try Data(contentsOf: url)
-            guard let uiImage = UIImage(data: data) else {
-                throw PipelineError.renderFailed
-            }
-            previewImage = uiImage
+            previewImage = UIImage(cgImage: result.image)
+            previewLayout = result.layout
+            previewRevision += 1
         } catch is CancellationError {
             // Superseded by a newer preview request — not a user-facing error.
             return
@@ -810,6 +827,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
             errorMessage = (error as? LocalizedError)?.errorDescription
                 ?? error.localizedDescription
             showError = true
+            // Settled, badly — the editor must still drop its drag overlay.
+            previewRevision += 1
         }
     }
 
@@ -1478,7 +1497,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
             )
             activeLayerIndex = existing
         } else {
-            config.watermarks.append(.signature(input, position: .bottomLeft, scale: 0.15, opacity: 1.0, isVisible: true))
+            config.watermarks.append(
+                .signature(input, position: config.nextFreePosition, scale: 0.15, opacity: 1.0, isVisible: true))
             activeLayerIndex = config.watermarks.count - 1
         }
     }

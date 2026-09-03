@@ -255,7 +255,7 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
             fontName: WatermarkConfiguration.defaultFontPostScriptName
         )
         viewModel.config.watermarks.append(
-            .text(seed, position: .bottomRight, scale: WatermarkConfiguration.defaultTextScale, opacity: 1.0, isVisible: true)
+            .text(seed, position: viewModel.config.nextFreePosition, scale: WatermarkConfiguration.defaultTextScale, opacity: 1.0, isVisible: true)
         )
         viewModel.activeLayerIndex = viewModel.config.watermarks.count - 1
     }
@@ -328,7 +328,7 @@ public struct TextWatermarkInputView<ViewModel: WatermarkConfigurable & Observab
                 fontName: resolvedFont(WatermarkConfiguration.defaultFontPostScriptName)
             )
             viewModel.config.watermarks.append(
-                .text(seed, position: .bottomRight, scale: WatermarkConfiguration.defaultTextScale, opacity: 1.0, isVisible: true)
+                .text(seed, position: viewModel.config.nextFreePosition, scale: WatermarkConfiguration.defaultTextScale, opacity: 1.0, isVisible: true)
             )
             viewModel.activeLayerIndex = viewModel.config.watermarks.count - 1
         }

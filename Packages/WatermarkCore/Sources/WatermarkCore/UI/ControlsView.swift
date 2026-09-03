@@ -81,11 +81,12 @@ public struct ControlsView<ViewModel: WatermarkConfigurable & Observable>: View 
                 .markepiTypography(.controlLabel)
             Spacer()
             Menu {
-                ForEach(WatermarkPosition.allCases, id: \.rawValue) { position in
-                    Button(position.displayName) {
-                        let idx = safeLayerIndex
-                        viewModel.updateLayerPosition(at: idx, position: position)
-                    }
+                PositionMenuContent(
+                    current: currentPos,
+                    layerIndex: safeLayerIndex,
+                    layout: viewModel.previewLayout
+                ) { position in
+                    viewModel.updateLayerPosition(at: safeLayerIndex, position: position)
                 }
             } label: {
                 HStack(spacing: 4) {

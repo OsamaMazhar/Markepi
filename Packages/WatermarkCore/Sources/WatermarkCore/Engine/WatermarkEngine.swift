@@ -94,13 +94,14 @@ public actor WatermarkEngine {
         config: WatermarkConfiguration,
         metadataOverride: [String: Any]? = nil,
         provenance: ProvenanceExportOptions? = nil,
-        preserveSourceCredentials: Bool = false
+        preserveSourceCredentials: Bool = false,
+        maxPixelDimension: CGFloat? = nil
     ) async throws -> ProcessingResult {
         // 1. Load (validates size, extracts metadata + HDR + CIImage)
         let loaded = try ImageLoader.load(from: sourceURL)
 
         // 2. Normalize orientation (Pitfall 3 prevention)
-        let normalized = OrientationNormalizer.normalize(loaded.ciImage)
+        var normalized = OrientationNormalizer.normalize(loaded.ciImage)
 
         // 3. Build filter graph (pure CIImage ops, no context needed).
         // `metadataOverride` lets a caller supply the caption's source metadata —
@@ -120,10 +121,27 @@ public actor WatermarkEngine {
             graphMetadata["PixelWidth"] = Int(normalized.extent.width.rounded())
             graphMetadata["PixelHeight"] = Int(normalized.extent.height.rounded())
         }
+        var previewLayout = RenderLayout(photoRect: .zero, layerFrames: [:])
+        // Live-preview fast path: render a screen-sized image instead of a
+        // 12-megapixel one. A full-resolution render takes long enough that the
+        // editor visibly lags behind a drag; the caption still reads the real
+        // dimensions because `graphMetadata` was filled in above, before this.
+        var renderScale: CGFloat = 1
+        if let maxPixelDimension {
+            let longest = max(normalized.extent.width, normalized.extent.height)
+            if longest > maxPixelDimension, longest > 0 {
+                renderScale = maxPixelDimension / longest
+                normalized = normalized.transformed(
+                    by: CGAffineTransform(scaleX: renderScale, y: renderScale))
+            }
+        }
+
         let composited = try buildFilterGraph(
             base: normalized,
             config: config,
-            metadata: graphMetadata
+            metadata: graphMetadata,
+            renderScale: renderScale,
+            layout: &previewLayout
         )
 
         // 4. Render via shared CIContext → CGImage.
@@ -224,7 +242,9 @@ public actor WatermarkEngine {
         // it verbatim only when nothing moved. Otherwise rotate it to match and,
         // when a white frame is applied, zero the gain under the border band so
         // the opaque SDR-white frame doesn't glow with residual HDR boost.
-        let alignedGainMap = GainMapProcessor.aligned(
+        // A downscaled preview's base no longer matches the source-sized gain
+        // map, and a preview never needs one.
+        let alignedGainMap = renderScale < 1 ? nil : GainMapProcessor.aligned(
             auxData: loaded.gainMapAuxData,
             type: loaded.gainMapType ?? .appleHDR,
             sourceOrientation: loaded.sourceOrientation,
@@ -343,8 +363,97 @@ public actor WatermarkEngine {
             url: outputURL,
             data: nil,
             outputUTI: destinationUTI,
-            provenanceReceipt: receipt
+            provenanceReceipt: receipt,
+            previewLayout: previewLayout
         )
+    }
+
+    // MARK: - Live Preview
+
+    /// A rendered editor preview: the pixels, and where everything landed.
+    public struct PreviewRender: @unchecked Sendable {
+        public let image: CGImage
+        public let layout: RenderLayout
+    }
+
+    /// Renders the live editor preview.
+    ///
+    /// Same composite as `process`, but built for the screen rather than for a
+    /// file: the source is decoded straight to preview size, and the result is
+    /// handed back as a CGImage. `process` would decode 12 megapixels, render
+    /// them, encode HEIC, write a temp file, read it back and decode it again —
+    /// about a second per frame on a real photo, which no amount of overlay
+    /// trickery can hide during a drag. None of that work has a preview.
+    ///
+    /// Exports keep going through `process`: metadata, HDR gain map, alpha
+    /// handling, provenance and C2PA all still belong there.
+    public func renderPreview(
+        sourceURL: URL,
+        config: WatermarkConfiguration,
+        metadataOverride: [String: Any]? = nil,
+        maxPixelDimension: CGFloat
+    ) async throws -> PreviewRender {
+        guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
+              CGImageSourceGetCount(source) > 0 else {
+            throw PipelineError.invalidSource
+        }
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
+        let sourceWidth = (properties[kCGImagePropertyPixelWidth] as? Int) ?? 0
+        let sourceHeight = (properties[kCGImagePropertyPixelHeight] as? Int) ?? 0
+
+        // Decode AT preview size rather than decoding everything and shrinking:
+        // `WithTransform` applies the EXIF orientation during the decode, so the
+        // pixels arrive upright — the same guarantee `OrientationNormalizer`
+        // gives the export path, and just as load-bearing for placement.
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: Int(maxPixelDimension.rounded()),
+        ]
+        guard let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            throw PipelineError.failedToCreateCIImage
+        }
+        let base = CIImage(cgImage: decoded)
+
+        var graphMetadata: [String: Any]
+        if let metadataOverride {
+            graphMetadata = metadataOverride
+            graphMetadata["_SourceUTI"] = metadataOverride["_SourceUTI"]
+                ?? (try? FormatDetector.detect(from: source).1 as String)
+        } else {
+            graphMetadata = ImageLoader.metadata(from: properties)
+            graphMetadata["_SourceUTI"] = (try? FormatDetector.detect(from: source).1 as String)
+            // The caption quotes the REAL photo, not the preview-sized copy.
+            let orientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
+            let sideways = (5...8).contains(Int(orientation))
+            graphMetadata["PixelWidth"] = sideways ? sourceHeight : sourceWidth
+            graphMetadata["PixelHeight"] = sideways ? sourceWidth : sourceHeight
+        }
+
+        // Millimetre-specified frame parts have to shrink with the photo.
+        let fullLongestSide = CGFloat(max(sourceWidth, sourceHeight))
+        let renderScale = fullLongestSide > 0
+            ? max(base.extent.width, base.extent.height) / fullLongestSide
+            : 1
+
+        var layout = RenderLayout(photoRect: .zero, layerFrames: [:])
+        let composited = try buildFilterGraph(
+            base: base,
+            config: config,
+            metadata: graphMetadata,
+            renderScale: renderScale,
+            layout: &layout
+        )
+
+        let colorSpace = decoded.colorSpace.flatMap { $0.model == .rgb ? $0 : nil }
+            ?? CIContextProvider.workingColorSpace
+        guard let image = context.createCGImage(
+            composited, from: composited.extent, format: .RGBA8, colorSpace: colorSpace
+        ) else {
+            throw PipelineError.renderFailed
+        }
+        return PreviewRender(image: image, layout: layout)
     }
 
     /// Processes a video file, applying watermark via AVFoundation CALayer overlay.
@@ -503,7 +612,9 @@ public actor WatermarkEngine {
     private func buildFilterGraph(
         base: CIImage,
         config: WatermarkConfiguration,
-        metadata: [String: Any]
+        metadata: [String: Any],
+        renderScale: CGFloat = 1,
+        layout: inout RenderLayout
     ) throws -> CIImage {
         // Safety net: normalize orientation before positioning (Pitfall 3)
         let normalized = OrientationNormalizer.normalize(base)
@@ -524,8 +635,13 @@ public actor WatermarkEngine {
         // dimension gives a comfortable, resolution-independent margin.
         let effectivePadding = max(config.padding, min(extent.width, extent.height) * 0.04)
 
+        // Where each layer landed, in the composited photo's own coordinates.
+        // Converted to normalized output coordinates once the mat (which moves
+        // and enlarges the canvas) is known.
+        var layerRects: [Int: CGRect] = [:]
+
         // Build layers in order: bottom layer first, top layer last (D-01)
-        for watermark in config.watermarks {
+        for (layerIndex, watermark) in config.watermarks.enumerated() {
             // MULT-02: Skip hidden layers
             guard watermark.isVisible else { continue }
 
@@ -600,6 +716,7 @@ public actor WatermarkEngine {
             position.x += positioningExtent.origin.x
             position.y += positioningExtent.origin.y
 
+            layerRects[layerIndex] = CGRect(origin: position, size: opacityAdjusted.extent.size)
             layers.append((opacityAdjusted, position))
         }
 
@@ -634,7 +751,10 @@ public actor WatermarkEngine {
             let geometry = FrameGeometry(
                 config: frameConfig,
                 sourceSize: watermarkedResult.extent.size,
-                dpi: FrameGeometry.resolveDPI(from: metadata, config: frameConfig),
+                // The mat is specified in millimetres, so a downscaled preview
+                // has to scale the DPI with it or the border comes out
+                // proportionally too thick.
+                dpi: FrameGeometry.resolveDPI(from: metadata, config: frameConfig) * renderScale,
                 hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(
                     config: frameConfig, metadata: metadata)
             )
@@ -660,9 +780,40 @@ public actor WatermarkEngine {
             frameFilter.inputImage = mat
             frameFilter.backgroundImage = placedPhoto
             let framed = frameFilter.outputImage ?? placedPhoto
-            return framed.cropped(to: CGRect(origin: .zero, size: geometry.framedSize))
+            let canvas = CGRect(origin: .zero, size: geometry.framedSize)
+            let matOffset = CGPoint(x: geometry.left - e.minX, y: geometry.bottom - e.minY)
+            layout = Self.previewLayout(
+                photoRect: e.offsetBy(dx: matOffset.x, dy: matOffset.y),
+                layerRects: layerRects.mapValues { $0.offsetBy(dx: matOffset.x, dy: matOffset.y) },
+                canvas: canvas
+            )
+            return framed.cropped(to: canvas)
         }
 
+        layout = Self.previewLayout(
+            photoRect: extent, layerRects: layerRects, canvas: watermarkedResult.extent)
         return watermarkedResult
+    }
+
+    /// Flips Core Image's y-up rects into the normalized, y-DOWN coordinates the
+    /// SwiftUI editor works in (fractions of the output image).
+    private static func previewLayout(
+        photoRect: CGRect, layerRects: [Int: CGRect], canvas: CGRect
+    ) -> RenderLayout {
+        guard canvas.width > 0, canvas.height > 0 else {
+            return RenderLayout(photoRect: .zero, layerFrames: [:])
+        }
+        func normalize(_ rect: CGRect) -> CGRect {
+            CGRect(
+                x: (rect.minX - canvas.minX) / canvas.width,
+                y: (canvas.maxY - rect.maxY) / canvas.height,
+                width: rect.width / canvas.width,
+                height: rect.height / canvas.height
+            )
+        }
+        return RenderLayout(
+            photoRect: normalize(photoRect),
+            layerFrames: layerRects.mapValues(normalize)
+        )
     }
 }

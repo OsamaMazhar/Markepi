@@ -71,6 +71,11 @@ public protocol WatermarkConfigurable: AnyObject {
     /// Presents the share sheet (sets internal showShareSheet flag).
     func presentShareSheet()
 
+    /// Where the photo and each layer landed in the last rendered preview.
+    /// Nil until a preview exists — position pickers fall back to nominal
+    /// placement, and dragging is disabled. Runtime-only, never persisted.
+    var previewLayout: RenderLayout? { get }
+
     /// The analyzer's verdict for the currently-loaded source.
     /// Runtime-only — NOT persisted in config. Default nil.
     var sourceProvenanceReport: SourceProvenanceReport? { get }
@@ -112,7 +117,8 @@ extension WatermarkConfigurable {
             showError = true
             return
         }
-        config.watermarks.append(.image(input, position: .bottomRight, scale: 0.15, opacity: 1.0, isVisible: true))
+        config.watermarks.append(
+            .image(input, position: config.nextFreePosition, scale: 0.15, opacity: 1.0, isVisible: true))
         activeLayerIndex = config.watermarks.count - 1
     }
 
@@ -283,5 +289,8 @@ extension WatermarkConfigurable {
 
     /// Default returns nil — ViewModels override with stored properties.
     public var sourceProvenanceReport: SourceProvenanceReport? { nil }
+
+    /// Default returns nil — only surfaces with a live preview provide it.
+    public var previewLayout: RenderLayout? { nil }
 }
 #endif
