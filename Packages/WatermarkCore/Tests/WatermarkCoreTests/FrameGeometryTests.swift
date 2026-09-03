@@ -695,3 +695,33 @@ struct MillimetreGridTests {
         #expect(abs(FrameMetrics.defaultMarkMillimetres - mark) / mark < 0.03)
     }
 }
+
+@Suite("A layer's size number means the same thing on every medium")
+struct LayerSizeNumberTests {
+
+    /// What the number promises: the same share of the frame, whatever the
+    /// medium or resolution. It deliberately does not promise millimetres on
+    /// the exported file, which is why the control shows no unit — a layer's
+    /// size does not follow a pinned print resolution the way the frame does.
+    @Test("One setting is one share of the frame on any source")
+    func sameShareEverywhere() {
+        let scale = WatermarkScaling.scale(forMillimetres: 16)
+        for size in [CGSize(width: 3024, height: 4032),
+                     CGSize(width: 1080, height: 1920),
+                     CGSize(width: 3840, height: 2160),
+                     CGSize(width: 1280, height: 960)] {
+            let drawn = WatermarkScaling.reference(size) * scale
+            #expect(abs(drawn / min(size.width, size.height) - scale) < 0.0001, "\(size)")
+        }
+        // 16 of 254 is 6.3% of the short edge — the measured render was 6.2%.
+        #expect(abs(scale - 0.063) < 0.001)
+    }
+
+    @Test("The number survives a round trip through the stepper")
+    func roundTrips() {
+        for value in [2.5, 11, 16, 38, 228.5] as [CGFloat] {
+            let scale = WatermarkScaling.scale(forMillimetres: value)
+            #expect(WatermarkScaling.millimetres(forScale: scale) == value)
+        }
+    }
+}

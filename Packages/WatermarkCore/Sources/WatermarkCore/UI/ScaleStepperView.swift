@@ -24,11 +24,11 @@ public struct ScaleStepperView<ViewModel: WatermarkConfigurable & Observable>: V
             VStack(alignment: .leading, spacing: 2) {
                 Text("Size")
                     .markepiTypography(.controlLabel)
-                Text("Same size on photos and video")
+                Text("The same size on photos and video")
                     .markepiTypography(.metadata)
             }
             Spacer()
-            Text(Self.label(currentMillimetres))
+            Text(Self.label(currentSize))
                 .markepiTypography(.value)
                 .monospacedDigit()
             Stepper(
@@ -39,21 +39,29 @@ public struct ScaleStepperView<ViewModel: WatermarkConfigurable & Observable>: V
             )
             .labelsHidden()
             .frame(width: 100)
-            .accessibilityIdentifier("layer.size.mm")
+            .accessibilityIdentifier("layer.size")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .accessibilityLabel("Watermark size")
-        .accessibilityValue(String(format: "%.1f millimetres", currentMillimetres))
-        .accessibilityHint("Adjusts the watermark's size, measured on a standard print")
+        .accessibilityValue(Self.label(currentSize))
+        .accessibilityHint("Adjusts the watermark's size. The same setting is the same size on photos and video")
         .onAppear(perform: snapToGrid)
     }
 
-    /// "12 mm", not "12.0 mm".
-    static func label(_ millimetres: CGFloat) -> String {
-        millimetres == millimetres.rounded()
-            ? String(format: "%.0f mm", millimetres)
-            : String(format: "%.1f mm", millimetres)
+    /// "12", not "12.0" — and no unit.
+    ///
+    /// The number is millimetres on a reference print, which is what makes one
+    /// setting the same size on a still and on footage. It is not millimetres
+    /// on the *exported* file, though: unlike the frame, a layer's size does
+    /// not follow a print resolution the user pins, so at 600 DPI a layer
+    /// labelled "16 mm" would print 8mm beside a frame labelled 8mm that
+    /// printed 8mm. Showing a bare number claims only what is true — that
+    /// bigger is bigger, consistently, on any medium.
+    static func label(_ size: CGFloat) -> String {
+        size == size.rounded()
+            ? String(format: "%.0f", size)
+            : String(format: "%.1f", size)
     }
 
     /// Brings a size set before the grid existed onto it.
@@ -64,7 +72,7 @@ public struct ScaleStepperView<ViewModel: WatermarkConfigurable & Observable>: V
     /// shown and what is drawn the same number.
     private func snapToGrid() {
         guard let layer = viewModel.config.watermarks[safe: layerIndex] else { return }
-        let snapped = WatermarkScaling.scale(forMillimetres: currentMillimetres)
+        let snapped = WatermarkScaling.scale(forMillimetres: currentSize)
         guard abs(layer.scale - snapped) > 0.00001 else { return }
         viewModel.updateLayerScale(at: layerIndex, scale: snapped)
     }
@@ -80,16 +88,17 @@ public struct ScaleStepperView<ViewModel: WatermarkConfigurable & Observable>: V
         return low...high
     }
 
-    /// Millimetres on a reference print, which is a fixed share of the frame —
-    /// so one setting is the same size on a still and on footage, whatever
-    /// either one's resolution.
-    private var currentMillimetres: CGFloat {
+    /// A fixed share of the frame, so one setting is the same size on a still
+    /// and on footage whatever either one's resolution. Carried in the same
+    /// units the frame's controls use, which is what keeps the two in step —
+    /// it is only the "mm" claim that is dropped, not the arithmetic.
+    private var currentSize: CGFloat {
         WatermarkScaling.millimetres(forScale: currentScale)
     }
 
     private var millimetreBinding: Binding<CGFloat> {
         Binding(
-            get: { currentMillimetres },
+            get: { currentSize },
             set: { viewModel.updateLayerScale(
                 at: layerIndex, scale: WatermarkScaling.scale(forMillimetres: $0)) }
         )
