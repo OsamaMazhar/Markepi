@@ -210,3 +210,66 @@ struct BrandResolutionTests {
         }
     }
 }
+
+/// A monochrome mark is drawn as a silhouette, so artwork whose ink covers
+/// nearly its whole box arrives on the mat as a plain block rather than a logo.
+///
+/// This is a real failure mode, not a hypothetical one: several official logos
+/// are a solid badge with the wordmark knocked out of it — Nikon's yellow
+/// square, GoPro's black box, Leica's red circle, realme's and Xiaomi's
+/// rounded rectangles — and converting those to monochrome yields the badge.
+/// Each is now built from the wordmark instead; this keeps it that way.
+@Suite("Monochrome marks are logos, not blocks")
+struct MonochromeMarkInkTests {
+
+    /// Share of the mark's box covered by ink.
+    static func inkCoverage(of url: URL) -> Double? {
+        let side = 200
+        guard let context = CGContext(
+            data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+
+        if url.pathExtension == "pdf" {
+            guard let page = CGPDFDocument(url as CFURL)?.page(at: 1) else { return nil }
+            let box = page.getBoxRect(.cropBox)
+            guard box.width > 0, box.height > 0 else { return nil }
+            context.scaleBy(x: CGFloat(side) / box.width, y: CGFloat(side) / box.height)
+            context.translateBy(x: -box.origin.x, y: -box.origin.y)
+            context.drawPDFPage(page)
+        } else {
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
+        }
+
+        guard let data = context.data else { return nil }
+        let pixels = data.bindMemory(to: UInt8.self, capacity: side * side * 4)
+        var inked = 0
+        for offset in stride(from: 0, to: side * side * 4, by: 4) where pixels[offset + 3] > 128 {
+            inked += 1
+        }
+        return Double(inked) / Double(side * side)
+    }
+
+    @Test("No shipped monochrome mark is a solid fill")
+    func noSolidFills() {
+        let marks = BrandMarkResourceTests.shippedMarkURLs().filter {
+            let stem = $0.deletingPathExtension().lastPathComponent
+            return stem.hasSuffix("-black") || stem.hasSuffix("-white")
+        }
+        #expect(!marks.isEmpty, "no monochrome marks found to check")
+
+        for url in marks {
+            let name = url.deletingPathExtension().lastPathComponent
+            guard let coverage = Self.inkCoverage(of: url) else {
+                Issue.record("\(name): could not be rasterised")
+                continue
+            }
+            // A dense wordmark (Nikon's bold italic) reaches about 0.6; a
+            // filled badge is 0.75 upwards, a rectangle 1.0.
+            #expect(coverage < 0.7,
+                    "\(name) covers \(Int(coverage * 100))% of its box — a badge silhouette, not a wordmark")
+        }
+    }
+}

@@ -348,3 +348,55 @@ struct EquivalentFocalLengthTests {
         #expect(EXIFTokenParser.substitute("{focal_length}", metadata: ["{Exif}": unzoomed]) == "29mm")
     }
 }
+
+@Suite("Lens names survive the focal-length restatement")
+struct LensNameIntegrityTests {
+
+    private func lens(_ exif: [String: Any]) -> String {
+        EXIFTokenParser.substitute("{lens}", metadata: ["{Exif}": exif])
+    }
+
+    @Test("A zoom lens keeps the focal range in its name")
+    func zoomRangeIsUntouched() {
+        // Regression: the range's "70mm" was rewritten to the shot's focal,
+        // renaming an RF24-70 to an "RF24-50" — a lens Canon never made.
+        let canon: [String: Any] = [
+            "LensModel": "RF24-70mm F2.8 L IS USM",
+            "FocalLength": 50.0,
+            "FocalLenIn35mmFilm": 50,
+        ]
+        #expect(lens(canon) == "RF24-70mm F2.8 L IS USM")
+    }
+
+    @Test("A prime lens's name is left alone on a large sensor")
+    func primeNameIsUntouched() {
+        // XF35mmF1.4 is 53mm equivalent on APS-C, but "XF35mm" is the product
+        // name — a crop factor of 1.5 is not phone-class, so nothing changes.
+        let fuji: [String: Any] = [
+            "LensModel": "XF35mmF1.4 R",
+            "FocalLength": 35.0,
+            "FocalLenIn35mmFilm": 53,
+        ]
+        #expect(lens(fuji) == "XF35mmF1.4 R")
+    }
+
+    @Test("A phone's optical focal is restated as the equivalent")
+    func phoneSpecIsRestated() {
+        let phone: [String: Any] = [
+            "LensModel": "iPhone 6s back camera 4.15mm f/2.2",
+            "FocalLength": 4.15,
+            "FocalLenIn35mmFilm": 29,
+        ]
+        #expect(lens(phone) == "iPhone 6s back camera 29mm f/2.2")
+    }
+
+    @Test("A lens name with no millimetres at all is passed through")
+    func noFocalInName() {
+        let dji: [String: Any] = [
+            "LensModel": "DJI Mini 3 Pro",
+            "FocalLength": 6.7,
+            "FocalLenIn35mmFilm": 24,
+        ]
+        #expect(lens(dji) == "DJI Mini 3 Pro")
+    }
+}

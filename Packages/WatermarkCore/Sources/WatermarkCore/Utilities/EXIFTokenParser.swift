@@ -76,14 +76,7 @@ public struct EXIFTokenParser {
         case .lens:
             let exif = metadata[exifDictKey] as? [String: Any]
             if let lensModel = exif?["LensModel"] as? String, !lensModel.isEmpty {
-                // The string carries the optical focal ("6.765mm"); the Photos
-                // app — and the reader — expect the 35mm equivalent ("24mm").
-                // Only the number is swapped, so the lens keeps its own name.
-                guard let equivalent = equivalentFocalLength(exif: exif) else { return lensModel }
-                return lensModel.replacingOccurrences(
-                    of: #"[0-9]+(\.[0-9]+)?mm"#,
-                    with: "\(equivalent)mm",
-                    options: .regularExpression)
+                return restatingFocalAsEquivalent(in: lensModel, exif: exif)
             }
             return "--"
 
@@ -198,6 +191,39 @@ public struct EXIFTokenParser {
     /// - Parameter exifDateString: EXIF-format date string
     /// - Returns: Locale-aware short date (e.g., "Jun 18, 2026") or "--" if parsing fails
     // MARK: - Focal length
+
+    /// Rewrites the optical focal length inside a lens name as its 35mm
+    /// equivalent — but only where that is what the name is describing.
+    ///
+    /// A phone writes a spec ("back triple camera 6.765mm f/1.78"), where the
+    /// millimetres mean nothing to a reader and Photos shows the equivalent.
+    /// A camera lens writes a *product name* ("RF24-70mm F2.8 L IS USM",
+    /// "XF35mmF1.4 R"), where the millimetres are part of what the lens is
+    /// called; rewriting those renamed the lens to one that does not exist.
+    ///
+    /// Two guards keep them apart: the sensor must be phone-class (a crop
+    /// factor of 2.5 or more, which no interchangeable-lens format reaches),
+    /// and only the number matching the optical focal is touched — so the "24"
+    /// and "70" of a zoom range are never mistaken for it.
+    private static func restatingFocalAsEquivalent(in lensModel: String, exif: [String: Any]?) -> String {
+        guard let optical = (exif?["FocalLength"] as? Double), optical > 0,
+              let equivalent = equivalentFocalLength(exif: exif),
+              Double(equivalent) / optical >= 2.5 else { return lensModel }
+
+        guard let regex = try? NSRegularExpression(pattern: #"[0-9]+(\.[0-9]+)?mm"#) else {
+            return lensModel
+        }
+        let text = lensModel as NSString
+        var result = lensModel
+        // Back to front, so earlier matches keep their ranges as we replace.
+        for match in regex.matches(in: lensModel, range: NSRange(location: 0, length: text.length)).reversed() {
+            let token = text.substring(with: match.range)
+            guard let value = Double(token.dropLast(2)), abs(value - optical) < 0.05 else { continue }
+            result = (result as NSString).replacingCharacters(in: match.range, with: "\(equivalent)mm")
+        }
+        return result
+    }
+
 
     /// Physical focal length → 35mm equivalent, for Apple's camera modules.
     ///
