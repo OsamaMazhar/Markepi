@@ -28,6 +28,9 @@ public struct FrameGeometry: Equatable, Sendable {
     /// Where the source sits within `framedSize`, origin at top-left.
     public let photoRect: CGRect
 
+    /// The proportions this frame was built from.
+    public let metrics: FrameMetrics
+
     /// Thickness of the optional keyline. Zero when it is disabled.
     ///
     /// The keyline is stroked in the mat immediately outside `photoRect`, so it
@@ -43,13 +46,6 @@ public struct FrameGeometry: Equatable, Sendable {
     /// Height the brand mark is drawn at, in pixels. Zero for styles that draw
     /// no mark.
     public let logoHeight: CGFloat
-
-    /// How much taller the gallery bottom band is than its other edges.
-    ///
-    /// The reference layout's caption bar is about three times the side mat.
-    /// Tying it to the mat means the band tracks the border setting: widen the
-    /// mat and the caption bar widens with it.
-    static let galleryBottomMultiple: CGFloat = 3.0
 
     /// Pixels per inch to convert a millimetre border against.
     ///
@@ -88,13 +84,17 @@ public struct FrameGeometry: Equatable, Sendable {
     ///     A gallery frame whose slots all resolve to nothing — a photo with no
     ///     metadata and no typed handle — collapses its bottom band to a
     ///     uniform mat rather than leaving an empty bar.
+    ///   - metrics: the proportions to build from. Defaults to the measured
+    ///     reference layout.
     public init(
         config: WhiteFrameConfig,
         sourceSize: CGSize,
         dpi: CGFloat = 300,
-        hasCaptionContent: Bool = true
+        hasCaptionContent: Bool = true,
+        metrics: FrameMetrics = .reference
     ) {
         self.sourceSize = sourceSize
+        self.metrics = metrics
 
         let shorter = min(sourceSize.width, sourceSize.height)
 
@@ -111,7 +111,7 @@ public struct FrameGeometry: Equatable, Sendable {
         // The keyline is a proportion of the mat rather than of the photo, so
         // it stays visible against the border it separates: tied to the photo
         // it came out a hairline on small images and vanished entirely.
-        let keyline = config.keylineEnabled ? max(1, (mat * 0.06).rounded()) : 0
+        let keyline = config.keylineEnabled ? max(1, (mat * metrics.keylineToBorder).rounded()) : 0
         self.keylineWidth = keyline
 
         // Caption size follows whatever the style measures its mat in, so the
@@ -144,19 +144,15 @@ public struct FrameGeometry: Equatable, Sendable {
             // Nothing to say, so no bar to say it in.
             bottomEdge = edge
         case .gallery:
-            // The bottom band is a multiple of the side mat, so it tracks the
-            // millimetre setting. It still has to hold two stacked lines,
-            // though, so a very small border is floored by what the caption
-            // physically needs rather than crushing the text.
-            let lineHeight = fontSize * 1.25
-            let interlineGap = fontSize * 0.25
-            let verticalPadding = fontSize * 0.85
-            let logoHeight = self.logoHeight
-            // The band has to clear whichever is taller: the two stacked text
-            // lines, or the brand mark beside them.
-            let textBlock = lineHeight * 2 + interlineGap
-            let contentFloor = (max(textBlock, logoHeight) + verticalPadding * 2).rounded() + keyline
-            bottomEdge = max(mat * Self.galleryBottomMultiple + keyline, contentFloor)
+            // The band is a multiple of the mat, so it tracks the border
+            // setting — widen the border and the caption bar widens with it.
+            // It still has to clear its contents, so a very small border is
+            // floored by what the caption and mark physically need rather
+            // than crushing them.
+            let pitch = fontSize * metrics.linePitchToFont
+            let textBlock = pitch * 2
+            let contentFloor = (max(textBlock, logoHeight) * 1.5).rounded() + keyline
+            bottomEdge = max((mat * metrics.bandToBorder).rounded() + keyline, contentFloor)
         }
 
         self.top = edge

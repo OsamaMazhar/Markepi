@@ -375,8 +375,10 @@ struct GalleryMetricSizingTests {
          "textFontSizeRatio": 0.018, "textColorRGBA": [0.3, 0.3, 0.3, 1.0]}
         """
         let config = try JSONDecoder().decode(WhiteFrameConfig.self, from: Data(legacy.utf8))
-        #expect(config.borderMillimetres == 5.0)
-        #expect(config.captionTextMillimetres == 2.5)
-        #expect(config.logoHeightMillimetres == 4.0)
+        // The defaults are derived from the measured reference proportions,
+        // so they move together if those are retuned.
+        #expect(config.borderMillimetres == FrameMetrics.defaultBorderMillimetres)
+        #expect(config.captionTextMillimetres == FrameMetrics.defaultCaptionMillimetres)
+        #expect(config.logoHeightMillimetres == FrameMetrics.defaultMarkMillimetres)
     }
 }

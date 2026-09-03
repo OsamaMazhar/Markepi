@@ -310,9 +310,9 @@ public struct WhiteFrameConfig: Sendable, Codable {
         textColor: CGColor = CGColor(gray: 0.333, alpha: 1.0),
         textFontSizeRatio: CGFloat = 0.018,
         style: FrameStyle = .gallery,
-        borderMillimetres: CGFloat = 5.0,
-        captionTextMillimetres: CGFloat = 2.5,
-        logoHeightMillimetres: CGFloat = 4.0,
+        borderMillimetres: CGFloat = FrameMetrics.defaultBorderMillimetres,
+        captionTextMillimetres: CGFloat = FrameMetrics.defaultCaptionMillimetres,
+        logoHeightMillimetres: CGFloat = FrameMetrics.defaultMarkMillimetres,
         keylineEnabled: Bool = true,
         logoVariant: LogoVariant = .color,
         leftPrimary: CaptionSlot = WhiteFrameConfig.defaultLeftPrimary,
@@ -380,11 +380,11 @@ public struct WhiteFrameConfig: Sendable, Codable {
         // reference gallery defaults it will only use if switched to gallery.
         style = try container.decodeIfPresent(FrameStyle.self, forKey: .style) ?? .classic
         borderMillimetres = min(50, max(0.5,
-            try container.decodeIfPresent(CGFloat.self, forKey: .borderMillimetres) ?? 5.0))
+            try container.decodeIfPresent(CGFloat.self, forKey: .borderMillimetres) ?? FrameMetrics.defaultBorderMillimetres))
         captionTextMillimetres = min(20, max(0.5,
-            try container.decodeIfPresent(CGFloat.self, forKey: .captionTextMillimetres) ?? 2.5))
+            try container.decodeIfPresent(CGFloat.self, forKey: .captionTextMillimetres) ?? FrameMetrics.defaultCaptionMillimetres))
         logoHeightMillimetres = min(30, max(0.5,
-            try container.decodeIfPresent(CGFloat.self, forKey: .logoHeightMillimetres) ?? 4.0))
+            try container.decodeIfPresent(CGFloat.self, forKey: .logoHeightMillimetres) ?? FrameMetrics.defaultMarkMillimetres))
         keylineEnabled = try container.decodeIfPresent(Bool.self, forKey: .keylineEnabled) ?? false
         logoVariant = try container.decodeIfPresent(LogoVariant.self, forKey: .logoVariant) ?? .color
         leftPrimary = try container.decodeIfPresent(CaptionSlot.self, forKey: .leftPrimary)

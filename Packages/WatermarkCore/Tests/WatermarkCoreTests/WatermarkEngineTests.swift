@@ -573,7 +573,7 @@ struct WatermarkEngineTests {
         let inputURL = try createInputWithMetadata(model: "iPhone 16 Pro")
         let config = WatermarkConfiguration(
             watermarks: [],
-            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false)
+            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false, style: .classic)
         )
         let engine = WatermarkEngine()
 
@@ -626,7 +626,7 @@ struct WatermarkEngineTests {
                 .text(TextWatermarkInput(text: "TOP", fontSize: 48, opacity: 1.0),
                       position: .topLeft, scale: 0.15, opacity: 1.0, isVisible: true),
             ],
-            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false)
+            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false, style: .classic)
         )
         let engine = WatermarkEngine()
 
@@ -684,7 +684,9 @@ struct WatermarkEngineTests {
             whiteFrame: WhiteFrameConfig(
                 isEnabled: true,
                 frameWidthRatio: 0.05,
-                metadataTextEnabled: true
+                metadataTextEnabled: true,
+                // Predates frame styles: asserts classic's centred caption.
+                style: .classic
             )
         )
         // Process WITHOUT text
@@ -693,7 +695,9 @@ struct WatermarkEngineTests {
             whiteFrame: WhiteFrameConfig(
                 isEnabled: true,
                 frameWidthRatio: 0.05,
-                metadataTextEnabled: false
+                metadataTextEnabled: false,
+                // Predates frame styles: asserts classic's centred caption.
+                style: .classic
             )
         )
         let engine = WatermarkEngine()
@@ -810,7 +814,9 @@ struct WatermarkEngineTests {
                 isEnabled: true,
                 frameWidthRatio: 0.05,
                 metadataTextEnabled: true,
-                customAttributionText: customText
+                customAttributionText: customText,
+                // Predates frame styles: asserts classic's centred caption.
+                style: .classic
             )
         )
         // Process without text
@@ -819,7 +825,9 @@ struct WatermarkEngineTests {
             whiteFrame: WhiteFrameConfig(
                 isEnabled: true,
                 frameWidthRatio: 0.05,
-                metadataTextEnabled: false
+                metadataTextEnabled: false,
+                // Predates frame styles: asserts classic's centred caption.
+                style: .classic
             )
         )
         let engine = WatermarkEngine()
@@ -883,7 +891,7 @@ struct WatermarkEngineTests {
         let inputURL = try createInputWithMetadata(model: "iPhone 16 Pro")
         let config = WatermarkConfiguration(
             watermarks: [],
-            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false)
+            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false, style: .classic)
         )
         let engine = WatermarkEngine()
 
@@ -920,7 +928,7 @@ struct WatermarkEngineTests {
         let inputURL = try createInputWithMetadata(model: "iPhone 16 Pro")
         let config = WatermarkConfiguration(
             watermarks: [],
-            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false)
+            whiteFrame: WhiteFrameConfig(isEnabled: true, metadataTextEnabled: false, style: .classic)
         )
         let engine = WatermarkEngine()
 

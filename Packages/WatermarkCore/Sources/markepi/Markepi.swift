@@ -304,15 +304,17 @@ struct Markepi {
                 } ?? 0.018),
                 style: try flags.value("--border-style").map { try enumValue($0, flag: "--border-style") }
                     ?? WhiteFrameConfig().style,
+                // Defer to the model's defaults rather than restating them,
+                // so the CLI and the app cannot drift apart.
                 borderMillimetres: CGFloat(try flags.value("--border-mm").map {
                     try doubleValue($0, flag: "--border-mm", in: 0.5...50)
-                } ?? 5.0),
+                } ?? Double(WhiteFrameConfig().borderMillimetres)),
                 captionTextMillimetres: CGFloat(try flags.value("--border-caption-mm").map {
                     try doubleValue($0, flag: "--border-caption-mm", in: 0.5...20)
-                } ?? 2.5),
+                } ?? Double(WhiteFrameConfig().captionTextMillimetres)),
                 logoHeightMillimetres: CGFloat(try flags.value("--border-logo-mm").map {
                     try doubleValue($0, flag: "--border-logo-mm", in: 0.5...30)
-                } ?? 4.0),
+                } ?? Double(WhiteFrameConfig().logoHeightMillimetres)),
                 keylineEnabled: flags.has("--border-no-keyline")
                     ? false
                     : (flags.has("--border-keyline") || WhiteFrameConfig().keylineEnabled),
