@@ -223,6 +223,15 @@ public struct WhiteFrameConfig: Sendable, Codable {
     /// someone's saved work. Only new frames get the gallery default.
     public var style: FrameStyle
 
+    /// Resolution the millimetre sizes are converted against, in pixels per
+    /// inch. `nil` means automatic: believe the photo's own resolution when it
+    /// looks like a real print measurement, else 300.
+    ///
+    /// Set it and every physical size follows — the mat, the caption, the mark
+    /// and the print size shown in More all key off this one number, so
+    /// raising it makes the same millimetres land on more pixels.
+    public var outputDPI: CGFloat?
+
     /// Mat thickness in millimetres, used by `gallery`.
     ///
     /// A physical size rather than a proportion: 5mm is 5mm on paper whatever
@@ -298,7 +307,8 @@ public struct WhiteFrameConfig: Sendable, Codable {
     ///   - captionPrefix: Free text shown before the fields (default: "")
     ///   - captionFields: Metadata fields to include (default: camera + shooting details)
     ///   - customAttributionText: Legacy verbatim override, nil = use prefix+fields (default: nil)
-    ///   - textColor: CGColor for the metadata text (default: dark gray)
+    ///   - textColor: CGColor for the metadata text (nil = per-style default:
+    ///     black on a gallery mat, dark grey on a classic one)
     ///   - textFontSizeRatio: Font size as proportion of image shorter dimension (default: 0.018)
     public init(
         isEnabled: Bool = false,
@@ -307,13 +317,14 @@ public struct WhiteFrameConfig: Sendable, Codable {
         captionPrefix: String = "",
         captionFields: [CaptionField] = WhiteFrameConfig.defaultCaptionFields,
         customAttributionText: String? = nil,
-        textColor: CGColor = CGColor(gray: 0.333, alpha: 1.0),
+        textColor: CGColor? = nil,
         textFontSizeRatio: CGFloat = 0.018,
         style: FrameStyle = .gallery,
         borderMillimetres: CGFloat = FrameMetrics.defaultBorderMillimetres,
         captionTextMillimetres: CGFloat = FrameMetrics.defaultCaptionMillimetres,
         logoHeightMillimetres: CGFloat = FrameMetrics.defaultMarkMillimetres,
         keylineEnabled: Bool = true,
+        outputDPI: CGFloat? = nil,
         logoVariant: LogoVariant = .color,
         leftPrimary: CaptionSlot = WhiteFrameConfig.defaultLeftPrimary,
         leftSecondary: CaptionSlot = WhiteFrameConfig.defaultLeftSecondary,
@@ -327,7 +338,12 @@ public struct WhiteFrameConfig: Sendable, Codable {
         self.captionPrefix = captionPrefix
         self.captionFields = captionFields
         self.customAttributionText = customAttributionText
-        self.textColor = textColor
+        // The gallery caption's device name is black in the reference, and
+        // the secondary line is derived from it — a grey primary made the whole
+        // block read washed out and, at a glance, unbold.
+        self.textColor = textColor ?? (style == .gallery
+            ? CGColor(gray: 0.0, alpha: 1.0)
+            : CGColor(gray: 0.333, alpha: 1.0))
         self.textFontSizeRatio = textFontSizeRatio
         self.style = style
         // A hairline mat is a rendering bug waiting to happen, and nobody
@@ -336,6 +352,9 @@ public struct WhiteFrameConfig: Sendable, Codable {
         self.captionTextMillimetres = min(20, max(0.5, captionTextMillimetres))
         self.logoHeightMillimetres = min(30, max(0.5, logoHeightMillimetres))
         self.keylineEnabled = keylineEnabled
+        // A print is not made below ~36 DPI and no consumer pipeline needs
+        // above 2400; clamp rather than let a stray value blow up the canvas.
+        self.outputDPI = outputDPI.map { min(2400, max(36, $0)) }
         self.logoVariant = logoVariant
         self.leftPrimary = leftPrimary
         self.leftSecondary = leftSecondary
@@ -350,7 +369,7 @@ public struct WhiteFrameConfig: Sendable, Codable {
         case captionPrefix, captionFields
         case customAttributionText, textColorRGBA, textFontSizeRatio
         case style, borderMillimetres, captionTextMillimetres, logoHeightMillimetres
-        case keylineEnabled, logoVariant
+        case keylineEnabled, logoVariant, outputDPI
         case leftPrimary, leftSecondary, rightPrimary, rightSecondary
     }
 
@@ -387,6 +406,8 @@ public struct WhiteFrameConfig: Sendable, Codable {
             try container.decodeIfPresent(CGFloat.self, forKey: .logoHeightMillimetres) ?? FrameMetrics.defaultMarkMillimetres))
         keylineEnabled = try container.decodeIfPresent(Bool.self, forKey: .keylineEnabled) ?? false
         logoVariant = try container.decodeIfPresent(LogoVariant.self, forKey: .logoVariant) ?? .color
+        outputDPI = try container.decodeIfPresent(CGFloat.self, forKey: .outputDPI)
+            .map { min(2400, max(36, $0)) }
         leftPrimary = try container.decodeIfPresent(CaptionSlot.self, forKey: .leftPrimary)
             ?? WhiteFrameConfig.defaultLeftPrimary
         leftSecondary = try container.decodeIfPresent(CaptionSlot.self, forKey: .leftSecondary)
@@ -406,11 +427,18 @@ public struct WhiteFrameConfig: Sendable, Codable {
         try container.encode(captionFields, forKey: .captionFields)
         try container.encodeIfPresent(customAttributionText, forKey: .customAttributionText)
         try container.encode(textFontSizeRatio, forKey: .textFontSizeRatio)
-        let components = textColor.components ?? [0.333, 0.333, 0.333, 1.0]
+        // Convert first: `CGColor(gray:alpha:)` has two components, so reading
+        // `.components` straight off a grey colour fell through to the 0.333
+        // fallback and silently rewrote the caption tone on every save.
+        let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+        let components = textColor.converted(to: sRGB, intent: .defaultIntent, options: nil)?.components
+            ?? textColor.components
+            ?? [0.333, 0.333, 0.333, 1.0]
         let rgba: [CGFloat] = components.count >= 4
             ? [components[0], components[1], components[2], components[3]]
             : [0.333, 0.333, 0.333, 1.0]
         try container.encode(rgba, forKey: .textColorRGBA)
+        try container.encodeIfPresent(outputDPI, forKey: .outputDPI)
         try container.encode(style, forKey: .style)
         try container.encode(borderMillimetres, forKey: .borderMillimetres)
         try container.encode(captionTextMillimetres, forKey: .captionTextMillimetres)

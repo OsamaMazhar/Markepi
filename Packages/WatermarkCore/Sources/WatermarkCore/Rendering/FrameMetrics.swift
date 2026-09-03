@@ -16,18 +16,18 @@ public struct FrameMetrics: Sendable, Equatable {
 
     // MARK: Band
 
-    /// Caption band height ÷ mat thickness. Measured: 125 ÷ 40.
+    /// Caption band height ÷ mat thickness. Measured: 126 ÷ 38.
     public var bandToBorder: CGFloat
 
     // MARK: Type
 
-    /// Default caption text size ÷ mat thickness. Measured: ~26 ÷ 40.
+    /// Default caption text size ÷ mat thickness. Measured: 27.9 ÷ 38.
     ///
     /// This sets the *default* for the user's millimetre text setting; once
     /// they change it, it is their number that counts.
     public var captionToBorder: CGFloat
 
-    /// Baseline-to-baseline ÷ font size. Measured: ~36 ÷ 26.
+    /// Baseline-to-baseline ÷ font size. Measured: 34 ÷ 27.9.
     public var linePitchToFont: CGFloat
 
     /// Share of the pitch that is the gap between the lines, the rest being
@@ -55,9 +55,17 @@ public struct FrameMetrics: Sendable, Equatable {
     /// Divider height ÷ the height of the text block beside it.
     public var dividerHeightToBlock: CGFloat
 
+    /// Centre of the caption block, as a fraction of the band height.
+    ///
+    /// Not 0.5: in the reference the block's ink spans 27..81 of a 126pt band,
+    /// centred at 0.43. That leaves a gap below the caption equal to the mat
+    /// on the other three sides, so the card reads as one even margin all the
+    /// way round rather than a caption floating in a tall bottom strip.
+    public var contentCentreOfBand: CGFloat
+
     // MARK: Ink
 
-    /// Keyline thickness ÷ mat thickness. Measured: 14 ÷ 40.
+    /// Keyline thickness ÷ mat thickness. Measured: 13 ÷ 38.
     ///
     /// Of the mat, not the photo: tied to the photo it came out a hairline on
     /// small images and vanished. The reference line is heavier than it looks
@@ -89,15 +97,16 @@ public struct FrameMetrics: Sendable, Equatable {
     public var matBottomWhite: CGFloat
 
     public init(
-        bandToBorder: CGFloat = 3.12,
-        captionToBorder: CGFloat = 0.65,
-        linePitchToFont: CGFloat = 1.38,
+        bandToBorder: CGFloat = 3.32,
+        captionToBorder: CGFloat = 0.73,
+        linePitchToFont: CGFloat = 1.22,
         interlineShareOfPitch: CGFloat = 0.18,
         markToBorder: CGFloat = 1.70,
         markMaxWidthOfBand: CGFloat = 0.28,
         columnGapToFont: CGFloat = 0.80,
-        dividerWidthToFont: CGFloat = 0.05,
+        dividerWidthToFont: CGFloat = 0.072,
         dividerHeightToBlock: CGFloat = 1.0,
+        contentCentreOfBand: CGFloat = 0.428,
         keylineToBorder: CGFloat = 0.35,
         secondaryToneMix: CGFloat = 0.45,
         emphasiseRightPrimary: Bool = false,
@@ -113,6 +122,7 @@ public struct FrameMetrics: Sendable, Equatable {
         self.columnGapToFont = columnGapToFont
         self.dividerWidthToFont = dividerWidthToFont
         self.dividerHeightToBlock = dividerHeightToBlock
+        self.contentCentreOfBand = contentCentreOfBand
         self.keylineToBorder = keylineToBorder
         self.secondaryToneMix = secondaryToneMix
         self.emphasiseRightPrimary = emphasiseRightPrimary

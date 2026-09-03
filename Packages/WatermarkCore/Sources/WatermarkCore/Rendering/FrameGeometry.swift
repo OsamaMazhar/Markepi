@@ -55,6 +55,13 @@ public struct FrameGeometry: Equatable, Sendable {
     /// 5mm border into 14px on an 8000px photo, which reads as no border at
     /// all. So only a print-intent resolution is believed; anything lower
     /// falls back to 300.
+    /// When `config` carries an explicit `outputDPI`, that is the answer —
+    /// a resolution the user set is not a guess to be second-guessed.
+    public static func resolveDPI(from metadata: [String: Any], config: WhiteFrameConfig) -> CGFloat {
+        if let chosen = config.outputDPI { return chosen }
+        return resolveDPI(from: metadata)
+    }
+
     public static func resolveDPI(from metadata: [String: Any]) -> CGFloat {
         let candidates = [
             metadata[kCGImagePropertyDPIWidth as String],

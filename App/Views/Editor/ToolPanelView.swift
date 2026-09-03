@@ -154,6 +154,11 @@ struct ToolPanelView: View {
             ProvenanceControlsView(viewModel: viewModel)
             EditorCard { DateStampToggleView(viewModel: viewModel) }
             EditorCard {
+                resolutionRow
+                Divider().padding(.leading, 16)
+                printSizeRow
+            }
+            EditorCard {
                 exportFormatRow
                 Divider().padding(.leading, 16)
                 qualitySliderRow
@@ -235,6 +240,102 @@ struct ToolPanelView: View {
     }
 
     // MARK: - Output format row
+
+    // MARK: - Resolution & print size
+
+    /// DPI presets the millimetre frame sizes convert against. "Automatic"
+    /// keeps the previous behaviour: believe the photo's own resolution when it
+    /// is a real print measurement, else 300.
+    private static let dpiPresets: [CGFloat] = [72, 150, 300, 600]
+
+    private var selectedDPI: CGFloat? { viewModel.config.whiteFrame?.outputDPI }
+
+    /// The DPI the render will actually use, so the print size below never
+    /// disagrees with the frame above.
+    private var effectiveDPI: CGFloat {
+        selectedDPI ?? FrameGeometry.resolveDPI(from: viewModel.sourceMetadata)
+    }
+
+    private func setDPI(_ dpi: CGFloat?) {
+        // The setting lives on the frame config because the frame is what
+        // measures in millimetres; a frame is created (left disabled) if the
+        // user sets a resolution before turning the frame on.
+        var frame = viewModel.config.whiteFrame ?? WhiteFrameConfig(isEnabled: false)
+        frame.outputDPI = dpi
+        viewModel.config.whiteFrame = frame
+    }
+
+    private var resolutionRow: some View {
+        HStack {
+            Text("Resolution")
+                .markepiTypography(.controlLabel)
+            Spacer()
+            Menu {
+                Button("Automatic") { setDPI(nil) }
+                ForEach(Self.dpiPresets, id: \.self) { dpi in
+                    Button("\(Int(dpi)) DPI") { setDPI(dpi) }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(selectedDPI.map { "\(Int($0)) DPI" } ?? "Automatic")
+                        .markepiTypography(.value)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityIdentifier("more.resolution")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var printSizeRow: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Print size")
+                .markepiTypography(.controlLabel)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(printSizeText)
+                    .markepiTypography(.value)
+                if let pixels = viewModel.sourcePixelSize {
+                    Text("\(Int(pixels.width)) × \(Int(pixels.height)) px at \(Int(effectiveDPI)) DPI")
+                        .markepiTypography(.metadata)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("more.printSize")
+    }
+
+    /// Physical size of the *exported* image — the frame enlarges the canvas,
+    /// so the number has to describe what comes out, not what went in.
+    private var printSizeText: String {
+        guard let pixels = viewModel.sourcePixelSize else { return "—" }
+        let framed: CGSize
+        if let frame = viewModel.config.whiteFrame, frame.isEnabled {
+            framed = FrameGeometry(
+                config: frame,
+                sourceSize: pixels,
+                dpi: effectiveDPI,
+                hasCaptionContent: WhiteFrameRenderer.hasCaptionContent(
+                    config: frame, metadata: viewModel.sourceMetadata)
+            ).framedSize
+        } else {
+            framed = pixels
+        }
+        let mmWidth = framed.width / effectiveDPI * 25.4
+        let mmHeight = framed.height / effectiveDPI * 25.4
+        // Millimetres below a postcard, centimetres above — nobody reads a
+        // poster as "1189 mm".
+        if max(mmWidth, mmHeight) >= 200 {
+            return String(format: "%.1f × %.1f cm", mmWidth / 10, mmHeight / 10)
+        }
+        return String(format: "%.0f × %.0f mm", mmWidth, mmHeight)
+    }
 
     private var exportFormatRow: some View {
         HStack {

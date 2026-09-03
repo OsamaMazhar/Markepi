@@ -180,7 +180,7 @@ public struct WhiteFrameRenderer {
             geometry: FrameGeometry(
                 config: config,
                 sourceSize: sourceSize,
-                dpi: FrameGeometry.resolveDPI(from: metadata),
+                dpi: FrameGeometry.resolveDPI(from: metadata, config: config),
                 hasCaptionContent: hasCaptionContent(config: config, metadata: metadata)
             ),
             metadata: metadata,
@@ -286,9 +286,10 @@ public struct WhiteFrameRenderer {
     static func matColor(for style: FrameStyle, metrics: FrameMetrics = .reference) -> CGColor {
         switch style {
         case .classic: return CGColor(gray: 1.0, alpha: 1.0)
-        // The gallery mat is a gradient; its midpoint is what contrast
-        // decisions (mark tone, secondary text) are judged against.
-        case .gallery: return CGColor(gray: (metrics.matTopWhite + metrics.matBottomWhite) / 2, alpha: 1.0)
+        // The gallery mat is a gradient, and every contrast decision (mark
+        // tone, secondary text) is made down in the caption band — so it is
+        // the bottom tone that matters, not the midpoint.
+        case .gallery: return CGColor(gray: metrics.matBottomWhite, alpha: 1.0)
         }
     }
 
@@ -467,7 +468,10 @@ public struct WhiteFrameRenderer {
         }
 
         let tallest = max(blockHeight(left), blockHeight(right), markSize.height)
-        let blockTop = band.midY - tallest / 2
+        // Sits above the band's centre, per `contentCentreOfBand`: the gap left
+        // beneath the caption then matches the mat on the other three sides.
+        let contentCentre = band.minY + band.height * m.contentCentreOfBand
+        let blockTop = contentCentre - tallest / 2
 
         // Left column hugs the left edge of the band.
         draw(left, x: { _ in band.minX }, top: blockTop + (tallest - blockHeight(left)) / 2)
@@ -483,7 +487,7 @@ public struct WhiteFrameRenderer {
             cursor -= gap
             let dividerHeight = max(blockHeight(right) * m.dividerHeightToBlock, markSize.height * 0.8)
             let dividerRect = CGRect(x: cursor - dividerWidth,
-                                     y: band.midY - dividerHeight / 2,
+                                     y: contentCentre - dividerHeight / 2,
                                      width: dividerWidth, height: dividerHeight)
             cgContext.setFillColor(platformColor(from: secondaryColor).cgColor)
             cgContext.fill(dividerRect)
@@ -494,7 +498,7 @@ public struct WhiteFrameRenderer {
 
         if let mark = content.mark {
             let markRect = CGRect(x: cursor - markSize.width,
-                                  y: band.midY - markSize.height / 2,
+                                  y: contentCentre - markSize.height / 2,
                                   width: markSize.width, height: markSize.height)
             mark.draw(in: markRect, context: cgContext)
         }
@@ -503,10 +507,16 @@ public struct WhiteFrameRenderer {
     /// Moves a colour part-way towards another — used to derive the secondary
     /// caption tone from the primary one and the mat behind it.
     static func lighten(_ color: CGColor, towards target: CGColor, by amount: CGFloat) -> CGColor {
-        guard let a = color.components, let b = target.components,
+        // Both sides must be in the same space first. `CGColor(gray:alpha:)`
+        // has two components, so the old `count >= 3` guard silently returned
+        // the colour untouched — which is why the secondary caption line came
+        // out identical to the primary instead of a lighter grey.
+        let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+        guard let a = color.converted(to: sRGB, intent: .defaultIntent, options: nil)?.components,
+              let b = target.converted(to: sRGB, intent: .defaultIntent, options: nil)?.components,
               a.count >= 3, b.count >= 3 else { return color }
         func mix(_ i: Int) -> CGFloat { a[i] + (b[i] - a[i]) * amount }
-        return CGColor(colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+        return CGColor(colorSpace: sRGB,
                        components: [mix(0), mix(1), mix(2), a.count > 3 ? a[3] : 1]) ?? color
     }
 

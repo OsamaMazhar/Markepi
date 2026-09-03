@@ -66,10 +66,30 @@ BORDER / WHITE FRAME           (applied when --border or any --border-* is given
                                 shutterSpeed,iso,dimensions,format)
       --border-no-text         Draw the frame with no caption at all.
       --border-text-color <hex>
-                               Caption colour (default: #555555)
+                               Caption colour (default: black on a gallery
+                               mat, #555555 on a classic one)
       --border-text-size <0.005–0.05>
                                Caption size as a fraction of the short edge
-                               (default: 0.018)
+                               (default: 0.018, classic only)
+      --border-style <style>   classic | gallery (default: gallery)
+
+  Gallery style is measured in millimetres, converted at --border-dpi:
+      --border-mm <0.5–50>     Mat thickness (default: 8)
+      --border-caption-mm <0.5–20>
+                               Caption text height (default: 5.84)
+      --border-logo-mm <0.5–30>
+                               Brand mark height (default: 13.6)
+      --border-dpi <36–2400>   Resolution the millimetres convert against.
+                               Omit to use the photo's own resolution when it
+                               is a real print measurement, else 300.
+      --border-keyline / --border-no-keyline
+                               Black rule between photo and mat (default: on)
+      --border-logo-variant <v>
+                               color | monochrome (default: color)
+      --border-left-primary <slot>, --border-left-secondary <slot>,
+      --border-right-primary <slot>, --border-right-secondary <slot>
+                               Caption slots: "field:<name>", "text:<literal>"
+                               or "" for empty.
 
 DATE STAMP                     (applied when --date-stamp or any --date-* is given)
       --date-stamp             Burn in the retro orange film-databack date,

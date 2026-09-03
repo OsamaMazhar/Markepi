@@ -36,7 +36,7 @@ private let valueFlags: Set<String> = [
     "--text", "--text-position", "--text-size", "--text-font", "--text-color", "--text-opacity",
     "--logo", "--logo-position", "--logo-size", "--logo-opacity", "--logo-rotation",
     "--border-width", "--border-caption", "--border-fields", "--border-text-color", "--border-text-size",
-    "--border-style", "--border-mm", "--border-caption-mm", "--border-logo-mm", "--border-logo-variant",
+    "--border-style", "--border-mm", "--border-caption-mm", "--border-logo-mm", "--border-dpi", "--border-logo-variant",
     "--border-left-primary", "--border-left-secondary",
     "--border-right-primary", "--border-right-secondary",
     "--date-format", "--date-size", "--date-position",
@@ -298,7 +298,7 @@ struct Markepi {
                     ?? WhiteFrameConfig.defaultCaptionFields,
                 textColor: try flags.value("--border-text-color").map {
                     try colorValue($0, flag: "--border-text-color")
-                } ?? CGColor(gray: 0.333, alpha: 1),
+                },
                 textFontSizeRatio: CGFloat(try flags.value("--border-text-size").map {
                     try doubleValue($0, flag: "--border-text-size", in: 0.005...0.05)
                 } ?? 0.018),
@@ -318,6 +318,9 @@ struct Markepi {
                 keylineEnabled: flags.has("--border-no-keyline")
                     ? false
                     : (flags.has("--border-keyline") || WhiteFrameConfig().keylineEnabled),
+                outputDPI: try flags.value("--border-dpi").map {
+                    CGFloat(try doubleValue($0, flag: "--border-dpi", in: 36...2400))
+                },
                 logoVariant: try flags.value("--border-logo-variant").map {
                     try enumValue($0, flag: "--border-logo-variant")
                 } ?? .color,

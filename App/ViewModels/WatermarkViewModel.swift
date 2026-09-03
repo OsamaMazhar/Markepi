@@ -61,10 +61,15 @@ final class WatermarkViewModel: WatermarkConfigurable {
 
     private static let rememberSettingsKey = "rememberLastSettings"
 
-    /// When true, the app reopens with the watermark used last time; when false
-    /// (default), each launch starts from a clean slate. Persisted in UserDefaults
-    /// and toggled from the Settings pane (gear icon).
-    var rememberLastSettings: Bool = UserDefaults.standard.bool(forKey: WatermarkViewModel.rememberSettingsKey) {
+    /// When true (the default), the app reopens with the settings used last
+    /// time; when false, each launch starts from a clean slate. Persisted in
+    /// UserDefaults and toggled from the Settings pane (gear icon).
+    ///
+    /// `UserDefaults.bool` reports false for a key that was never written, so
+    /// the unset case is checked explicitly — otherwise the default reads as
+    /// "forget", and a force-quit threw away everything the user had set up.
+    var rememberLastSettings: Bool = UserDefaults.standard
+        .object(forKey: WatermarkViewModel.rememberSettingsKey) as? Bool ?? true {
         didSet { UserDefaults.standard.set(rememberLastSettings, forKey: Self.rememberSettingsKey) }
     }
 
@@ -303,10 +308,46 @@ final class WatermarkViewModel: WatermarkConfigurable {
 
     /// Runs whenever the current source changes (import funnels + index change)
     /// and when the user changes the source declaration.
+    /// Pixel dimensions of the current source, read from its header. Drives the
+    /// print-size readout in More, which needs pixels and a DPI to state a
+    /// physical size.
+    var sourcePixelSize: CGSize?
+
+    /// The current source's image properties, in the same shape the renderer
+    /// reads ("{Exif}", "{TIFF}", DPI…). Lets the More panel state the print
+    /// size and the automatic resolution using exactly what the render will use.
+    var sourceMetadata: [String: Any] = [:]
+
+    /// Reads the header without decoding the image — cheap enough to do on
+    /// every source change.
+    private static func imageProperties(of url: URL) -> [String: Any] {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]
+        else { return [:] }
+        return properties
+    }
+
+    private static func pixelSize(from properties: [String: Any]) -> CGSize? {
+        guard let width = properties[kCGImagePropertyPixelWidth as String] as? CGFloat,
+              let height = properties[kCGImagePropertyPixelHeight as String] as? CGFloat,
+              width > 0, height > 0 else { return nil }
+        // A portrait photo is stored landscape plus an orientation tag; the
+        // print size has to describe what the viewer actually sees.
+        let orientation = (properties[kCGImagePropertyOrientation as String] as? UInt32) ?? 1
+        let quarterTurned = (5...8).contains(orientation)
+        return quarterTurned ? CGSize(width: height, height: width)
+                             : CGSize(width: width, height: height)
+    }
+
     func analyzeCurrentSource() {
         guard let photo = currentPhoto else {
-            sourceProvenanceReport = nil; return
+            sourceProvenanceReport = nil
+            sourcePixelSize = nil
+            sourceMetadata = [:]
+            return
         }
+        sourceMetadata = Self.imageProperties(of: photo.sourceURL)
+        sourcePixelSize = Self.pixelSize(from: sourceMetadata)
         let url = photo.sourceURL
         let id = photo.id
         let mediaType = photo.mediaType
@@ -388,6 +429,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 + "|bmm:\(String(format: "%.2f", wf.borderMillimetres))"
                 + "|cmm:\(String(format: "%.2f", wf.captionTextMillimetres))"
                 + "|lmm:\(String(format: "%.2f", wf.logoHeightMillimetres))"
+                + "|dpi:\(wf.outputDPI.map { String(format: "%.0f", $0) } ?? "auto")"
                 + "|lp:\(Self.slotKey(wf.leftPrimary))|ls:\(Self.slotKey(wf.leftSecondary))"
                 + "|rp:\(Self.slotKey(wf.rightPrimary))|rs:\(Self.slotKey(wf.rightSecondary))"
             )

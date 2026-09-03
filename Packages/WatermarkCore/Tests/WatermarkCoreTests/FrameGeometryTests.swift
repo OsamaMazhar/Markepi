@@ -1,4 +1,5 @@
 import CoreGraphics
+import ImageIO
 import Foundation
 import Testing
 @testable import WatermarkCore
@@ -380,5 +381,96 @@ struct GalleryMetricSizingTests {
         #expect(config.borderMillimetres == FrameMetrics.defaultBorderMillimetres)
         #expect(config.captionTextMillimetres == FrameMetrics.defaultCaptionMillimetres)
         #expect(config.logoHeightMillimetres == FrameMetrics.defaultMarkMillimetres)
+    }
+}
+
+// MARK: - Output DPI
+
+@Suite("Output DPI drives every physical size")
+struct OutputDPIGeometryTests {
+
+    private let source = CGSize(width: 3024, height: 4032)
+
+    @Test("An explicit DPI overrides the photo's own resolution")
+    func explicitDPIWins() {
+        let metadata: [String: Any] = [kCGImagePropertyDPIWidth as String: 600]
+        let auto = WhiteFrameConfig(isEnabled: true, style: .gallery)
+        #expect(FrameGeometry.resolveDPI(from: metadata, config: auto) == 600)
+
+        var pinned = auto
+        pinned.outputDPI = 150
+        #expect(FrameGeometry.resolveDPI(from: metadata, config: pinned) == 150)
+    }
+
+    @Test("Doubling the DPI doubles the mat, keyline, caption and mark")
+    func sizesScaleWithDPI() {
+        let config = WhiteFrameConfig(isEnabled: true, style: .gallery)
+        let low = FrameGeometry(config: config, sourceSize: source, dpi: 150)
+        let high = FrameGeometry(config: config, sourceSize: source, dpi: 300)
+
+        // Each size is rounded to a whole pixel, so doubling is exact to ±1.
+        #expect(abs(high.keylineWidth - low.keylineWidth * 2) <= 1)
+        #expect(abs(high.captionFontSize - low.captionFontSize * 2) <= 1)
+        #expect(abs(high.logoHeight - low.logoHeight * 2) <= 1)
+        // 8mm at 150 DPI is 47px a side; at 300 it is 94px.
+        #expect(abs((high.framedSize.width - source.width)
+                    - (low.framedSize.width - source.width) * 2) <= 2)
+    }
+
+    @Test("The DPI is clamped to a printable range")
+    func dpiIsClamped() {
+        #expect(WhiteFrameConfig(outputDPI: 10_000).outputDPI == 2400)
+        #expect(WhiteFrameConfig(outputDPI: 1).outputDPI == 36)
+        #expect(WhiteFrameConfig().outputDPI == nil)
+    }
+
+    @Test("A saved config restores its DPI and its caption colour unchanged")
+    func dpiAndColourSurviveARoundTrip() throws {
+        var config = WhiteFrameConfig(isEnabled: true, style: .gallery)
+        config.outputDPI = 600
+        let restored = try JSONDecoder().decode(
+            WhiteFrameConfig.self, from: JSONEncoder().encode(config))
+
+        #expect(restored.outputDPI == 600)
+        // Black, not the 0.333 grey the old encoder fell back to for any
+        // colour that was not already RGBA.
+        let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+        let components = restored.textColor.converted(
+            to: sRGB, intent: .defaultIntent, options: nil)?.components
+        #expect(components?[0] == 0)
+    }
+}
+
+// MARK: - Caption tone
+
+@Suite("Gallery caption tone")
+struct GalleryCaptionToneTests {
+
+    @Test("The gallery primary is black and the classic one stays grey")
+    func perStyleDefaults() {
+        let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+        func red(_ color: CGColor) -> CGFloat? {
+            color.converted(to: sRGB, intent: .defaultIntent, options: nil)?.components?[0]
+        }
+        #expect(red(WhiteFrameConfig(style: .gallery).textColor) == 0)
+        // Classic keeps its mid grey. Compared as a range, not a number: it is
+        // authored in DeviceGray, and converting that to sRGB preserves the
+        // appearance rather than the component (0.333 grey reads as 0.41 sRGB).
+        let classic = red(WhiteFrameConfig(style: .classic).textColor) ?? 0
+        #expect(classic > 0.3 && classic < 0.5)
+    }
+
+    @Test("The secondary line is lighter than the primary")
+    func secondaryIsLighter() {
+        // Regression: `lighten` bailed out on two-component grey colours and
+        // returned the primary unchanged, so both caption lines drew identical.
+        let mat = WhiteFrameRenderer.matColor(for: .gallery)
+        let secondary = WhiteFrameRenderer.lighten(
+            CGColor(gray: 0, alpha: 1), towards: mat, by: 0.45)
+        let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+        let value = secondary.converted(to: sRGB, intent: .defaultIntent, options: nil)?.components?[0]
+        // Black lifted 45% of the way to the mat's 0.651 lands near 0.29.
+        #expect(value != nil)
+        #expect(value! > 0.2 && value! < 0.4)
     }
 }

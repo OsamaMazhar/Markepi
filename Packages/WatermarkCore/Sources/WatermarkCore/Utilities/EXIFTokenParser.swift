@@ -25,6 +25,7 @@ public struct EXIFTokenParser {
     private static let exifDictKey = "{Exif}"       // kCGImagePropertyExifDictionary
     private static let tiffDictKey = "{TIFF}"       // kCGImagePropertyTIFFDictionary
     private static let gpsDictKey = "{GPS}"         // kCGImagePropertyGPSDictionary
+    private static let iptcDictKey = "{IPTC}"       // kCGImagePropertyIPTCDictionary
 
     // MARK: - Token Definitions
 
@@ -122,12 +123,25 @@ public struct EXIFTokenParser {
             return "ISO \(iso)"
 
         case .date:
+            // Where the capture date lives varies by writer: phones fill the
+            // Exif dictionary, some cameras and most re-encoders leave only
+            // TIFF's DateTime, and edited files can carry it in IPTC alone.
+            // Reading Exif only is why the date silently dropped out of the
+            // caption on files that plainly had one.
             let exif = metadata[exifDictKey] as? [String: Any]
+            let tiff = metadata[tiffDictKey] as? [String: Any]
             let dateString = (exif?["DateTimeOriginal"] as? String)
                 ?? (exif?["DateTimeDigitized"] as? String)
                 ?? (exif?["DateTime"] as? String)
-            guard let dateString = dateString else { return "--" }
-            return formatDate(dateString)
+                ?? (tiff?["DateTime"] as? String)
+            if let dateString, let formatted = formatDate(dateString) { return formatted }
+            if let iptc = metadata[iptcDictKey] as? [String: Any],
+               let created = iptc["DateCreated"] as? String {
+                // IPTC splits the stamp: yyyyMMdd plus an optional HHmmss.
+                let time = (iptc["TimeCreated"] as? String) ?? ""
+                if let formatted = formatIPTCDate(created, time: time) { return formatted }
+            }
+            return "--"
 
         case .gps:
             return formatGPS(from: metadata)
@@ -178,10 +192,19 @@ public struct EXIFTokenParser {
     ///
     /// - Parameter exifDateString: EXIF-format date string
     /// - Returns: Locale-aware short date (e.g., "Jun 18, 2026") or "--" if parsing fails
-    private static func formatDate(_ exifDateString: String) -> String {
+    private static func formatDate(_ exifDateString: String) -> String? {
         let inputFormatter = DateFormatter()
         inputFormatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
-        guard let date = inputFormatter.date(from: exifDateString) else { return "--" }
+        // Some writers use dashes, and a few omit the time entirely.
+        inputFormatter.locale = Locale(identifier: "en_US_POSIX")
+        let date = ["yyyy:MM:dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy:MM:dd"]
+            .lazy
+            .compactMap { format -> Date? in
+                inputFormatter.dateFormat = format
+                return inputFormatter.date(from: exifDateString)
+            }
+            .first
+        guard let date else { return nil }
 
         // Medium date plus the time, without seconds — "16 Dec 2018 at 09:50".
         // Styles rather than a fixed pattern, so month names and time order
@@ -190,6 +213,21 @@ public struct EXIFTokenParser {
         outputFormatter.dateStyle = .medium
         outputFormatter.timeStyle = .short
         return outputFormatter.string(from: date)
+    }
+
+    /// IPTC keeps the date as `yyyyMMdd` and the time separately as `HHmmss`
+    /// (optionally with a zone suffix), so it needs its own parse.
+    private static func formatIPTCDate(_ date: String, time: String) -> String? {
+        let digits = time.prefix(while: \.isNumber)
+        let combined = digits.count >= 6 ? "\(date) \(digits.prefix(6))" : date
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = digits.count >= 6 ? "yyyyMMdd HHmmss" : "yyyyMMdd"
+        guard let parsed = formatter.date(from: combined) else { return nil }
+        let output = DateFormatter()
+        output.dateStyle = .medium
+        output.timeStyle = digits.count >= 6 ? .short : .none
+        return output.string(from: parsed)
     }
 
     /// Formats GPS latitude/longitude from metadata GPS dictionary.

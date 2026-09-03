@@ -28,7 +28,9 @@ public struct AppGroupConfigSync {
     /// "still small" report that prompted this.
     ///
     /// 2: frame styles — gallery default, millimetre sizing, measured metrics.
-    private static let schemaVersion = 2
+    /// 3: gallery caption retuned to the reference (black primary, new metrics)
+    ///    and a settable output DPI.
+    private static let schemaVersion = 3
 
     // MARK: - Save
 
