@@ -51,8 +51,7 @@ struct GainMapProcessorTests {
             auxData: aux,
             type: .appleHDR,
             sourceOrientation: .up,
-            frameEnabled: false,
-            frameWidthRatio: 0
+            placement: nil
         ))
         #expect(pixels(of: out) == [1, 2, 3, 4])
         let desc = try #require(description(of: out))
@@ -66,8 +65,8 @@ struct GainMapProcessorTests {
             auxData: nil,
             type: .appleHDR,
             sourceOrientation: .right,
-            frameEnabled: true,
-            frameWidthRatio: 0.04
+            placement: Self.framed(photo: CGRect(x: 1, y: 1, width: 6, height: 6),
+                                   canvas: CGSize(width: 8, height: 8))
         ) == nil)
     }
 
@@ -86,8 +85,7 @@ struct GainMapProcessorTests {
             auxData: aux,
             type: .appleHDR,
             sourceOrientation: .right,
-            frameEnabled: false,
-            frameWidthRatio: 0
+            placement: nil
         ))
 
         // 90° CW → 2 wide, 4 tall. The original left column (10,20) becomes the
@@ -111,8 +109,7 @@ struct GainMapProcessorTests {
             auxData: aux,
             type: .appleHDR,
             sourceOrientation: .down,
-            frameEnabled: false,
-            frameWidthRatio: 0
+            placement: nil
         ))
         let desc = try #require(description(of: out))
         #expect(desc["Width"] as? Int == 3)
@@ -133,8 +130,7 @@ struct GainMapProcessorTests {
             auxData: aux,
             type: .appleHDR,
             sourceOrientation: .down,
-            frameEnabled: false,
-            frameWidthRatio: 0
+            placement: nil
         ))
         // Reading through the 4-byte stride, the logical pixels are (1,2 / 3,4);
         // 180° → (4,3 / 2,1). No padding byte (99) survives.
@@ -144,34 +140,69 @@ struct GainMapProcessorTests {
         #expect(desc["BytesPerRow"] as? Int == 2)
     }
 
-    // MARK: - Frame band neutralization
+    // MARK: - Framed canvas
 
-    @Test("White frame zeroes the border band and preserves the interior")
-    func neutralizesFrameBand() throws {
-        // 8×8 map, all boosted (200). ratio 0.25 → inset = round(8*0.25) = 2.
-        let source = [UInt8](repeating: 200, count: 64)
-        let aux = makeAux(pixels: source, width: 8, height: 8)
+    /// A placement in canvas pixels, as the engine builds it from the render.
+    static func framed(photo: CGRect, canvas: CGSize) -> GainMapProcessor.Placement {
+        GainMapProcessor.Placement(canvas: canvas, photo: photo)
+    }
+
+    @Test("A framed export grows the map to the canvas and leaves the mat at no boost")
+    func padsMapToFramedCanvas() throws {
+        // 4×4 map of a 4×4 photo seated in an 8×12 canvas at (2, 2): the mat is
+        // 2px on three sides and 6px at the bottom, as a caption band is.
+        let aux = makeAux(pixels: [UInt8](repeating: 200, count: 16), width: 4, height: 4)
 
         let out = try #require(GainMapProcessor.aligned(
             auxData: aux,
             type: .appleHDR,
             sourceOrientation: .up,
-            frameEnabled: true,
-            frameWidthRatio: 0.25
+            placement: Self.framed(photo: CGRect(x: 2, y: 2, width: 4, height: 4),
+                                   canvas: CGSize(width: 8, height: 12))
         ))
+
+        let desc = try #require(description(of: out))
+        #expect(desc["Width"] as? Int == 8, "the map has to cover the framed canvas")
+        #expect(desc["Height"] as? Int == 12)
+        #expect(desc["BytesPerRow"] as? Int == 8)
+
         let px = try #require(pixels(of: out))
         func sample(_ x: Int, _ y: Int) -> UInt8 { px[y * 8 + x] }
-
-        // Corners and edges inside the 2px band are neutralized to 0.
+        // The photo's gain sits exactly where the photo sits.
+        for y in 2..<6 {
+            for x in 2..<6 { #expect(sample(x, y) == 200) }
+        }
+        // Every sample of the mat is neutral, the tall caption band included.
         #expect(sample(0, 0) == 0)
         #expect(sample(7, 0) == 0)
-        #expect(sample(0, 7) == 0)
-        #expect(sample(1, 4) == 0)   // left band, middle row
-        #expect(sample(6, 4) == 0)   // right band, middle row
-        // Interior (rows/cols 2...5) keeps the original boost.
-        #expect(sample(2, 2) == 200)
-        #expect(sample(5, 5) == 200)
-        #expect(sample(4, 4) == 200)
+        #expect(sample(1, 4) == 0)
+        #expect(sample(6, 4) == 0)
+        #expect(sample(4, 6) == 0)
+        #expect(sample(4, 11) == 0)
+    }
+
+    @Test("A rotated source is seated in the framed canvas upright")
+    func padsRotatedMap() throws {
+        // 4×2 landscape map, .right → 2×4 upright, seated in a 4×8 canvas at (1, 1).
+        let aux = makeAux(pixels: [10, 11, 12, 13,
+                                   20, 21, 22, 23], width: 4, height: 2)
+        let out = try #require(GainMapProcessor.aligned(
+            auxData: aux,
+            type: .appleHDR,
+            sourceOrientation: .right,
+            placement: Self.framed(photo: CGRect(x: 1, y: 1, width: 2, height: 4),
+                                   canvas: CGSize(width: 4, height: 8))
+        ))
+        let desc = try #require(description(of: out))
+        #expect(desc["Width"] as? Int == 4)
+        #expect(desc["Height"] as? Int == 8)
+        let px = try #require(pixels(of: out))
+        func sample(_ x: Int, _ y: Int) -> UInt8 { px[y * 4 + x] }
+        #expect(sample(1, 1) == 20, "the rotated map keeps its upright order")
+        #expect(sample(2, 1) == 10)
+        #expect(sample(1, 4) == 23)
+        #expect(sample(0, 0) == 0)
+        #expect(sample(3, 7) == 0)
     }
 
     // MARK: - Safe fallback
@@ -188,8 +219,7 @@ struct GainMapProcessorTests {
             auxData: aux,
             type: .appleHDR,
             sourceOrientation: .right,
-            frameEnabled: false,
-            frameWidthRatio: 0
+            placement: nil
         ) == nil)
     }
 
@@ -200,8 +230,8 @@ struct GainMapProcessorTests {
             auxData: aux,
             type: .iso,
             sourceOrientation: .up,
-            frameEnabled: true,
-            frameWidthRatio: 0.25
+            placement: Self.framed(photo: CGRect(x: 1, y: 1, width: 2, height: 2),
+                                   canvas: CGSize(width: 4, height: 4))
         ) == nil)
     }
 
@@ -214,8 +244,7 @@ struct GainMapProcessorTests {
             auxData: aux,
             type: .iso,
             sourceOrientation: .right,
-            frameEnabled: false,
-            frameWidthRatio: 0
+            placement: nil
         ))
         let desc = try #require(description(of: out))
         #expect(desc["Width"] as? Int == 2)

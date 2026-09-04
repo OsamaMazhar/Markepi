@@ -202,7 +202,7 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
 
     private func inkColorBinding(_ index: Int) -> Binding<Color> {
         Binding(
-            get: { signatureInput.map { Color(cgColor: $0.inkColor) } ?? .black },
+            get: { signatureInput.map { Color(cgColor: $0.inkColor) } ?? .white },
             set: { viewModel.updateSignature(at: index, inkColor: Self.cgColor(from: $0), strokeWidth: nil) }
         )
     }
@@ -258,10 +258,11 @@ public struct SignatureCaptureView<ViewModel: WatermarkConfigurable & Observable
                     Button("Save") {
                         let strokeData = drawing.dataRepresentation()
                         // Preserve the current thickness and ink color when
-                        // editing; default a brand-new signature to fixed
-                        // black ink, independent of the current appearance.
+                        // editing; a brand-new signature renders in white on
+                        // the photo, whatever colour it was drawn in here.
                         let width = signatureInput?.strokeWidth ?? 5
-                        let inkColor = signatureInput?.inkColor ?? CGColor(gray: 0, alpha: 1)
+                        let inkColor = signatureInput?.inkColor
+                            ?? CGColor(red: 1, green: 1, blue: 1, alpha: 1)
                         viewModel.addSignatureLayer(
                             strokeData: strokeData,
                             inkColor: inkColor,

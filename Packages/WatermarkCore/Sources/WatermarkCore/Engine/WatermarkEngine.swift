@@ -244,22 +244,30 @@ public actor WatermarkEngine {
         // the opaque SDR-white frame doesn't glow with residual HDR boost.
         // A downscaled preview's base no longer matches the source-sized gain
         // map, and a preview never needs one.
-        // The mat is a millimetre measurement now, so the band the gain map has
-        // to neutralize is derived the same way the geometry derives it.
-        let frameBandRatio: CGFloat = {
-            guard let frame = config.whiteFrame, frame.isEnabled else { return 0 }
-            let shorter = min(normalized.extent.width, normalized.extent.height)
-            guard shorter > 0 else { return 0 }
-            let dpi = FrameGeometry.resolveDPI(
-                from: loaded.metadata, config: frame, sourceSize: normalized.extent.size)
-            return FrameGeometry.pixels(millimetres: frame.borderMillimetres, dpi: dpi) / shorter
+        // A frame enlarges the canvas, and a viewer stretches the gain map over
+        // whatever it is attached to — so the map has to be seated in the framed
+        // canvas, not left at the photo's own shape. The render already recorded
+        // exactly where the photo landed, so use that rather than re-deriving it.
+        let gainMapPlacement: GainMapProcessor.Placement? = {
+            guard config.whiteFrame?.isEnabled == true else { return nil }
+            let canvas = composited.extent.size
+            let photo = previewLayout.photoRect
+            guard canvas.width > 0, canvas.height > 0, photo.width > 0, photo.height > 0 else {
+                return nil
+            }
+            return GainMapProcessor.Placement(
+                canvas: canvas,
+                photo: CGRect(x: photo.minX * canvas.width,
+                              y: photo.minY * canvas.height,
+                              width: photo.width * canvas.width,
+                              height: photo.height * canvas.height)
+            )
         }()
         let alignedGainMap = renderScale < 1 ? nil : GainMapProcessor.aligned(
             auxData: loaded.gainMapAuxData,
             type: loaded.gainMapType ?? .appleHDR,
             sourceOrientation: loaded.sourceOrientation,
-            frameEnabled: config.whiteFrame?.isEnabled == true,
-            frameWidthRatio: frameBandRatio
+            placement: gainMapPlacement
         )
 
         try ImageWriter.write(

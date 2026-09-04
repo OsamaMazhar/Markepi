@@ -30,14 +30,32 @@ public enum GainMapType: Sendable {
 /// for any source whose EXIF orientation wasn't already `.up` (nearly every
 /// iPhone photo) — the map's gain lands in the wrong places.
 ///
-/// This type rotates the gain map with the SAME transform the base received, and
-/// — when a white frame is applied — zeroes the gain in the border band so the
-/// opaque SDR-white frame renders flat instead of glowing with the photo's
-/// residual gain (an Apple `HDRGainMap` sample of 0 == gain 1.0 == no boost).
+/// This type rotates the gain map with the SAME transform the base received,
+/// and — when a frame is applied — pads it out to the framed canvas, seating the
+/// photo's map exactly where the photo sits and leaving the mat at no boost (an
+/// Apple `HDRGainMap` sample of 0 == gain 1.0 == SDR).
 ///
-/// Rotation is a lossless byte permutation (90°/180°/mirror only), so no
-/// resampling or gamma conversion touches the gain values.
+/// Padding, not merely blanking a border: a viewer stretches the map over
+/// whatever image it is attached to, so a photo-shaped map on a framed canvas is
+/// re-scaled across the mat as well. The photo's own gain then lands on the
+/// border as a shaded rectangle that is invisible in the SDR pixels and obvious
+/// on an HDR display.
+///
+/// Rotation and padding are lossless byte moves, so no resampling or gamma
+/// conversion touches the gain values.
 public struct GainMapProcessor {
+
+    /// Where the photo sits inside the exported canvas, in pixels, y-down —
+    /// exactly the rect the renderer composited it into.
+    public struct Placement: Sendable {
+        public let canvas: CGSize
+        public let photo: CGRect
+
+        public init(canvas: CGSize, photo: CGRect) {
+            self.canvas = canvas
+            self.photo = photo
+        }
+    }
 
     /// Returns a gain-map auxiliary dictionary aligned to the exported base
     /// image, or `nil` when there is no gain map / it can't be safely aligned.
@@ -53,22 +71,20 @@ public struct GainMapProcessor {
     ///   - type: Which gain-map flavor `auxData` came from.
     ///   - sourceOrientation: The source image's EXIF orientation (the transform
     ///     the base pixels received to become upright).
-    ///   - frameEnabled: Whether a white frame is composited on export.
-    ///   - frameWidthRatio: Frame width as a fraction of the shorter dimension
-    ///     (matches `WhiteFrameRenderer`); only used when `frameEnabled`.
+    ///   - placement: Where the photo sits in the exported canvas when a frame
+    ///     enlarged it. `nil` ⇒ the canvas IS the photo ⇒ nothing to pad.
     /// - Returns: A rebuilt aux dict ready for `CGImageDestinationAddAuxiliaryDataInfo`,
     ///   the original dict unchanged (fast path), or `nil`.
     public static func aligned(
         auxData: [String: Any]?,
         type: GainMapType,
         sourceOrientation: CGImagePropertyOrientation,
-        frameEnabled: Bool,
-        frameWidthRatio: CGFloat
+        placement: Placement?
     ) -> [String: Any]? {
         guard let auxData else { return nil }
 
         let needsRotation = sourceOrientation != .up
-        let needsNeutralization = frameEnabled
+        let needsNeutralization = placement != nil
 
         // Fast path: base wasn't rotated and no frame band to clear — the stored
         // gain map already aligns with the exported pixels. Return it untouched.
@@ -78,8 +94,8 @@ public struct GainMapProcessor {
 
         // ISO gain maps: geometry is type-agnostic (safe to rotate) but the
         // neutral value depends on the map's own metadata, so we can't fabricate
-        // a "no boost" frame band. When a frame is applied to an ISO map, drop it
-        // (clean SDR frame) rather than risk a glowing border.
+        // "no boost" samples for the mat. When a frame is applied to an ISO map,
+        // drop it (clean SDR frame) rather than risk a glowing border.
         if type == .iso && needsNeutralization {
             #if DEBUG
             gainMapLog.debug("ISO gain map + white frame: dropping map to keep frame flat")
@@ -107,21 +123,29 @@ public struct GainMapProcessor {
             orientation: sourceOrientation
         )
         var buffer = rotated.pixels
-        let width = rotated.width
-        let height = rotated.height
-        let tightBytesPerRow = width * parsed.bytesPerSample
+        var width = rotated.width
+        var height = rotated.height
 
-        if needsNeutralization {
-            // Guaranteed `.appleHDR` here (ISO + frame returned above): neutral == 0.
-            neutralizeBorder(
-                &buffer,
+        if let placement {
+            // Guaranteed `.appleHDR` here (ISO + frame returned above): the mat
+            // is filled with 0, which is gain 1.0 — no boost.
+            guard let padded = padded(
+                buffer,
                 width: width,
                 height: height,
                 bytesPerSample: parsed.bytesPerSample,
-                bytesPerRow: tightBytesPerRow,
-                frameWidthRatio: frameWidthRatio
-            )
+                into: placement
+            ) else {
+                #if DEBUG
+                gainMapLog.debug("gain map cannot be seated in the framed canvas — dropping (SDR export)")
+                #endif
+                return nil
+            }
+            buffer = padded.pixels
+            width = padded.width
+            height = padded.height
         }
+        let tightBytesPerRow = width * parsed.bytesPerSample
 
         var description: [String: Any] = [
             "Width": width,
@@ -301,47 +325,44 @@ public struct GainMapProcessor {
         return (out, dstWidth, dstHeight)
     }
 
-    // MARK: - Frame band neutralization
+    // MARK: - Framed canvas
 
-    /// Zeroes the gain in a uniform border band so an opaque SDR-white frame
-    /// renders flat. `bytesPerRow` MUST be tight (`width * bytesPerSample`).
+    /// Seats the photo's gain map in a neutral canvas of the framed image's
+    /// shape, so a viewer's stretch puts every sample back over the pixel it
+    /// was measured from and the mat stays at no boost.
     ///
-    /// The inset is computed at gain-map resolution: because the map is a
-    /// uniformly downscaled copy of the base, `min(w,h) * frameWidthRatio` at
-    /// gain-map scale covers the same physical border as the base frame
-    /// (`min(baseW,baseH) * frameWidthRatio`).
-    private static func neutralizeBorder(
-        _ buffer: inout [UInt8],
+    /// The map is a uniformly downscaled copy of the photo, so its own scale
+    /// against `placement.photo` is the scale the whole canvas is built at.
+    private static func padded(
+        _ buffer: [UInt8],
         width: Int,
         height: Int,
         bytesPerSample bps: Int,
-        bytesPerRow: Int,
-        frameWidthRatio: CGFloat
-    ) {
-        let rawInset = Int((CGFloat(min(width, height)) * frameWidthRatio).rounded())
-        // Clamp so the four bands never overlap past the center on tiny maps.
-        let inset = min(rawInset, min(width, height) / 2)
-        guard inset > 0 else { return }
+        into placement: Placement
+    ) -> (pixels: [UInt8], width: Int, height: Int)? {
+        let photo = placement.photo
+        let canvas = placement.canvas
+        guard photo.width > 0, photo.height > 0, canvas.width > 0, canvas.height > 0 else { return nil }
 
-        buffer.withUnsafeMutableBufferPointer { p in
-            for y in 0..<height {
-                let rowStart = y * bytesPerRow
-                if y < inset || y >= height - inset {
-                    // Whole row is inside the top/bottom band.
-                    for i in rowStart..<(rowStart + width * bps) { p[i] = 0 }
-                } else {
-                    // Left band.
-                    for x in 0..<inset {
-                        let idx = rowStart + x * bps
-                        for b in 0..<bps { p[idx + b] = 0 }
-                    }
-                    // Right band.
-                    for x in (width - inset)..<width {
-                        let idx = rowStart + x * bps
-                        for b in 0..<bps { p[idx + b] = 0 }
-                    }
+        let scaleX = CGFloat(width) / photo.width
+        let scaleY = CGFloat(height) / photo.height
+        let outWidth = max(width, Int((canvas.width * scaleX).rounded()))
+        let outHeight = max(height, Int((canvas.height * scaleY).rounded()))
+        let originX = min(max(Int((photo.minX * scaleX).rounded()), 0), outWidth - width)
+        let originY = min(max(Int((photo.minY * scaleY).rounded()), 0), outHeight - height)
+
+        var out = [UInt8](repeating: 0, count: outWidth * outHeight * bps)
+        let sourceRow = width * bps
+        let destinationRow = outWidth * bps
+        buffer.withUnsafeBufferPointer { src in
+            out.withUnsafeMutableBufferPointer { dst in
+                for y in 0..<height {
+                    let s = y * sourceRow
+                    let d = (y + originY) * destinationRow + originX * bps
+                    for i in 0..<sourceRow { dst[d + i] = src[s + i] }
                 }
             }
         }
+        return (out, outWidth, outHeight)
     }
 }

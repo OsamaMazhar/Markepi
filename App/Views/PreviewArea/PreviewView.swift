@@ -14,14 +14,32 @@ struct PreviewView: View {
     @Bindable var viewModel: WatermarkViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @GestureState private var pinchScale: CGFloat = 1.0
-    @State private var committedScale: CGFloat = 1.0
+    /// Canvas zoom. `pan` is in screen points and is applied *after* the
+    /// scale, which is what lets a pinch hold the point under the fingers
+    /// still instead of always growing out of the centre.
+    @State private var zoom: CGFloat = 1.0
+    @State private var pan: CGSize = .zero
+    @GestureState private var pinchZoom: CGFloat = 1.0
+    @GestureState private var pinchFocus: CGPoint = .zero
     @GestureState private var isComparing: Bool = false
     @GestureState private var isPinching: Bool = false
+
+    /// `pan` as it was when a canvas-panning drag began; nil while a drag is
+    /// moving a layer instead.
+    @State private var panStart: CGSize?
 
     /// Displayed size of the preview image itself (not the container), so a
     /// drag in points can be converted into the layer's placement fractions.
     @State private var imageDisplaySize: CGSize = .zero
+
+    /// The whole preview area. A zoomed photo may fill it, black bars included,
+    /// and it bounds how far the photo can be panned.
+    @State private var containerSize: CGSize = .zero
+
+    /// Untransformed space to measure drags in. Measuring them in the zoomed
+    /// photo's own space fed the pan back into its own input — every pan moved
+    /// the view the translation was measured against, so it juddered.
+    private static let canvasSpace = "markepi.preview.canvas"
 
     /// Live drag state, nil when nothing is being dragged.
     ///
@@ -52,14 +70,49 @@ struct PreviewView: View {
         var translation: CGSize = .zero
     }
 
-    private var effectiveScale: CGFloat {
-        committedScale * pinchScale
+    private var liveZoom: CGFloat { clampedZoom(zoom * pinchZoom) }
+
+    private var livePan: CGSize { panOffset(forZoom: liveZoom, focus: pinchFocus) }
+
+    private func clampedZoom(_ value: CGFloat) -> CGFloat { min(max(value, 1.0), 6.0) }
+
+    /// The pan that keeps `focus` — a point in the photo's own coordinates,
+    /// measured from its centre — under the fingers as the zoom changes.
+    private func panOffset(forZoom newZoom: CGFloat, focus: CGPoint) -> CGSize {
+        clampedPan(
+            CGSize(width: pan.width + (zoom - newZoom) * focus.x,
+                   height: pan.height + (zoom - newZoom) * focus.y),
+            zoom: newZoom
+        )
     }
 
-    private var layerScale: CGFloat {
-        let idx = viewModel.activeLayerIndex
-        guard idx >= 0, idx < viewModel.config.watermarks.count else { return 1.0 }
-        return viewModel.config.watermarks[idx].scale
+    /// Holds the zoomed photo's edges outside the preview area, so it can never
+    /// be pushed off far enough to show a gap. An axis the photo doesn't fill
+    /// yet has no travel at all, which keeps it centred.
+    private func panLimits(zoom: CGFloat) -> CGSize {
+        CGSize(width: max((zoom * imageDisplaySize.width - containerSize.width) / 2, 0),
+               height: max((zoom * imageDisplaySize.height - containerSize.height) / 2, 0))
+    }
+
+    private func clampedPan(_ offset: CGSize, zoom: CGFloat) -> CGSize {
+        let limit = panLimits(zoom: zoom)
+        return CGSize(width: min(max(offset.width, -limit.width), limit.width),
+                      height: min(max(offset.height, -limit.height), limit.height))
+    }
+
+    /// A point in the preview area's coordinates as a point in the photo's own,
+    /// undoing the zoom. The photo is centred, so the two centres coincide.
+    private func contentPoint(_ point: CGPoint) -> CGPoint {
+        CGPoint(
+            x: imageDisplaySize.width / 2 + (point.x - containerSize.width / 2 - pan.width) / zoom,
+            y: imageDisplaySize.height / 2 + (point.y - containerSize.height / 2 - pan.height) / zoom
+        )
+    }
+
+    /// A pinch's anchor as a point in the photo's own coordinates, from centre.
+    private func focus(of anchor: UnitPoint) -> CGPoint {
+        CGPoint(x: (anchor.x - 0.5) * imageDisplaySize.width,
+                y: (anchor.y - 0.5) * imageDisplaySize.height)
     }
 
     var body: some View {
@@ -76,7 +129,6 @@ struct PreviewView: View {
                     // Letting SwiftUI render the image natively makes it resize
                     // in lock-step with the surrounding layout.
                     .onGeometryChange(for: CGSize.self) { $0.size } action: { imageDisplaySize = $0 }
-                    .scaleEffect(effectiveScale)
                     // The gestures live on a transparent overlay, NOT on the
                     // Image: a new preview lands mid-drag now that renders are
                     // fast, and a recognizer attached to the Image itself is
@@ -85,13 +137,6 @@ struct PreviewView: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .gesture(combinedGesture)
-                    }
-                    .sensoryFeedback(.impact(weight: .light), trigger: isComparing)
-                    .overlay(alignment: .topTrailing) {
-                        if pinchScale != 1.0 {
-                            ScaleLabelView(scale: effectiveScale * layerScale)
-                                .padding(12)
-                        }
                     }
                     .overlay(alignment: .topLeading) {
                         if let drag = activeDrag, let ghost = drag.ghost, imageDisplaySize.width > 0 {
@@ -105,6 +150,18 @@ struct PreviewView: View {
                                 .opacity(drag.opacity)
                                 .offset(x: origin.x, y: origin.y)
                                 .allowsHitTesting(false)
+                        }
+                    }
+                    // Photo, gesture layer and ghost zoom as one, so gesture
+                    // locations and the ghost's placement stay in the photo's
+                    // own coordinates however far it is zoomed in.
+                    .scaleEffect(liveZoom)
+                    .offset(livePan)
+                    .sensoryFeedback(.impact(weight: .light), trigger: isComparing)
+                    .overlay(alignment: .topTrailing) {
+                        if liveZoom != 1.0 {
+                            ScaleLabelView(scale: liveZoom)
+                                .padding(12)
                         }
                     }
                     .overlay(alignment: .center) {
@@ -125,21 +182,17 @@ struct PreviewView: View {
                         }
                     }
                     .accessibilityLabel("Watermark preview")
-                    .accessibilityHint("Drag to move the watermark, pinch to resize it")
+                    .accessibilityHint("Drag to move the watermark, pinch to zoom the photo")
                     .accessibilityZoomAction { action in
-                        let idx = viewModel.activeLayerIndex
-                        guard idx >= 0, idx < viewModel.config.watermarks.count else { return }
-                        let currentScale = viewModel.config.watermarks[idx].scale
-                        let newScale: CGFloat
+                        let factor: CGFloat
                         switch action.direction {
-                        case .zoomIn:
-                            newScale = min(currentScale + 0.05, 0.90)
-                        case .zoomOut:
-                            newScale = max(currentScale - 0.05, 0.01)
-                        @unknown default:
-                            return
+                        case .zoomIn:  factor = 1.5
+                        case .zoomOut: factor = 1 / 1.5
+                        @unknown default: return
                         }
-                        viewModel.updateLayerScale(at: idx, scale: newScale)
+                        let newZoom = clampedZoom(zoom * factor)
+                        pan = panOffset(forZoom: newZoom, focus: .zero)
+                        zoom = newZoom
                     }
             } else if viewModel.currentPhoto != nil {
                 if let thumbnail = viewModel.currentPhoto?.thumbnail {
@@ -164,6 +217,11 @@ struct PreviewView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { containerSize = $0 }
+        // Clipping the preview area rather than the photo's fitted frame is
+        // what lets a zoomed photo spread into the black bars beside it.
+        .clipped()
+        .coordinateSpace(.named(Self.canvasSpace))
         .onChange(of: viewModel.previewRevision) {
             // The composite now shows the element where it was dropped.
             if drag == nil { settling = nil }
@@ -173,22 +231,24 @@ struct PreviewView: View {
         // of the bottom chrome. The full-bleed black canvas behind fills the rest.
     }
 
+    /// Pinch to zoom the photo, anchored on the point between the fingers, and
+    /// the zoom stays where it is left. Sizing a layer is the size control's
+    /// job, so nothing here writes to the config.
     private var magnifyGesture: some Gesture {
         MagnifyGesture()
-            .updating($pinchScale) { value, state, _ in
+            .updating($pinchZoom) { value, state, _ in
                 state = value.magnification
+            }
+            .updating($pinchFocus) { value, state, _ in
+                state = focus(of: value.startAnchor)
             }
             .updating($isPinching) { _, state, _ in
                 state = true
             }
             .onEnded { value in
-                committedScale *= value.magnification
-                let clamped = min(max(committedScale, 0.01 / layerScale), 0.90 / layerScale)
-                let finalScale = clamped * layerScale
-                committedScale = 1.0
-                let idx = viewModel.activeLayerIndex
-                guard idx >= 0, idx < viewModel.config.watermarks.count else { return }
-                viewModel.updateLayerScale(at: idx, scale: finalScale)
+                let newZoom = clampedZoom(zoom * value.magnification)
+                pan = panOffset(forZoom: newZoom, focus: focus(of: value.startAnchor))
+                zoom = newZoom
             }
     }
 
@@ -213,7 +273,7 @@ struct PreviewView: View {
     private var dragGesture: some Gesture {
         // 12pt beats the long-press-to-compare gesture's 10pt slop, so holding
         // still to compare doesn't nudge the watermark.
-        DragGesture(minimumDistance: 12)
+        DragGesture(minimumDistance: 12, coordinateSpace: .named(Self.canvasSpace))
             .onChanged { value in
                 // A pinch moves its centroid; without this the watermark would
                 // fly across the photo while being resized.
@@ -223,10 +283,33 @@ struct PreviewView: View {
                     #endif
                     return
                 }
-                if drag == nil { beginDrag(at: value.startLocation) }
-                drag?.translation = value.translation
+                if let panStart {
+                    // Both the translation and the pan are in preview-area
+                    // points, so the photo tracks the finger exactly.
+                    pan = clampedPan(
+                        CGSize(width: panStart.width + value.translation.width,
+                               height: panStart.height + value.translation.height),
+                        zoom: zoom
+                    )
+                    return
+                }
+                if drag == nil { beginDrag(at: contentPoint(value.startLocation)) }
+                // Nothing under the finger and the photo has somewhere to go:
+                // move the photo instead, so a zoomed-in area can be reached.
+                let limits = panLimits(zoom: zoom)
+                if drag == nil, limits.width > 0 || limits.height > 0 {
+                    panStart = pan
+                    return
+                }
+                // A layer moves with the finger, so its travel is the on-screen
+                // distance measured back in the photo's own points.
+                drag?.translation = CGSize(width: value.translation.width / zoom,
+                                           height: value.translation.height / zoom)
             }
-            .onEnded { _ in endDrag() }
+            .onEnded { _ in
+                panStart = nil
+                endDrag()
+            }
     }
 
     /// Picks the layer to move, snapshots the geometry the drag is relative to,

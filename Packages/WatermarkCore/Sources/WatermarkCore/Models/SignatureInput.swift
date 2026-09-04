@@ -12,7 +12,7 @@ public struct SignatureInput: Sendable, Codable {
     /// Raw PKDrawing.dataRepresentation() bytes (vector, typically <100KB)
     public let strokeData: Data
 
-    /// Ink color for the rendered signature (default: black)
+    /// Ink color for the rendered signature (default: white)
     public let inkColor: CGColor
 
     /// Stroke width in points (default: 3.0)
@@ -22,11 +22,11 @@ public struct SignatureInput: Sendable, Codable {
     ///
     /// - Parameters:
     ///   - strokeData: Raw PKDrawing.dataRepresentation() bytes
-    ///   - inkColor: CGColor for the ink (default: black)
+    ///   - inkColor: CGColor for the ink (default: white)
     ///   - strokeWidth: Stroke width in points (default: 3.0)
     public init(
         strokeData: Data,
-        inkColor: CGColor = CGColor(gray: 0, alpha: 1),
+        inkColor: CGColor = CGColor(red: 1, green: 1, blue: 1, alpha: 1),
         strokeWidth: CGFloat = 3.0
     ) {
         self.strokeData = strokeData

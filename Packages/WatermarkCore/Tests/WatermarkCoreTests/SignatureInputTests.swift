@@ -58,7 +58,7 @@ struct SignatureInputTests {
 
     // MARK: - Default Values
 
-    @Test("SignatureInput defaults: inkColor black, strokeWidth 3.0")
+    @Test("SignatureInput defaults: inkColor white, strokeWidth 3.0")
     func testSignatureInputDefaultValues() throws {
         let strokeData = makeTestStrokeData()
         let input = SignatureInput(strokeData: strokeData)
@@ -66,10 +66,14 @@ struct SignatureInputTests {
         #expect(input.strokeData == strokeData)
         #expect(input.strokeWidth == 3.0)
 
-        // Default inkColor should be black (gray: 0, alpha: 1)
+        // Default inkColor is opaque sRGB white — what a signature renders as
+        // on the photo, whatever colour the capture canvas draws in.
         let components = input.inkColor.components ?? []
-        #expect(components.count >= 2)
-        #expect(abs(components[0] - 0.0) < 0.01) // Gray component ~0 (black)
+        #expect(components.count == 4)
+        #expect(components[0] == 1.0)
+        #expect(components[1] == 1.0)
+        #expect(components[2] == 1.0)
+        #expect(components[3] == 1.0)
     }
 
     // MARK: - WatermarkLayer .signature Codable Round-Trip
