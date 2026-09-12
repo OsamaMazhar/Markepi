@@ -1,3 +1,4 @@
+import StoreKit
 import SwiftUI
 import UIKit
 import WatermarkCore
@@ -50,6 +51,13 @@ struct PaywallView: View {
 
     /// Drives the one-shot entrance animation (content fades/rises in).
     @State private var appeared = false
+
+    /// Presents Apple's native offer-code redemption sheet, where the user types
+    /// an alphanumeric code distributed through App Store Connect. A successful
+    /// redemption lands as a transaction on `Transaction.updates`, which
+    /// `StoreManager` already observes — so entitlement is granted with no extra
+    /// wiring here, and the paywall flips to the "Pro" state on its own.
+    @State private var showRedeemCode = false
 
     /// When set, the paywall acts as the final onboarding page: the close
     /// affordance becomes a "Skip" text button (top-right) that calls this
@@ -156,6 +164,7 @@ struct PaywallView: View {
         } message: {
             Text(infoMessage ?? "")
         }
+        .offerCodeRedemption(isPresented: $showRedeemCode)
     }
 
     // MARK: - Header
@@ -361,6 +370,9 @@ struct PaywallView: View {
 
             HStack(spacing: 18) {
                 Button("Restore") { Task { await restore() } }
+                Button("Redeem Code") { showRedeemCode = true }
+                    .accessibilityLabel("Redeem an offer code")
+                    .accessibilityHint("Enter a code to unlock Markepi Pro")
                 Button("Terms") { openURL(Self.termsURL) }
                 Button("Privacy") { openURL(Self.privacyURL) }
             }
