@@ -141,6 +141,21 @@ final class WatermarkViewModel: WatermarkConfigurable {
     /// whether an export is allowed and what to count when one completes.
     private let exportGate = ExportGate()
 
+    /// What the finished render will cost the free daily allowance, held until
+    /// the share actually completes. A share sheet opened and dismissed exports
+    /// nothing, so it must cost nothing.
+    private var pendingQuota: (photos: Int, videos: Int)?
+
+    /// Charges the allowance for the export the user actually completed —
+    /// called from the share sheet's completion, which only reports `true` when
+    /// something was saved or sent. Clearing it as it is spent means re-sharing
+    /// the same render is still one export.
+    func recordCompletedExport() {
+        guard let pending = pendingQuota else { return }
+        pendingQuota = nil
+        exportGate.record(photos: pending.photos, videos: pending.videos)
+    }
+
     /// Checks the gate for an export of the given size. Returns `true` when the
     /// export may proceed; otherwise raises the paywall and returns `false`.
     private func allowExportOrPaywall(photos: Int, videos: Int) -> Bool {
@@ -928,9 +943,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
             )
             fullResResult = result
             renderingState = .done
-            // Count this completed photo export against the free daily quota
-            // (no-op for premium users).
-            exportGate.record(photos: 1)
+            // Charged when the share completes, not here — see `pendingQuota`.
+            pendingQuota = (photos: 1, videos: 0)
             if let url = result.url,
                let data = try? Data(contentsOf: url),
                let uiImage = UIImage(data: data) {
@@ -990,9 +1004,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
                     fullResResult = result
                     lastExportReceipt = result.provenanceReceipt
                     renderingState = .done
-                    // Count this completed video export against the free daily
-                    // quota (no-op for premium users).
-                    exportGate.record(videos: 1)
+                    // Charged when the share completes — see `pendingQuota`.
+                    pendingQuota = (photos: 0, videos: 1)
                     // D-14: Schedule notification for background completion
                     scheduleCompletionNotification(success: true)
                     // Auto-open the share sheet when the export finishes in the
@@ -1055,8 +1068,8 @@ final class WatermarkViewModel: WatermarkConfigurable {
             fullResResult = result
             lastExportReceipt = result.provenanceReceipt
             renderingState = .done
-            // Live Photo exports count as one photo against the free quota.
-            exportGate.record(photos: 1)
+            // Live Photo exports count as one photo, charged on share.
+            pendingQuota = (photos: 1, videos: 0)
             if let url = result.url,
                let data = try? Data(contentsOf: url),
                let uiImage = UIImage(data: data) {
@@ -1080,7 +1093,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 lastExportReceipt = stillResult.provenanceReceipt
                 renderingState = .done
                 // Still-only fallback still produced a shareable photo.
-                exportGate.record(photos: 1)
+                pendingQuota = (photos: 1, videos: 0)
                 errorMessage = "Live Photo animation could not be preserved. The still image has been watermarked."
                 showError = true
                 if let url = stillResult.url,
@@ -1293,7 +1306,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
                     // media type, against the free daily quota.
                     let failedIDs = Set(result.failures.keys)
                     let succeeded = items.filter { !failedIDs.contains($0.id) }
-                    self.exportGate.record(
+                    self.pendingQuota = (
                         photos: succeeded.filter { $0.mediaType != .video }.count,
                         videos: succeeded.filter { $0.mediaType == .video }.count
                     )

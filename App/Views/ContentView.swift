@@ -991,8 +991,11 @@ private struct SheetModifiers: ViewModifier {
                 applicationActivities: [SaveToPhotosActivity(onFinished: handleSaveToPhotosResult)],
                 excludedActivityTypes: [.saveToCameraRoll],
                 onComplete: { completed in
-                    // A completed batch share counts as one delight moment.
-                    if completed { requestReviewAfterSuccessfulExport() }
+                    // Only a share the user goes through with spends the free
+                    // allowance, and it counts as one delight moment.
+                    guard completed else { return }
+                    viewModel.recordCompletedExport()
+                    requestReviewAfterSuccessfulExport()
                 }
             ) {
                 viewModel.cleanupTempFile()
@@ -1003,7 +1006,9 @@ private struct SheetModifiers: ViewModifier {
                 applicationActivities: [SaveToPhotosActivity(onFinished: handleSaveToPhotosResult)],
                 excludedActivityTypes: [.saveToCameraRoll],
                 onComplete: { completed in
-                    if completed { requestReviewAfterSuccessfulExport() }
+                    guard completed else { return }
+                    viewModel.recordCompletedExport()
+                    requestReviewAfterSuccessfulExport()
                 }
             ) {
                 viewModel.cleanupTempFile()
