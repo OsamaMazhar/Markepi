@@ -63,6 +63,8 @@ The `studio` style's caption SHALL be two centred lines. The first line SHALL re
 
 The second line SHALL be built from the user's selected metadata fields, using the same field-selection mechanism `classic` already offers, joined with plain spacing rather than `classic`'s "·" separator.
 
+`studio` SHALL NOT offer the free-text caption prefix that `classic` offers, because its fixed first line already occupies that role and offering both would let the same lead-in appear twice. A prefix the user has previously set SHALL be preserved rather than discarded, so returning to a style that does offer it finds it intact.
+
 #### Scenario: Device and manufacturer both resolve
 - **WHEN** a photo whose metadata resolves both a device model and a recognized manufacturer is rendered in `studio`
 - **THEN** the first line reads "Shot on", the device model in emphasized weight, then the manufacturer's name in normal weight, all on one line
@@ -78,6 +80,14 @@ The second line SHALL be built from the user's selected metadata fields, using t
 #### Scenario: Second line reflects selected fields
 - **WHEN** the user selects a set of metadata fields for `studio`'s caption
 - **THEN** the second line shows exactly those fields, in the system's canonical field order, separated by plain spacing
+
+#### Scenario: No caption prefix is offered
+- **WHEN** the user selects `studio` and opens its caption settings
+- **THEN** the free-text caption prefix offered by `classic` is not shown, and only the field selection is
+
+#### Scenario: A previously typed prefix survives the round trip
+- **WHEN** the user types a caption prefix in `classic`, switches to `studio`, then switches back to `classic`
+- **THEN** the prefix they typed is still there
 
 #### Scenario: Second line fields all missing
 - **WHEN** every field selected for the second line is unavailable in the photo's metadata
