@@ -1,5 +1,5 @@
 import SwiftUI
-import WatermarkCore
+import MarkepiCore
 
 /// A single row in the template list showing a 48x48pt preview thumbnail,
 /// template name, creation date, and a default star badge.

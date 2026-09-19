@@ -1,5 +1,5 @@
 import AppIntents
-import WatermarkCore
+import MarkepiCore
 
 @AssistantIntent(schema: .photos.edit)
 struct WatermarkVideoIntent: AppIntent {

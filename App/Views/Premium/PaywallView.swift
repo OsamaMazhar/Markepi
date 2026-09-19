@@ -1,7 +1,7 @@
 import StoreKit
 import SwiftUI
 import UIKit
-import WatermarkCore
+import MarkepiCore
 
 /// Premium upgrade screen ("Markepi Pro").
 ///
@@ -36,7 +36,7 @@ struct PaywallView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
 
-    /// StoreKit source of truth, injected from `WatermarkApp`.
+    /// StoreKit source of truth, injected from `MarkepiApp`.
     @Environment(StoreManager.self) private var store
 
     /// Currently highlighted plan. Defaults to the one-time unlock.
@@ -75,7 +75,7 @@ struct PaywallView: View {
 
     var body: some View {
         NavigationStack {
-            GeometryReader { _ in
+            GeometryReader { proxy in
                 let compact = verticalSizeClass == .compact || dynamicTypeSize >= .xxLarge
                 let gap: CGFloat = compact ? 14 : 22
 
@@ -87,50 +87,62 @@ struct PaywallView: View {
                     MarkepiColors.canvasBackground.ignoresSafeArea()
                     AuroraBackground(reduceMotion: reduceMotion, fade: false)
 
-                    VStack(spacing: 0) {
-                        header(compact: compact)
-
-                        Spacer(minLength: gap)
-
-                        if store.isPremium {
-                            // Already entitled (a real purchase, a restore, or the
-                            // DEBUG "Force Premium" override): show what's unlocked
-                            // instead of the plans + buy CTA.
-                            proBenefitsCard
+                    // Scrolls only when it has to. App Review rejected 1.3 (2)
+                    // under Guideline 4 because the subscribe button "was not
+                    // visible": the layout assumed its content always fit, and
+                    // an iPad `.sheet` is a ~620pt form sheet while the iPad
+                    // branch simultaneously bumps every type size. Whatever
+                    // overflowed fell off the bottom — the footer, and the CTA
+                    // with it. `minHeight` keeps the roomy look wherever the
+                    // content does fit, so the Spacers still distribute exactly
+                    // as before; past that it scrolls rather than truncating.
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            header(compact: compact)
 
                             Spacer(minLength: gap)
 
-                            Button {
-                                finishUnlocked()
-                            } label: {
-                                PurchaseCTALabel(title: "Continue",
-                                                 isWorking: false,
-                                                 reduceMotion: reduceMotion)
+                            if store.isPremium {
+                                // Already entitled (a real purchase, a restore, or the
+                                // DEBUG "Force Premium" override): show what's unlocked
+                                // instead of the plans + buy CTA.
+                                proBenefitsCard
+
+                                Spacer(minLength: gap)
+
+                                Button {
+                                    finishUnlocked()
+                                } label: {
+                                    PurchaseCTALabel(title: "Continue",
+                                                     isWorking: false,
+                                                     reduceMotion: reduceMotion)
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                freeCard
+
+                                Spacer(minLength: gap)
+
+                                plansSection
+
+                                Spacer(minLength: gap)
+
+                                footer
                             }
-                            .buttonStyle(.plain)
-                        } else {
-                            freeCard
-
-                            Spacer(minLength: gap)
-
-                            plansSection
-
-                            Spacer(minLength: gap)
-
-                            footer
                         }
-                    }
-                    .padding(.horizontal, isPad ? 28 : 20)
-                    .padding(.top, compact ? 6 : 14)
-                    .padding(.bottom, onSkip != nil ? 40 : 12)
-                    .frame(maxWidth: isPad ? 720 : 640, maxHeight: .infinity, alignment: .top)
-                    // GeometryReader parks content at the top-leading corner, so on
-                    // the wide iPad canvas the 720pt column would hug the left edge.
-                    // Expand an outer frame to full width (default .center) to seat
-                    // the column in the middle of the display.
-                    .frame(maxWidth: .infinity)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 14)
+                        .padding(.horizontal, isPad ? 28 : 20)
+                        .padding(.top, compact ? 6 : 14)
+                        .padding(.bottom, onSkip != nil ? 40 : 12)
+                        .frame(maxWidth: isPad ? 720 : 640, alignment: .top)
+                        // GeometryReader parks content at the top-leading corner, so on
+                        // the wide iPad canvas the 720pt column would hug the left edge.
+                        // Expand an outer frame to full width (default .center) to seat
+                        // the column in the middle of the display.
+                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .top)
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 14)
+                        }
+                    .scrollBounceBehavior(.basedOnSize)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)

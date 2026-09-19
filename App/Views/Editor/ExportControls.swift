@@ -1,5 +1,5 @@
 import SwiftUI
-import WatermarkCore
+import MarkepiCore
 
 /// Compact, single Export action for the editor's top bar.
 ///
@@ -162,9 +162,7 @@ struct RenderProgressBanner: View {
                     HStack {
                         // Near 100% the export is finalizing/writing the file —
                         // say so instead of a static "100%" that looks hung.
-                        Text(progress >= 0.99
-                             ? "Finalizing…"
-                             : (eta.map { "About \(Int($0))s remaining" } ?? "Exporting video…"))
+                        Text(progress >= 0.99 ? "Finalizing…" : TimeRemaining.phrase(eta))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()

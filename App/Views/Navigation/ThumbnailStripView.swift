@@ -1,5 +1,5 @@
 import SwiftUI
-import WatermarkCore
+import MarkepiCore
 
 struct ThumbnailStripView: View {
     let photos: [PhotoItem]
@@ -312,5 +312,167 @@ struct ThumbnailStripView: View {
             .overlay {
                 ProgressView()
             }
+    }
+}
+
+/// The single-photo counterpart to `ThumbnailStripView`: the same photo in
+/// every frame style, so the choice is made by looking rather than by reading
+/// four names in a dropdown.
+///
+/// Deliberately not the batch strip with different content. The batch strip's
+/// cells are things the user owns and can reorder, adjust or remove; these are
+/// four views of one photo, and the only thing to do with them is pick one. So
+/// there is no edit mode, no remove badge, no drag to reorder, and the cells fit
+/// the whole framed image rather than filling a square — a frame cropped away
+/// at the edges would defeat the point.
+struct FrameStyleStripView: View {
+    /// A render per style. A style still rendering simply has no entry yet.
+    let thumbnails: [FrameStyle: UIImage]
+
+    @Binding var selected: FrameStyle
+
+    /// `.horizontal` under the photo in portrait, `.vertical` in the landscape
+    /// right rail — the same axis switch the batch strip makes.
+    var axis: Axis = .horizontal
+
+    /// Cap on the scrollable region in vertical mode, as in the batch strip.
+    var verticalMaxLength: CGFloat = 400
+
+    /// Shape to use before a style's own render arrives, from the source
+    /// photo. Without it the cells start square and jump as each render lands.
+    var fallbackAspect: CGFloat = 1
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private let stripCornerRadius: CGFloat = MarkepiRadius.xxl
+    private let cellSpacing: CGFloat = 10
+    private let contentPadding: CGFloat = 12
+    /// The cell's short side.
+    ///
+    /// A quarter larger than a batch thumbnail: these cells are shaped like the
+    /// photo rather than square, so a portrait one gives up that much width,
+    /// and there are only four of them to fit.
+    private var cellSize: CGFloat {
+        MarkepiMetrics.thumbnailCellSize(dynamicTypeSize: dynamicTypeSize) * 1.25
+    }
+
+    var body: some View {
+        Group {
+            if axis == .horizontal {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: cellSpacing) {
+                        ForEach(FrameStyle.allCases) { style in
+                            cell(for: style)
+                        }
+                    }
+                    .padding(.horizontal, contentPadding)
+                    .padding(.vertical, 8)
+                }
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: cellSpacing) {
+                        ForEach(FrameStyle.allCases) { style in
+                            cell(for: style)
+                        }
+                    }
+                    .padding(.vertical, contentPadding)
+                    .padding(.horizontal, 8)
+                }
+                .frame(height: min(verticalIdealLength, verticalMaxLength))
+            }
+        }
+        .markepiGlass(
+            shape: RoundedRectangle(cornerRadius: stripCornerRadius, style: .continuous),
+            isEnabled: !reduceTransparency
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: stripCornerRadius, style: .continuous)
+                .strokeBorder(MarkepiColors.controlStroke, lineWidth: 0.5)
+        }
+        .accessibilityLabel("Frame styles")
+        .accessibilityHint("Shows this photo in each frame style. Double tap one to use it.")
+    }
+
+    private var verticalIdealLength: CGFloat {
+        FrameStyle.allCases.reduce(contentPadding * 2) { total, style in
+            total + cellSize / aspect(for: style) + labelHeight + cellSpacing
+        } - cellSpacing
+    }
+
+    private var labelHeight: CGFloat { 16 }
+
+    /// A cell's width ÷ its height: the shape of that style's render, so a
+    /// portrait photo gets portrait cells and a wide one wide cells.
+    ///
+    /// Clamped, because the cell is a fixed height in a fixed-height strip and
+    /// a panorama would otherwise run off the screen while a very tall crop
+    /// would thin to a sliver.
+    private func aspect(for style: FrameStyle) -> CGFloat {
+        let size = thumbnails[style]?.size
+        let raw = (size.map { $0.height > 0 ? $0.width / $0.height : fallbackAspect }) ?? fallbackAspect
+        return min(max(raw, 0.5), 2.0)
+    }
+
+    /// The cell's size: the short side is `cellSize` and the long side follows
+    /// the image, so every cell in a row is the same height (and every cell in
+    /// a column the same width) whatever each style adds to the photo.
+    private func cellSize(for style: FrameStyle) -> CGSize {
+        let ratio = aspect(for: style)
+        return axis == .horizontal
+            ? CGSize(width: cellSize * ratio, height: cellSize)
+            : CGSize(width: cellSize, height: cellSize / ratio)
+    }
+
+    private func cell(for style: FrameStyle) -> some View {
+        let isSelected = style == selected
+
+        return Button {
+            guard !isSelected else { return }
+            selected = style
+        } label: {
+            VStack(spacing: 3) {
+                ZStack {
+                    // A pale ground behind the render: most frames are a white
+                    // mat, and on glass alone their edges would simply vanish.
+                    Rectangle()
+                        .fill(Color(.systemGray6))
+
+                    if let image = thumbnails[style] {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .padding(3)
+                    } else {
+                        ProgressView()
+                    }
+                }
+                .frame(width: cellSize(for: style).width, height: cellSize(for: style).height)
+                // Square corners, cell and selection ring alike. A rounded ring
+                // around a photograph whose own corners are square reads as a
+                // mistake, and no frame this app draws rounds a corner.
+                .clipShape(Rectangle())
+                .overlay {
+                    Rectangle()
+                        .strokeBorder(isSelected ? Color.accentColor : MarkepiColors.controlStroke,
+                                      lineWidth: isSelected ? 3 : 0.5)
+                        .animation(reduceMotion ? nil : .easeInOut, value: selected)
+                }
+
+                Text(style.displayName)
+                    .font(.caption2.weight(isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                    .lineLimit(1)
+                    // Free of the cell's width: a portrait cell is narrower
+                    // than its own name, and a truncated "Galle…" helps nobody.
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minWidth: cellSize, minHeight: labelHeight)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(style.displayName) frame")
+        .accessibilityValue(style.summary)
+        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
     }
 }

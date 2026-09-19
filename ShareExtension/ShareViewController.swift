@@ -2,7 +2,7 @@ import UIKit
 import SwiftUI
 import UniformTypeIdentifiers
 import os.log
-import WatermarkCore
+import MarkepiCore
 
 #if DEBUG
 private let shareLog = Logger(subsystem: "com.osamamazhar.markepi", category: "ShareExtension")

@@ -19,3 +19,9 @@ icon_making/__pycache__/
 
 # Python bytecode cache
 __pycache__/
+
+# Natural Earth download cached by tools/geo/build-country-boundaries.py (13MB)
+tools/geo/.cache-*.geojson
+
+# Per-user Xcode UI state
+xcuserdata/

@@ -1,5 +1,5 @@
 import SwiftUI
-import WatermarkCore
+import MarkepiCore
 import CoreImage
 
 /// Renders a 48x48pt watermark preview for a template applied to current media.

@@ -2,6 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Read access is what lets a frame caption say where a photo was taken.
+	     The photo picker runs outside the app and removes the location from the
+	     copy it hands over, so the coordinate has to be read from the library
+	     itself. Also required by the "watermark my last photo" quick action,
+	     which requests read-write access. -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Markepi reads where your photos were taken so a frame caption can show the place. The photo picker removes that from the copy it gives apps.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save your watermarked photos and videos to your photo library.</string>
 	<!-- The app imports a copy of incoming documents (it never edits the

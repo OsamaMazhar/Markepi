@@ -1,6 +1,6 @@
 import SwiftUI
 import UIKit
-import WatermarkCore
+import MarkepiCore
 
 /// Per-item watermark override modal sheet.
 ///

@@ -1,7 +1,7 @@
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
 
-**Watermark**
+**Markepi**
 
 An iOS app that lets users add watermarks or white-frame metadata overlays to photos and videos, then immediately share them to social media without saving. Users can import media from the in-app picker or the iOS share sheet. Works for both photos and videos while preserving all metadata, HDR, and original image quality.
 
@@ -121,14 +121,14 @@ An iOS app that lets users add watermarks or white-frame metadata overlays to ph
 ## Conventions
 
 ### Design System (shared package)
-- **Token home:** `Packages/WatermarkCore/Sources/WatermarkCore/DesignSystem/` — shared with the Share Extension.
+- **Token home:** `Packages/MarkepiCore/Sources/MarkepiCore/DesignSystem/` — shared with the Share Extension.
 - **Colors:** `MarkepiColors` uses `UIColor` dynamic providers (no asset catalog needed). Two buckets: canvas (never flips: `canvasBackground = .black`, `canvasOverlayText = .white`) and chrome (flips via `traits.userInterfaceStyle`).
 - **Spacing / Radius / Sizing:** Semantic enums (`MarkepiSpacing`, `MarkepiRadius`, `MarkepiSizing`) in the shared package. Use these for recurring values; one-shot isolated literals can stay inline.
 - **Typography:** `MarkepiTypography` enum with semantic cases (`sectionHeader`, `controlLabel`, `value`, `metadata`, `pillLabel`, `largeTitle`, `glyph`). Apply via `.markepiTypography(.case)` — no raw `.font(.system(size:))` on text.
 
 ### Appearance Preference
 - `AppearancePreference` enum (`.system`, `.light`, `.dark`) with `colorScheme: ColorScheme?` mapping.
-- Stored via `@AppStorage("appearancePreference")` at the app root (`WatermarkApp.swift`).
+- Stored via `@AppStorage("appearancePreference")` at the app root (`MarkepiApp.swift`).
 - Consumed with `.preferredColorScheme(appearance.colorScheme)`.
 
 ### Landscape Side-Rail Layout
@@ -211,14 +211,14 @@ After all plans in an execution wave complete (all SUMMARY.md files written) and
 bash scripts/build-gate.sh
 ```
 
-This gate replaces file-existence-only self-checks as the source of truth for "build PASSED" in the execute workflow. It runs `xcodebuild` across both targets (WatermarkApp and ShareExtension) via the single WatermarkApp scheme.
+This gate replaces file-existence-only self-checks as the source of truth for "build PASSED" in the execute workflow. It runs `xcodebuild` across both targets (Markepi and ShareExtension) via the single Markepi scheme.
 
 ### Exit Codes and Resolution
 
 | Exit | Meaning | Action |
 |------|---------|--------|
 | 0 | All targets compiled successfully. "BUILD GATE: PASSED" | Proceed to next wave. |
-| non-zero | At least one target failed compilation. "BUILD GATE: FAILED" | **BLOCKER.** Resolve build errors before proceeding. Compilation errors appear inline in the xcodebuild output above. If xcodebuild reports errors that don't appear in Xcode IDE, run `xcodebuild -project Watermark.xcodeproj -scheme WatermarkApp clean` and retry. |
+| non-zero | At least one target failed compilation. "BUILD GATE: FAILED" | **BLOCKER.** Resolve build errors before proceeding. Compilation errors appear inline in the xcodebuild output above. If xcodebuild reports errors that don't appear in Xcode IDE, run `xcodebuild -project Markepi.xcodeproj -scheme Markepi clean` and retry. |
 
 ### Regression Check
 

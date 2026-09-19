@@ -2,7 +2,7 @@ import PhotosUI
 import StoreKit
 import SwiftUI
 import UniformTypeIdentifiers
-import WatermarkCore
+import MarkepiCore
 
 /// Lightweight Identifiable wrapper for Int to support `.sheet(item:)` modifier.
 struct IdentifiableIndex: Identifiable {
@@ -36,7 +36,7 @@ struct ContentView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// StoreKit entitlement, injected from `WatermarkApp`. Drives the toolbar
+    /// StoreKit entitlement, injected from `MarkepiApp`. Drives the toolbar
     /// crown's treatment (shiny "upgrade" prompt vs. entitled state).
     @Environment(StoreManager.self) private var store
 
@@ -139,6 +139,13 @@ struct ContentView: View {
             }
             .sheet(isPresented: $viewModel.showPaywall) {
                 PaywallView()
+                    // iPad's default sheet is a ~540pt form sheet, which is what
+                    // clipped the subscribe button off the bottom in 1.3 (2).
+                    // A page-sized sheet gives the plans and the CTA room to sit
+                    // on screen together; the paywall scrolls if even that is
+                    // short (very large Dynamic Type). No effect on iPhone,
+                    // where sheets are already full width.
+                    .presentationSizing(.page)
             }
             .overlay {
                 if viewModel.isImportingMedia {
@@ -368,10 +375,11 @@ struct ContentView: View {
     /// stacks with — rather than hides behind — the tool panel.
     @ViewBuilder
     private var batchOverlays: some View {
-        if case .batchProcessing(let current, let total, let eta) = viewModel.renderingState {
+        if case .batchProcessing(let current, let total, let fraction, let eta) = viewModel.renderingState {
             BatchProgressOverlay(
                 current: current,
                 total: total,
+                fraction: fraction,
                 eta: eta,
                 onCancel: {
                     showBatchCancelConfirmation = true
@@ -556,7 +564,16 @@ struct ContentView: View {
             // Batch strip as a vertical column, sitting between the (optional)
             // open panel and the tool dock — the landscape home for what is the
             // horizontal strip under the photo in portrait.
-            if viewModel.hasMultiplePhotos {
+            if viewModel.showsFrameStyleStrip {
+                FrameStyleStripView(
+                    thumbnails: viewModel.frameStyleThumbnails,
+                    selected: frameStyleBinding,
+                    axis: .vertical,
+                    verticalMaxLength: max(160, geometry.size.height - 140),
+                    fallbackAspect: viewModel.sourceAspectRatio
+                )
+                .frame(maxHeight: .infinity, alignment: .center)
+            } else if viewModel.hasMultiplePhotos {
                 landscapeVerticalStrip(geometry)
             }
 
@@ -619,7 +636,17 @@ struct ContentView: View {
     /// applied only when there's content, so a lone photo doesn't get an empty
     /// band before the tool dock.
     private var mediaControlsHasContent: Bool {
-        viewModel.hasMultiplePhotos || (viewModel.isCurrentVideo && !isBusy)
+        viewModel.hasMultiplePhotos || viewModel.showsFrameStyleStrip
+            || (viewModel.isCurrentVideo && !isBusy)
+    }
+
+    /// The style strip, bound so a tap switches the frame and carries the
+    /// settings of the style being left.
+    private var frameStyleBinding: Binding<FrameStyle> {
+        Binding(
+            get: { viewModel.config.whiteFrame?.style ?? .classic },
+            set: { viewModel.selectFrameStyle($0) }
+        )
     }
 
     /// Media controls that sit below the photo. In portrait this holds the
@@ -629,7 +656,16 @@ struct ContentView: View {
     @ViewBuilder
     private func mediaControls(includeStrip: Bool) -> some View {
         VStack(spacing: MarkepiSpacing.md) {
-            if includeStrip && viewModel.hasMultiplePhotos {
+            // One photo shows the frame styles instead: with nothing to page
+            // between, the strip's job becomes choosing a frame by eye.
+            if includeStrip && viewModel.showsFrameStyleStrip {
+                FrameStyleStripView(
+                    thumbnails: viewModel.frameStyleThumbnails,
+                    selected: frameStyleBinding,
+                    fallbackAspect: viewModel.sourceAspectRatio
+                )
+                .padding(.horizontal, MarkepiSpacing.md)
+            } else if includeStrip && viewModel.hasMultiplePhotos {
                 ThumbnailStripView(
                     photos: viewModel.photos,
                     currentIndex: $viewModel.currentIndex,
@@ -654,6 +690,13 @@ struct ContentView: View {
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isBusy)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.hasMultiplePhotos)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.showsFrameStyleStrip)
+        // Four renders of the current photo, one per style. Keyed on every
+        // style's settings, so an edit with "apply to all" on refreshes them
+        // all rather than leaving three stale cells.
+        .task(id: viewModel.frameStyleStripIdentifier) {
+            await viewModel.generateFrameStyleThumbnails()
+        }
     }
 
     /// Landscape batch strip: a slim vertical column of thumbnails that lives in

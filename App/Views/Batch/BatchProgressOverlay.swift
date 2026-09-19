@@ -1,5 +1,5 @@
 import SwiftUI
-import WatermarkCore
+import MarkepiCore
 
 /// Full preview-area overlay shown during batch processing.
 ///
@@ -15,6 +15,9 @@ public struct BatchProgressOverlay: View {
     /// Total number of items in the batch.
     let total: Int
 
+    /// How much of the batch's work is done, 0...1.
+    let fraction: Double
+
     /// Estimated time remaining in seconds, or nil when not yet available.
     let eta: TimeInterval?
 
@@ -28,11 +31,13 @@ public struct BatchProgressOverlay: View {
     public init(
         current: Int,
         total: Int,
+        fraction: Double,
         eta: TimeInterval?,
         onCancel: @escaping () -> Void
     ) {
         self.current = current
         self.total = total
+        self.fraction = fraction
         self.eta = eta
         self.onCancel = onCancel
     }
@@ -50,25 +55,20 @@ public struct BatchProgressOverlay: View {
                     .monospacedDigit()
                     .foregroundStyle(.primary)
 
-                // Determinate progress bar — full width, blue tint
-                ProgressView(
-                    value: min(Double(current), Double(total)),
-                    total: Double(total)
-                )
-                .progressViewStyle(.linear)
-                .tint(.blue)
-                .frame(maxWidth: 280)
+                // Driven by work done, not by item count, and tweened between
+                // updates so it drifts rather than hops. A photo finishing is a
+                // step; the animation is what makes a step look like motion.
+                ProgressView(value: min(max(fraction, 0), 1), total: 1.0)
+                    .progressViewStyle(.linear)
+                    .tint(.blue)
+                    .frame(maxWidth: 280)
+                    .animation(reduceMotion ? nil : .linear(duration: 0.3), value: fraction)
 
-                // ETA label — caption2, secondary color
-                if let eta = eta, eta > 0 {
-                    Text("ETA: \(Int(eta / 60)) min")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Estimating...")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                Text(TimeRemaining.phrase(eta))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
 
                 Spacer().frame(height: 8)
 

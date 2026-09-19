@@ -16,8 +16,8 @@
 # — so they never soften in practice.
 set -euo pipefail
 
-SRC="Packages/WatermarkCore/LogoSources"
-OUT="Packages/WatermarkCore/Sources/WatermarkCore/Resources/Logos"
+SRC="Packages/MarkepiCore/LogoSources"
+OUT="Packages/MarkepiCore/Sources/MarkepiCore/Resources/Logos"
 
 command -v rsvg-convert >/dev/null || { echo "error: rsvg-convert not found (brew install librsvg)" >&2; exit 1; }
 [ -d "$SRC" ] || { echo "error: no $SRC" >&2; exit 1; }
