@@ -1,6 +1,6 @@
 import OSLog
 import SwiftUI
-import WatermarkCore
+import MarkepiCore
 
 #if DEBUG
 /// Drag placement is a gesture, a lifted layer and a background render moving

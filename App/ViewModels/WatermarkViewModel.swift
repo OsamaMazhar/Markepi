@@ -12,7 +12,7 @@ import UniformTypeIdentifiers
 // @preconcurrency: UserNotifications' request/settings types are not Sendable;
 // this downgrades the Sendable-crossing diagnostics when they hop actors.
 @preconcurrency import UserNotifications
-import WatermarkCore
+import MarkepiCore
 
 @Observable @MainActor
 final class WatermarkViewModel: WatermarkConfigurable {
@@ -449,24 +449,9 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 )
             }
         }
-        if let wf = config.whiteFrame {
-            parts.append(
-                "wf:\(wf.isEnabled ? 1 : 0)"
-                + "|mt:\(wf.metadataTextEnabled ? 1 : 0)|at:\(wf.customAttributionText ?? "auto")"
-                + "|cpfx:\(wf.captionPrefix)|cf:\(wf.captionFields.map(\.rawValue).joined(separator: ","))"
-                + "|tc:\(Self.colorKey(wf.textColor))"
-                + "|st:\(wf.style.rawValue)|kl:\(wf.keylineEnabled ? 1 : 0)|lv:\(wf.logoVariant.rawValue)"
-                + "|bmm:\(String(format: "%.2f", wf.borderMillimetres))"
-                + "|cmm:\(String(format: "%.2f", wf.captionTextMillimetres))"
-                + "|lmm:\(String(format: "%.2f", wf.logoHeightMillimetres))"
-                + "|dpi:\(wf.outputDPI.map { String(format: "%.0f", $0) } ?? "auto")"
-                + "|le:\(wf.logoEnabled ? 1 : 0)"
-                + "|lp:\(Self.slotKey(wf.leftPrimary))|ls:\(Self.slotKey(wf.leftSecondary))"
-                + "|rp:\(Self.slotKey(wf.rightPrimary))|rs:\(Self.slotKey(wf.rightSecondary))"
-            )
-        } else {
-            parts.append("wf:none")
-        }
+        // Spelled out by the config itself, so the share extension's preview
+        // keys on exactly the same fields this one does.
+        parts.append(config.whiteFrame?.previewKey ?? "wf:none")
         if let ds = config.dateStamp {
             parts.append(
                 "ds:\(ds.isEnabled ? 1 : 0)|df:\(ds.format.rawValue)"
@@ -476,16 +461,6 @@ final class WatermarkViewModel: WatermarkConfigurable {
             parts.append("ds:none")
         }
         return parts.joined(separator: "~")
-    }
-
-    /// Compact, stable key for a caption slot, so editing one refreshes the
-    /// preview instead of leaving it stale.
-    private static func slotKey(_ slot: CaptionSlot) -> String {
-        switch slot {
-        case .empty: return "none"
-        case .field(let field): return "f:\(field.rawValue)"
-        case .text(let text): return "t:\(text)"
-        }
     }
 
     /// Compact, stable string key for a CGColor's components, used to make
@@ -571,7 +546,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
                         continue
                     }
                     let thumb = createThumbnail(from: stillData, maxPixelSize: 200)
-                    let stillURL = await copyToTemp(data: stillData)
+                    // The still half is a photo like any other, and the picker
+                    // strips its location the same way.
+                    let importableStill = await restoringLocation(stillData, from: pair.still)
+                    let stillURL = await copyToTemp(data: importableStill)
                     let videoURL = await copyToTemp(data: videoData, ext: videoExtension(for: pair.video))
                     loaded.append(PhotoItem(
                         id: UUID(),
@@ -609,8 +587,12 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 }
 
                 let isVid = isVideoItem(item)
+                // Before the copy is written, so every stage downstream — the
+                // preview, the caption, the export — reads one file that simply
+                // has a location, with no special case of its own.
+                let importable = isVid ? data : await restoringLocation(data, from: item)
                 let sourceURL = await copyToTemp(
-                    data: data,
+                    data: importable,
                     ext: isVid ? videoExtension(for: item) : "jpg"
                 )
                 // Videos need a frame-extracted thumbnail; image thumbnailing
@@ -777,6 +759,149 @@ final class WatermarkViewModel: WatermarkConfigurable {
         guard currentIndex > 0 else { return }
         currentIndex -= 1
         analyzeCurrentSource()
+    }
+
+    // MARK: - Frame style strip
+
+    /// Longest edge, in pixels, of a frame-style thumbnail. Four of these are
+    /// rendered per change, so they stay small; the strip is a guide to which
+    /// frame to pick, not something to inspect.
+    private static let frameStyleThumbnailMaxPixel: CGFloat = 360
+
+    /// The current photo rendered once per frame style, keyed by style.
+    ///
+    /// Filled in as each render lands rather than all at once, so the strip
+    /// populates left to right instead of appearing whole after four renders.
+    var frameStyleThumbnails: [FrameStyle: UIImage] = [:]
+
+    /// Whether the editor shows frame styles under the photo instead of the
+    /// batch strip.
+    ///
+    /// One still image only. With a batch, the strip has a job already — it is
+    /// how the user moves between photos — and with a video there is no cheap
+    /// still to render four times.
+    var showsFrameStyleStrip: Bool {
+        photos.count == 1 && !isCurrentVideo && (config.whiteFrame?.isEnabled ?? false)
+    }
+
+    /// `.task(id:)` key for the strip.
+    ///
+    /// Every cell is its own render, so this has to cover every style's
+    /// settings rather than just the one on screen — otherwise editing a style
+    /// with "apply to all" on would leave three stale thumbnails.
+    var frameStyleStripIdentifier: String {
+        guard showsFrameStyleStrip else { return "off" }
+        let styles = FrameStyle.allCases
+            .map { config.frameConfig(for: $0).previewKey }
+            .joined(separator: "~")
+        return previewIdentifier + "~styles:" + styles
+    }
+
+    /// The source photo's shape, for cells that have not rendered yet.
+    var sourceAspectRatio: CGFloat {
+        guard let size = sourcePixelSize, size.height > 0 else { return 1 }
+        return size.width / size.height
+    }
+
+    /// Renders the current photo once per frame style.
+    func generateFrameStyleThumbnails() async {
+        // Live Photos point `sourceURL` at their still component, so they render
+        // through the image path like any other photo.
+        guard showsFrameStyleStrip, let photo = currentPhoto, photo.mediaType != .video else {
+            frameStyleThumbnails = [:]
+            return
+        }
+        // The main preview is what the user is looking at; let it go first.
+        try? await Task.sleep(for: .milliseconds(150))
+        guard !Task.isCancelled else { return }
+
+        var rendered: [FrameStyle: UIImage] = [:]
+        for style in FrameStyle.allCases {
+            guard !Task.isCancelled else { return }
+            var styleConfig = config
+            styleConfig.selectFrameStyle(style)
+            do {
+                let result = try await engine.renderPreview(
+                    sourceURL: photo.sourceURL,
+                    config: styleConfig,
+                    maxPixelDimension: Self.frameStyleThumbnailMaxPixel
+                )
+                guard !Task.isCancelled else { return }
+                rendered[style] = UIImage(cgImage: result.image)
+                frameStyleThumbnails = rendered
+            } catch {
+                // One style failing to render is not worth an error banner:
+                // its cell simply stays a placeholder.
+                continue
+            }
+        }
+    }
+
+    /// Switches the frame to `style`, keeping what the user had set on the one
+    /// being left.
+    func selectFrameStyle(_ style: FrameStyle) {
+        config.selectFrameStyle(style)
+    }
+
+    // MARK: - Location the picker withholds
+
+    /// Whether the frame caption has anything to do with where the photo was
+    /// taken. Asked before the library is, so a caption with no location field
+    /// never provokes a permission prompt.
+    private var captionWantsLocation: Bool {
+        let frame = config.whiteFrame ?? WhiteFrameConfig(isEnabled: true)
+        if frame.captionFields.contains(.gps) { return true }
+        return [frame.leftPrimary, frame.leftSecondary, frame.rightPrimary, frame.rightSecondary]
+            .contains { $0 == .field(.gps) }
+    }
+
+    /// Puts the coordinate back into a picked photo that arrived without one.
+    ///
+    /// The photo picker runs outside the app and hands over a *copy* with the
+    /// location removed, unless the app has been granted access to the library.
+    /// The photo in the library still has it, so this asks for it there and
+    /// writes it into the copy — which is why a frame captioned the place
+    /// perfectly from a file on disk and showed nothing at all from the picker.
+    ///
+    /// Returns the original data unchanged whenever anything is missing: no
+    /// location field in the caption, a photo that already has a coordinate,
+    /// access declined, an asset with no location of its own.
+    private func restoringLocation(_ data: Data, from item: PhotosPickerItem) async -> Data {
+        guard captionWantsLocation,
+              let identifier = item.itemIdentifier,
+              !LocationMetadataWriter.hasCoordinate(in: data),
+              await hasPhotoLibraryReadAccess(),
+              let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
+                .firstObject,
+              let location = asset.location
+        else { return data }
+
+        return LocationMetadataWriter.data(
+            data,
+            addingLatitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude,
+            altitude: location.verticalAccuracy >= 0 ? location.altitude : nil,
+            timestamp: location.timestamp
+        ) ?? data
+    }
+
+    /// Read access to the library, asked for once.
+    ///
+    /// Declining is a valid answer and raises no error: the caption simply goes
+    /// without the place, exactly as it does for a photo that never had one.
+    private func hasPhotoLibraryReadAccess() async -> Bool {
+        switch PHPhotoLibrary.authorizationStatus(for: .readWrite) {
+        case .authorized, .limited:
+            return true
+        case .notDetermined:
+            return await withCheckedContinuation { continuation in
+                PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+                    continuation.resume(returning: status == .authorized || status == .limited)
+                }
+            }
+        default:
+            return false
+        }
     }
 
     func generatePreview() async {
@@ -990,9 +1115,9 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 let result = try await engine.processVideo(
                     sourceURL: sourceURL,
                     config: exportConfig,
-                    onProgress: { [weak self] progress, eta in
+                    onProgress: { progress, eta in
                         Task { @MainActor in
-                            self?.renderingState = .renderingVideo(
+                            self.renderingState = .renderingVideo(
                                 progress: progress,
                                 estimatedTimeRemaining: eta
                             )
@@ -1253,7 +1378,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
             return
         }
 
-        renderingState = .batchProcessing(current: 0, total: photos.count, eta: nil)
+        renderingState = .batchProcessing(current: 0, total: photos.count, fraction: 0, eta: nil)
 
         let items: [BatchProcessor.BatchItem] = photos.map { photo in
             BatchProcessor.BatchItem(
@@ -1283,9 +1408,13 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 items: items,
                 sharedConfig: self.config,
                 provenanceAppVersion: self.config.provenanceEnabled ? self.appVersion : nil,
-                onProgress: { @Sendable current, total, eta in
-                    Task { @MainActor [weak self] in
-                        self?.renderingState = .batchProcessing(current: current, total: total, eta: eta)
+                onProgress: { @Sendable progress in
+                    Task { @MainActor in
+                        self.renderingState = .batchProcessing(
+                            current: progress.completedItems,
+                            total: progress.totalItems,
+                            fraction: progress.fractionCompleted,
+                            eta: progress.estimatedTimeRemaining)
                     }
                 }
             )

@@ -1,5 +1,5 @@
 import SwiftUI
-import WatermarkCore
+import MarkepiCore
 
 /// Persistent bottom tool dock for the main editor.
 ///

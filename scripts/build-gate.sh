@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Resolve project root (script may be called from any CWD under repo)
 REPO_ROOT=$(git rev-parse --show-toplevel)
-PROJECT="$REPO_ROOT/Watermark.xcodeproj"
+PROJECT="$REPO_ROOT/Markepi.xcodeproj"
 
 echo "=== Build Gate: WatermarkApp (all targets) ==="
 echo ""
@@ -15,7 +15,7 @@ echo ""
 # no redirect (per RESEARCH.md: suppressing output defeats the gate's purpose).
 xcodebuild \
   -project "$PROJECT" \
-  -scheme WatermarkApp \
+  -scheme Markepi \
   -configuration Debug \
   -destination 'generic/platform=iOS' \
   CODE_SIGNING_ALLOWED=NO \

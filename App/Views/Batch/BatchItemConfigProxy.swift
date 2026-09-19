@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 import SwiftUI
-import WatermarkCore
+import MarkepiCore
 
 /// Lightweight @Observable proxy that conforms to WatermarkConfigurable
 /// and wraps a single WatermarkConfiguration for in-sheet editing by the

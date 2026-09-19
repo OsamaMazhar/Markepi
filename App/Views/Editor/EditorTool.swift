@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The tools available in the main editor's persistent bottom dock.
 ///
-/// Each tool maps to a focused control panel (the existing WatermarkCore leaf
+/// Each tool maps to a focused control panel (the existing MarkepiCore leaf
 /// views), letting the photo canvas stay full-bleed while only one group of
 /// controls is revealed at a time — an Adobe/Photos-style editing model.
 enum EditorTool: String, CaseIterable, Identifiable {

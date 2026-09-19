@@ -1,5 +1,5 @@
 import SwiftUI
-import WatermarkCore
+import MarkepiCore
 
 /// Animated launch splash shown once per cold launch.
 ///

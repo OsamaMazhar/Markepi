@@ -1,6 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
-import WatermarkCore
+import MarkepiCore
 
 /// Full template library sheet with scrollable list, context menus,
 /// swipe-to-delete, and .watermarktemplate import.

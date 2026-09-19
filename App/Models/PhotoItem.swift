@@ -1,6 +1,6 @@
 import Foundation
 import UIKit
-import WatermarkCore
+import MarkepiCore
 
 struct PhotoItem: Identifiable, Hashable, Sendable {
     let id: UUID

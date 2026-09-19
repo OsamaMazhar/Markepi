@@ -1,9 +1,9 @@
 import SwiftUI
-import WatermarkCore
+import MarkepiCore
 
 /// Floating control panel for the currently-selected `EditorTool`.
 ///
-/// Hosts the existing WatermarkCore leaf control views (text, logo, signature,
+/// Hosts the existing MarkepiCore leaf control views (text, logo, signature,
 /// frame, layers) plus a few small rows reimplemented locally (position, format,
 /// quality, save-as-template). Sits as a floating glass card above the tool dock
 /// so the photo canvas stays visible behind it.
@@ -264,9 +264,12 @@ struct ToolPanelView: View {
         // The setting lives on the frame config because the frame is what
         // measures in millimetres; a frame is created (left disabled) if the
         // user sets a resolution before turning the frame on.
-        var frame = viewModel.config.whiteFrame ?? WhiteFrameConfig(isEnabled: false)
-        frame.outputDPI = dpi
-        viewModel.config.whiteFrame = frame
+        if viewModel.config.whiteFrame == nil {
+            viewModel.config.whiteFrame = WhiteFrameConfig(isEnabled: false)
+        }
+        // Through `editFrame` like every other frame setting, so "apply to all
+        // styles" carries the resolution across with the rest.
+        viewModel.config.editFrame { $0.outputDPI = dpi }
     }
 
     private var resolutionRow: some View {
@@ -443,7 +446,7 @@ struct ToolPanelView: View {
 // MARK: - EditorCard
 
 /// A glass-backed rounded card used to group rows in the tool panel.
-/// Mirrors the styling used by the WatermarkCore leaf control views.
+/// Mirrors the styling used by the MarkepiCore leaf control views.
 struct EditorCard<Content: View>: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @ViewBuilder let content: () -> Content

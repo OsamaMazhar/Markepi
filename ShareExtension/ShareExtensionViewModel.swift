@@ -6,7 +6,7 @@ import PhotosUI
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
-import WatermarkCore
+import MarkepiCore
 
 /// @Observable ViewModel for the share extension's watermarking flow.
 ///
@@ -560,9 +560,13 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
                 let result = try await engine.processVideo(
                     sourceURL: sourceURL,
                     config: exportConfig,
-                    onProgress: { [weak self] progress, eta in
+                    // Strong self, matching the enclosing Task: that Task already
+                    // holds self for the duration of the export (its body assigns
+                    // fullResResult and renderingState), so a weak capture here
+                    // bought nothing and only disagreed with the outer scope.
+                    onProgress: { progress, eta in
                         Task { @MainActor in
-                            self?.renderingState = .renderingVideo(
+                            self.renderingState = .renderingVideo(
                                 progress: progress,
                                 estimatedTimeRemaining: eta
                             )
@@ -868,7 +872,10 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
                 )
             }
         }
-        parts.append("wf:\(config.whiteFrame?.isEnabled == true ? "1" : "0")")
+        // The whole frame, not just its on/off state: keying on `isEnabled`
+        // alone left every frame control in the extension editing a config the
+        // preview never re-rendered from.
+        parts.append(config.whiteFrame?.previewKey ?? "wf:none")
         return parts.joined(separator: "-")
         }
         set { /* no-op: computed from sourceURL + config */ }

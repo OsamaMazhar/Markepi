@@ -1,5 +1,5 @@
 import SwiftUI
-import WatermarkCore
+import MarkepiCore
 
 struct ScaleLabelView: View {
     let scale: CGFloat
