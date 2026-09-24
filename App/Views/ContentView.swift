@@ -970,6 +970,8 @@ private struct SheetModifiers: ViewModifier {
     /// Set by a completed export; cleared once the prompt is actually asked.
     /// Survives a trip to another app so we ask when the user comes back.
     @State private var reviewPending = false
+    /// Completed exports since install; every 3rd one asks for a review.
+    @AppStorage("review.completedExportCount") private var completedExportCount = 0
 
     func body(content: Content) -> some View {
         content
@@ -1075,11 +1077,13 @@ private struct SheetModifiers: ViewModifier {
         }
     }
 
-    /// Asks for an App Store review after EVERY completed save/share — never on
+    /// Asks for an App Store review on every 3rd completed save/share — never on
     /// cancel. iOS itself caps the prompt at 3 per 365 days and silently no-ops
-    /// beyond that, so no gating of our own. If the share took the user to
+    /// beyond that. If the share took the user to
     /// another app, the ask waits until they come back (scenePhase → .active).
     private func requestReviewAfterSuccessfulExport() {
+        completedExportCount += 1
+        guard completedExportCount % 3 == 0 else { return }
         reviewPending = true
         askForReviewIfPending()
     }
