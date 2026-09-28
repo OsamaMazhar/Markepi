@@ -371,6 +371,8 @@ public struct WhiteFrameRenderer {
             return !resolveCreditCaption(config: config, metadata: metadata).isEmpty
         case .banner:
             return !resolveBannerCaption(config: config, metadata: metadata).isEmpty
+        default:
+            return hasModernCaptionContent(config: config, metadata: metadata)
         }
     }
 
@@ -395,6 +397,10 @@ public struct WhiteFrameRenderer {
     ///   - geometry: where the photo sits and how big the canvas is.
     ///   - metadata: source metadata, used to resolve the caption.
     ///   - scale: rendering scale for Retina/HDR output (default: 1.0)
+    ///   - sourceImage: a small copy of the photo being framed. Read only by
+    ///     the styles that take their colour or backdrop from it
+    ///     (`FrameStyle.readsPhoto`); they fall back to a neutral surround
+    ///     without it.
     /// - Returns: a `CIImage` of `geometry.framedSize` with a transparent
     ///   `photoRect`.
     /// - Throws: `PipelineError.frameRenderFailed` if image conversion fails
@@ -402,8 +408,13 @@ public struct WhiteFrameRenderer {
         config: WhiteFrameConfig,
         geometry: FrameGeometry,
         metadata: [String: Any],
-        scale: CGFloat = 1.0
+        scale: CGFloat = 1.0,
+        sourceImage: CGImage? = nil
     ) throws -> CIImage {
+        if config.style.isModern {
+            return try renderModern(config: config, geometry: geometry,
+                                    metadata: metadata, sourceImage: sourceImage)
+        }
         let attributionText = resolveCaption(config: config, metadata: metadata)
         let gallery = config.style.usesGalleryCaption
             ? resolveGalleryCaption(config: config, metadata: metadata)
@@ -443,7 +454,8 @@ public struct WhiteFrameRenderer {
         config: WhiteFrameConfig,
         sourceSize: CGSize,
         metadata: [String: Any],
-        scale: CGFloat = 1.0
+        scale: CGFloat = 1.0,
+        sourceImage: CGImage? = nil
     ) throws -> CIImage {
         try render(
             config: config,
@@ -454,7 +466,8 @@ public struct WhiteFrameRenderer {
                 hasCaptionContent: hasCaptionContent(config: config, metadata: metadata)
             ),
             metadata: metadata,
-            scale: scale
+            scale: scale,
+            sourceImage: sourceImage
         )
     }
 
@@ -586,6 +599,11 @@ public struct WhiteFrameRenderer {
         switch config.style {
         case .classic, .print, .banner:
             return .flat(CGColor(gray: 1.0, alpha: 1.0))
+        // The modern styles draw their own surround in `renderModern`; white
+        // is only the tone their unused gallery-style contrast checks see.
+        case .float, .tone, .swatch, .spine, .noir, .readout, .ambient, .aura,
+             .blend, .emboss, .sunlight, .glow:
+            return .flat(CGColor(gray: 1.0, alpha: 1.0))
         case .gallery:
             guard config.gradientEnabled else {
                 // Plain white, the same mat `classic` and `print` use. It was
@@ -686,6 +704,9 @@ public struct WhiteFrameRenderer {
         case .banner:
             drawBannerCaption(cgContext: cgContext, geometry: geometry,
                               content: banner, config: config)
+        case .float, .tone, .swatch, .spine, .noir, .readout, .ambient, .aura,
+             .blend, .emboss, .sunlight, .glow:
+            break  // Routed to `renderModern` before this point.
         }
     }
 
@@ -1162,7 +1183,7 @@ public struct WhiteFrameRenderer {
     // MARK: - Cross-platform font/color helpers
 
     #if canImport(UIKit)
-    private static func platformFont(ofSize size: CGFloat, weight: CaptionWeight) -> UIFont {
+    static func platformFont(ofSize size: CGFloat, weight: CaptionWeight) -> UIFont {
         let uiWeight: UIFont.Weight
         switch weight {
         case .regular: uiWeight = .regular
@@ -1172,11 +1193,11 @@ public struct WhiteFrameRenderer {
         return UIFont.systemFont(ofSize: size, weight: uiWeight)
     }
 
-    private static func platformColor(from cgColor: CGColor) -> UIColor {
+    static func platformColor(from cgColor: CGColor) -> UIColor {
         return UIColor(cgColor: cgColor)
     }
     #elseif canImport(AppKit)
-    private static func platformFont(ofSize size: CGFloat, weight: CaptionWeight) -> NSFont {
+    static func platformFont(ofSize size: CGFloat, weight: CaptionWeight) -> NSFont {
         let nsWeight: NSFont.Weight
         switch weight {
         case .regular: nsWeight = .regular
@@ -1186,7 +1207,7 @@ public struct WhiteFrameRenderer {
         return NSFont.systemFont(ofSize: size, weight: nsWeight)
     }
 
-    private static func platformColor(from cgColor: CGColor) -> NSColor {
+    static func platformColor(from cgColor: CGColor) -> NSColor {
         return NSColor(cgColor: cgColor) ?? NSColor.darkGray
     }
     #endif

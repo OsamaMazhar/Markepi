@@ -55,7 +55,8 @@ public struct VideoLayerBuilder {
         config: WatermarkConfiguration,
         videoSize: CGSize,
         metadata: [String: Any] = [:],
-        isHDR: Bool = false
+        isHDR: Bool = false,
+        frameSample: CGImage? = nil
     ) throws -> (parentLayer: CALayer, videoLayer: CALayer, renderSize: CGSize) {
         // Match overlay rasterization to the export bit depth. Half-float only
         // for HDR; 8-bit for SDR so the CoreAnimation compositor / VT compression
@@ -108,7 +109,8 @@ public struct VideoLayerBuilder {
                 config: frameConfig,
                 geometry: geometry,
                 metadata: metadata,
-                format: overlayFormat
+                format: overlayFormat,
+                frameSample: frameSample
             )
             parentLayer.addSublayer(frameLayer)
         }
@@ -269,13 +271,15 @@ public struct VideoLayerBuilder {
         config: WhiteFrameConfig,
         geometry: FrameGeometry,
         metadata: [String: Any],
-        format: CIFormat
+        format: CIFormat,
+        frameSample: CGImage? = nil
     ) throws -> CALayer {
         let frameCIImage = try WhiteFrameRenderer.render(
             config: config,
             geometry: geometry,
             metadata: metadata,
-            scale: 1.0
+            scale: 1.0,
+            sourceImage: frameSample
         )
 
         let cgImage = try renderToCGImage(frameCIImage, format: format)

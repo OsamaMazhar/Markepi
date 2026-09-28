@@ -150,90 +150,22 @@ Architecture not yet mapped. Follow existing patterns found in the codebase.
 No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, or `.codex/skills/` with a `SKILL.md` index file.
 <!-- GSD:skills-end -->
 
-<!-- GSD:workflow-start source:GSD defaults -->
-## GSD Workflow Enforcement
+## Planning Workflow: OpenSpec
 
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
+Planning and change management use **OpenSpec** (`openspec/`), not GSD. GSD (`.planning/`, `/gsd-*`) is retired for new work; its history stays in `.planning/` for reference only.
 
-Use these entry points:
-- `/gsd-quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd-debug` for investigation and bug fixing
-- `/gsd-execute-phase` for planned phase work
+- New feature or behaviour change: `/opsx:propose` (or the `openspec-propose` skill) creates `openspec/changes/<name>/` with proposal, spec delta, design and tasks.
+- Implement: `/opsx:apply` works through `tasks.md`, ticking checkboxes as tasks are verified.
+- Done: `/opsx:archive` merges the spec delta into `openspec/specs/`.
+- Small fixes with no spec-level behaviour change can be made directly.
 
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
-<!-- GSD:workflow-end -->
+## Build Gate
 
-<!-- GSD:post-plan-start source=.planning/phases/08-traceability-reconciliation-recurrence-guard -->
-## GSD Post-Plan Step
-
-After writing a plan's SUMMARY.md, the gsd-executor MUST run:
-
-```
-bash scripts/sync-requirements.sh <path-to-summary>
-```
-
-This keeps `.planning/REQUIREMENTS.md` checkboxes and traceability table in sync with shipped features, preventing the manual drift that affected v1.0 (10/35 requirements unchecked at milestone close).
-
-### Exit Codes and Resolution
-
-| Exit | Meaning | Action |
-|------|---------|--------|
-| 0 | All requirement IDs marked complete or already complete. No `not_found`. | Proceed — plan completion is unblocked. |
-| 1 | At least one requirement ID in `not_found`. **BLOCKER.** | Resolve before marking plan complete: |
-| 2+ | Script error (missing SUMMARY, invalid frontmatter, tool failure). **BLOCKER.** | Diagnose and fix the script or SUMMARY. |
-
-### Not-Found Resolution Path
-
-If the script exits 1 (IDs in `not_found`):
-
-1. **Typo in SUMMARY `requirements-completed`:** Fix the requirement ID in the SUMMARY frontmatter, then re-run the script.
-2. **Requirement ID missing from REQUIREMENTS.md:** Add the requirement definition to `.planning/REQUIREMENTS.md` (with `- [ ] **ID**:` checkbox and traceability table row), then re-run the script.
-3. The script is idempotent — re-running with corrected data is always safe.
-
-### Regression Check
-
-Verify the guard works:
-
-```bash
-bash scripts/test-sync-requirements.sh
-```
-
-This self-contained fixture test validates three branches (happy path, not_found, already_complete) and exits non-zero on failure. Run after any change to `sync-requirements.sh` or the GSD `mark-complete` tool.
-
-<!-- GSD:post-plan-end -->
-
-<!-- GSD:post-wave-start source=Phase 9 -->
-## GSD Post-Wave Build Gate
-
-After all plans in an execution wave complete (all SUMMARY.md files written) and before the next wave begins, the gsd-executor MUST run:
+Before calling a change done, run:
 
 ```
 bash scripts/build-gate.sh
 ```
 
-This gate replaces file-existence-only self-checks as the source of truth for "build PASSED" in the execute workflow. It runs `xcodebuild` across both targets (Markepi and ShareExtension) via the single Markepi scheme.
+It builds both targets (Markepi and ShareExtension) via the Markepi scheme; non-zero exit is a blocker. If xcodebuild reports errors that Xcode does not, run `xcodebuild -project Markepi.xcodeproj -scheme Markepi clean` and retry. Package tests: `cd Packages/MarkepiCore && swift test`.
 
-### Exit Codes and Resolution
-
-| Exit | Meaning | Action |
-|------|---------|--------|
-| 0 | All targets compiled successfully. "BUILD GATE: PASSED" | Proceed to next wave. |
-| non-zero | At least one target failed compilation. "BUILD GATE: FAILED" | **BLOCKER.** Resolve build errors before proceeding. Compilation errors appear inline in the xcodebuild output above. If xcodebuild reports errors that don't appear in Xcode IDE, run `xcodebuild -project Markepi.xcodeproj -scheme Markepi clean` and retry. |
-
-### Regression Check
-
-Verify the gate works:
-
-```bash
-bash scripts/test-build-gate.sh
-```
-
-This self-contained fixture test validates three branches (clean build, broken build caught, gate blocks wave progression) and exits non-zero on failure. Run after any change to `build-gate.sh` or the Xcode project structure.
-<!-- GSD:post-wave-end -->
-
-<!-- GSD:profile-start -->
-## Developer Profile
-
-> Profile not yet configured. Run `/gsd-profile-user` to generate your developer profile.
-> This section is managed by `generate-claude-profile` -- do not edit manually.
-<!-- GSD:profile-end -->

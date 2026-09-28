@@ -176,6 +176,9 @@ struct LocationCaptionTests {
             caption = [resolved.leftPrimary, resolved.leftSecondary,
                        resolved.rightPrimary, resolved.rightSecondary]
                 .compactMap { $0 }.joined(separator: " ")
+        default:
+            caption = WhiteFrameRenderer.resolveRowCaption(
+                config: config, metadata: metadata).place ?? ""
         }
         // Silence the unused-mutation warning while keeping `config` a var for
         // readability above.

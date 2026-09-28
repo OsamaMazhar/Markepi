@@ -776,7 +776,12 @@ public actor WatermarkEngine {
                 config: frameConfig,
                 geometry: geometry,
                 metadata: metadata,
-                scale: 1.0
+                scale: 1.0,
+                // Only the styles that take colour or backdrop from the photo
+                // pay for a sample, and a small one: palette work stays the
+                // same cost at 48MP as at a thumbnail.
+                sourceImage: frameConfig.style.readsPhoto
+                    ? Self.frameSample(of: watermarkedResult) : nil
             )
 
             // Core Image works bottom-left up while FrameGeometry is expressed
@@ -815,6 +820,19 @@ public actor WatermarkEngine {
         layout = Self.previewLayout(
             photoRect: extent, layerRects: layerRects, canvas: watermarkedResult.extent)
         return watermarkedResult
+    }
+
+    /// A copy of `image` at most 512px on its long edge, in sRGB, for the frame
+    /// styles that read the photo. Nil if it cannot be rendered — the frame
+    /// then falls back to a neutral surround rather than failing the export.
+    static func frameSample(of image: CIImage) -> CGImage? {
+        let extent = image.extent
+        guard extent.width > 0, extent.height > 0, extent.width.isFinite, extent.height.isFinite else { return nil }
+        let k = min(1, 512 / max(extent.width, extent.height))
+        let small = image.transformed(by: CGAffineTransform(scaleX: k, y: k))
+        return CIContextProvider.shared.createCGImage(
+            small, from: small.extent.integral, format: .RGBA8,
+            colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
     }
 
     /// Flips Core Image's y-up rects into the normalized, y-DOWN coordinates the

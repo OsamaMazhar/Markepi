@@ -431,6 +431,9 @@ struct FrameStyleCatalogTests {
             drawn = [c.maker, c.values, c.device].compactMap { $0 }.joined(separator: " ")
         case .classic:
             drawn = WhiteFrameRenderer.resolveCaption(config: config, metadata: meta) ?? ""
+        default:
+            let c = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: meta)
+            drawn = [c.model, c.moment, c.valuesLine, c.place].compactMap { $0 }.joined(separator: " ")
         }
 
         #expect(drawn.contains("back triple camera"), "\(style): the lens is still named")
@@ -619,6 +622,9 @@ struct FrameStyleCatalogTests {
             return [c.maker, c.values, c.device].compactMap { $0 }.joined(separator: " ")
         case .classic:
             return WhiteFrameRenderer.resolveCaption(config: config, metadata: meta) ?? ""
+        default:
+            let c = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: meta)
+            return [c.model, c.moment, c.valuesLine, c.place].compactMap { $0 }.joined(separator: " ")
         }
     }
 

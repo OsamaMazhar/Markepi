@@ -134,12 +134,26 @@ public struct VideoProcessor {
             return transfer?.contains("HLG") == true || transfer?.contains("2084") == true
         }
 
+        // Frame styles that take their colour or backdrop from the picture read
+        // one frame, a tenth of the way in — past most fade-ins. The surround
+        // then holds still for the whole export. A failed grab costs only the
+        // colour: the frame falls back to a neutral surround.
+        var frameSample: CGImage?
+        if let frame = config.whiteFrame, frame.isEnabled, frame.style.readsPhoto {
+            let duration = (try? await asset.load(.duration))?.seconds ?? 0
+            frameSample = try? await VideoFrameExtractor.extract(
+                from: sourceURL,
+                at: CMTime(seconds: duration.isFinite ? duration * 0.1 : 0, preferredTimescale: 600),
+                maxPixelSize: 512)
+        }
+
         // Step 4: Build CALayer hierarchy via VideoLayerBuilder (D-01, D-02)
         let (parentLayer, videoLayer, framedRenderSize) = try VideoLayerBuilder.buildLayers(
             config: config,
             videoSize: videoSize,
             metadata: videoMetadata,
-            isHDR: isHDR
+            isHDR: isHDR,
+            frameSample: frameSample
         )
 
         // Step 5: Configure AVVideoComposition (D-09, D-10)
