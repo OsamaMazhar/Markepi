@@ -169,3 +169,7 @@ bash scripts/build-gate.sh
 
 It builds both targets (Markepi and ShareExtension) via the Markepi scheme; non-zero exit is a blocker. If xcodebuild reports errors that Xcode does not, run `xcodebuild -project Markepi.xcodeproj -scheme Markepi clean` and retry. Package tests: `cd Packages/MarkepiCore && swift test`.
 
+
+## Store Screenshots
+
+Pipeline, scripts, and pitfalls for producing App Store screenshots (any app): **`notebook.md`** + **`tools/screenshots/`**. Simulator drives via `axe` (fresh-coordinate taps only), photos load through the App Group share inbox, phone frame is the Remotion GLB keyed green, compositing is HTML/CSS in headless Chromium, captions use Apple Ads popularity data, upload via AutoAlign's `tools/aso/screenshots.py` (`--replace`, pixel size decides the bucket, filename order = display order). Rules: flat phone, no tilted pop-outs, never the developer's real name in demo content, two-line caption + two-line subline on every slide, phone fills the canvas below the caption.

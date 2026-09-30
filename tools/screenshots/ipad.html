@@ -1,0 +1,114 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  html, body { width: 2064px; height: 2752px; overflow: hidden; background: #000; }
+  body { font-family: -apple-system, "SF Pro Display", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  #stage { position: relative; width: 2064px; height: 2752px; overflow: hidden; }
+  .bg, .blooms, .rays, .grain, .vig { position: absolute; inset: 0; }
+  .blooms { filter: blur(170px) saturate(1.15); }
+  .bloom { position: absolute; border-radius: 50%; }
+  .rays { mix-blend-mode: soft-light; opacity: .22; filter: blur(6px); }
+  .grain { opacity: .14; mix-blend-mode: overlay; }
+  .vig { background: radial-gradient(120% 80% at 50% 45%, transparent 55%, rgba(0,0,0,.35) 100%); }
+  .cap { position: absolute; left: 0; right: 0; text-align: center; color: #fff; padding: 0 120px; }
+  .chip { display: inline-block; font-size: 52px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+          padding: 20px 42px; border-radius: 999px; margin-bottom: 36px;
+          background: rgba(255,255,255,.16); border: 1.5px solid rgba(255,255,255,.35); backdrop-filter: blur(20px); }
+  h1 { font-size: 172px; line-height: 1.02; font-weight: 800; letter-spacing: -0.035em; text-shadow: 0 6px 40px rgba(0,0,0,.25); }
+  .sub { margin-top: 36px; font-size: 66px; line-height: 1.2; font-weight: 500; opacity: .88; }
+  .card { position: absolute; border-radius: 56px; overflow: hidden;
+          box-shadow: 0 70px 110px rgba(0,0,0,.5), 0 24px 40px rgba(0,0,0,.3); }
+  .card img { position: absolute; }
+  .popwrap { position: absolute; }
+  .pop img { width: 100%; height: 100%; display: block; border-radius: 12px;
+             box-shadow: 0 90px 160px rgba(0,0,0,.5), 0 40px 60px rgba(0,0,0,.28); }
+  .pop .sheen { position: absolute; inset: 0; border-radius: 12px; pointer-events: none;
+                background: linear-gradient(115deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,0) 32%, rgba(255,255,255,0) 70%, rgba(255,255,255,.08) 100%); mix-blend-mode: screen; }
+  .play { position: absolute; left: 50%; top: 50%; width: 220px; height: 220px; margin: -110px 0 0 -110px; border-radius: 50%;
+          background: rgba(255,255,255,.28); backdrop-filter: blur(18px); border: 2px solid rgba(255,255,255,.55); }
+  .play:after { content: ""; position: absolute; left: 86px; top: 64px; border-left: 70px solid #fff; border-top: 46px solid transparent; border-bottom: 46px solid transparent; }
+  .pills { position: absolute; display: flex; gap: 22px; justify-content: center; left: 0; right: 0; }
+  .pill { font-size: 52px; font-weight: 700; color: #fff; padding: 22px 36px; border-radius: 999px;
+          background: rgba(20,20,28,.55); backdrop-filter: blur(20px); border: 1.5px solid rgba(255,255,255,.25);
+          box-shadow: 0 20px 40px rgba(0,0,0,.3); }
+</style></head>
+<body><div id="stage"></div>
+<script>
+// iPad slides: 2064x2752. The capture sits in a rounded card bleeding off the bottom;
+// the photo render (or a controls crop) lifts out of it at its own rect.
+const P = {
+  blue:  { base: ["#12143f", "#2b3aa0"], blooms: ["#3f5bd8", "#e0703a", "#f4b860", "#6d4bd8"] },
+  gold:  { base: ["#07060c", "#1a1208"], blooms: ["#d9a54a", "#7a1d1d", "#f3dfb0", "#3a2a10"] },
+  dusk:  { base: ["#3b3f7a", "#b9a6d6"], blooms: ["#f6c7a8", "#8f86d9", "#fff1e0", "#5a6aa8"] },
+  sky:   { base: ["#0f2a6b", "#3b82f6"], blooms: ["#fde7c7", "#60a5fa", "#fbbf24", "#1e3a8a"] },
+  teal:  { base: ["#062b2a", "#0f766e"], blooms: ["#14b8a6", "#99f6e4", "#0f1f45", "#10b981"] },
+  alps:  { base: ["#0e1f35", "#35597f"], blooms: ["#a5c8f0", "#6b8cae", "#eef5ff", "#1e3a5f"] },
+  pink:  { base: ["#3b0f3a", "#d6247a"], blooms: ["#f5c518", "#ff6b4a", "#d6247a", "#7c1d6f"] },
+  slate: { base: ["#0b0f14", "#12303a"], blooms: ["#14b8a6", "#22d3ee", "#334155", "#0e7490"] },
+};
+const SLIDES = {
+  "01":  { ...P.blue, cap: "01-hero-aura", rect: [80, 190, 1904, 1650], photo: "01", chip: "Photo & video watermark",
+           h: "Watermark &amp;<br>frame your photos", sub: "The photo editor that frames, watermarks<br>and shares in one tap." },
+  "02b": { ...P.gold, cap: "02b-frames-noir", rect: [0, 150, 2064, 1780], photo: "02",
+           h: "12 new<br>photo frames", sub: "White borders, soft shadows and light,<br>coloured by your own shot.", chip: "New" },
+  "02c": { ...P.gold, cap: "02-frame-panel-noir", crop: "02c",
+           h: "Custom<br>photo borders", sub: "Border size, caption, keyline and more,<br>per style or for all." },
+  "03":  { ...P.dusk, cap: "03-readout-exif", rect: [0, 210, 2064, 1690], photo: "03",
+           h: "Real EXIF<br>on every frame", sub: "EXIF metadata: camera, lens, aperture,<br>shutter and ISO, added automatically.",
+           pills: ["24mm", "ƒ/1.8", "1/121", "ISO 100"] },
+  "04b": { ...P.sky, cap: "04b-text", rect: [0, 190, 2064, 1660], photo: "04",
+           h: "Add text<br>to photos", sub: "Your name or studio in beautiful fonts,<br>on photos and videos." },
+  "05b": { ...P.teal, cap: "05b-logo", rect: [0, 230, 2064, 1600], photo: "05",
+           h: "Add your logo<br>&amp; signature", sub: "Transparent PNG logos and a handwritten<br>signature, placed perfectly." },
+  "06":  { ...P.alps, cap: "06-video", rect: [30, 380, 2004, 1290], photo: "06", play: true,
+           h: "Watermark<br>videos too", sub: "The same frames and marks<br>on every clip." },
+  "07c": { ...P.pink, cap: "07b-share-editor", crop: "07c",
+           h: "Share<br>instantly", sub: "Watermarked photos straight to any app.<br>No camera-roll clutter." },
+  "08c": { ...P.slate, cap: "08b-c2pa-signed", crop: "08c",
+           h: "Protect photos<br>with C2PA", sub: "Creator and copyright sealed in<br>with Content Credentials." },
+};
+const q = new URLSearchParams(location.search), id = q.get("s") || "01", S = SLIDES[id];
+let seed = parseInt(id) * 9301 + 49297 + id.length; const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+
+async function main() {
+  const st = document.getElementById("stage");
+  st.insertAdjacentHTML("beforeend", `<div class="bg" style="background:linear-gradient(165deg, ${S.base[0]} 0%, ${S.base[1]} 100%)"></div><div class="blooms"></div><div class="rays"></div>
+    <svg class="grain" width="2064" height="2752"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg><div class="vig"></div>`);
+  const bl = st.querySelector(".blooms");
+  S.blooms.forEach((c, i) => {
+    const s = 900 + rnd() * 800, x = (i % 2 ? .6 : -.1) * 2064 + rnd() * 300, y = (i < 2 ? .05 : .5) * 2752 + rnd() * 800;
+    bl.insertAdjacentHTML("beforeend", `<div class="bloom" style="width:${s}px;height:${s}px;left:${x}px;top:${y}px;background:${c};opacity:${.55 + rnd() * .35}"></div>`);
+  });
+  st.querySelector(".rays").style.background = `repeating-conic-gradient(from ${200 + rnd() * 40}deg at ${20 + rnd() * 60}% -10%, rgba(255,255,255,.35) 0deg 3deg, rgba(255,255,255,0) 3deg 11deg)`;
+
+  // Caption block: two-line headline + two-line subline, centred in the band above the card.
+  const CARD_TOP = 620;
+  st.insertAdjacentHTML("beforeend", `<div class="cap">${S.chip ? `<div class="chip">${S.chip}</div>` : ""}<h1>${S.h}</h1><div class="sub">${S.sub}</div></div>`);
+  const capEl = st.querySelector(".cap");
+  capEl.style.top = `${90 + (CARD_TOP - 50 - 90 - capEl.offsetHeight) / 2}px`;
+
+  // Card: the full capture, rounded, bleeding off the bottom.
+  const CW = 1880, CH = 2494, cl = (2064 - CW) / 2, k = CW / 2064;
+  st.insertAdjacentHTML("beforeend", `<div class="card" style="width:${CW}px;height:${CH}px;left:${cl}px;top:${CARD_TOP}px">
+    <img src="capi/${S.cap}.png" style="left:0;top:0;width:${CW}px;height:${CH}px;object-fit:cover"></div>`);
+
+  // Pop-out at its own rect (card px), lifted around its centre.
+  const pop = new Image(); pop.src = S.crop ? `capi/${S.crop}-crop.png` : `pop/${S.photo}_web.jpg`; await pop.decode();
+  let [rx, ry, rw, rh] = S.crop ? (await fetch(`capi/${S.crop}-crop.json`).then(r => r.json())).crop : S.rect;
+  if (!S.crop) { const ar = pop.naturalWidth / pop.naturalHeight;
+    if (rw / rh > ar) { const w = rh * ar; rx += (rw - w) / 2; rw = w; } else { const h = rw / ar; ry += (rh - h) / 2; rh = h; } }
+  const cx = cl + (rx + rw / 2) * k, cy = CARD_TOP + (ry + rh / 2) * k;
+  let pw, ph;
+  if (S.crop) { pw = rw * k * 1.16; ph = rh * k * 1.16; }
+  else { // uniform presence: fit inside 1400x1500 regardless of the in-screen rect
+    const ar = rw / rh; pw = Math.min(1400, 1500 * ar); ph = pw / ar; }
+  st.insertAdjacentHTML("beforeend", `<div class="popwrap" style="left:${cx - pw / 2}px;top:${cy - ph / 2}px;width:${pw}px;height:${ph}px">
+    <div class="pop"><img src="${pop.src}"><div class="sheen"></div>${S.play ? '<div class="play"></div>' : ""}</div></div>`);
+  if (S.pills) st.insertAdjacentHTML("beforeend", `<div class="pills" style="top:${cy + ph / 2 + 60}px">${S.pills.map(p => `<div class="pill">${p}</div>`).join("")}</div>`);
+
+  await Promise.all([...document.images].map(i => i.decode().catch(() => {})));
+  window.DONE = true;
+}
+main().catch(e => { document.title = "ERR " + e; window.DONE = true; });
+</script></body></html>
