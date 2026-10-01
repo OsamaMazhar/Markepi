@@ -38,4 +38,4 @@
 
 - [x] 6.1 Run `bash scripts/build-gate.sh` and the MarkepiCore suite (with the known `--skip`s); verify both are green
 - [ ] 6.2 Device pass on Osama's iPhone: free photo (size, no HDR, mark placement with text in corners), free video, free Live Photo, Pro unchanged, purchase-resume from the comparison; verify by inspecting exported files with exiftool
-- [ ] 6.3 Update ASC description, promo text and What's New for 1.6 to the new model (no "3 free photos a day"); verify via the ASC API that the en-US localization text no longer mentions daily limits
+- [x] 6.3 Update ASC description, promo text and What's New for 1.5 (the pending version) to the new model (no "3 free photos a day"); verify via the ASC API that the en-US localization text no longer mentions daily limits
