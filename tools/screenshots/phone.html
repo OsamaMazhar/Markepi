@@ -1,0 +1,21 @@
+<!doctype html><html><body style="margin:0;background:transparent">
+<script type="importmap">{"imports":{"three":"./three/build/three.module.js","three/addons/":"./three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+const W=innerWidth,H=innerHeight;
+const r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
+r.setPixelRatio(1); r.setSize(W,H); r.setClearColor(0,0); r.outputColorSpace=THREE.SRGBColorSpace; r.toneMapping=THREE.ACESFilmicToneMapping;
+document.body.appendChild(r.domElement);
+const scene=new THREE.Scene(); const pm=new THREE.PMREMGenerator(r); scene.environment=pm.fromScene(new RoomEnvironment(),0.04).texture;
+new GLTFLoader().load('phone.glb',g=>{
+  const m=g.scene; scene.add(m);
+  m.traverse(o=>{ if(o.name==='Object_49'){ o.material=new THREE.MeshBasicMaterial({color:0x00ff00,toneMapped:false}); }});
+  const box=new THREE.Box3().setFromObject(m), c=box.getCenter(new THREE.Vector3()), s=box.getSize(new THREE.Vector3());
+  m.position.sub(c);
+  const pad=1.02, aspect=W/H; let h=s.y*pad, w=h*aspect; if(w<s.x*pad){w=s.x*pad;h=w/aspect;}
+  const cam=new THREE.OrthographicCamera(-w/2,w/2,h/2,-h/2,0.1,1000); cam.position.set(0,0,200); cam.lookAt(0,0,0);
+  r.render(scene,cam); window.DONE=JSON.stringify({size:s});
+});
+</script></body></html>

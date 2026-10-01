@@ -137,7 +137,17 @@ struct ContentView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView(viewModel: viewModel)
             }
-            .sheet(isPresented: $viewModel.showPaywall) {
+            .sheet(isPresented: $viewModel.showExportComparison, onDismiss: {
+                Task { await viewModel.comparisonClosed() }
+            }) {
+                ExportComparisonSheet(viewModel: viewModel)
+                    // Page-sized on iPad, like the paywall: the default form
+                    // sheet leaves the two photos too small to compare.
+                    .presentationSizing(.page)
+            }
+            .sheet(isPresented: $viewModel.showPaywall, onDismiss: {
+                Task { await viewModel.paywallDismissed() }
+            }) {
                 PaywallView()
                     // iPad's default sheet is a ~540pt form sheet, which is what
                     // clipped the subscribe button off the bottom in 1.3 (2).
@@ -964,12 +974,20 @@ private struct SheetModifiers: ViewModifier {
     @Binding var selectedItemForOverride: IdentifiableIndex?
 
     /// StoreKit's official review prompt (iOS 16+). The system presents the
-    /// prompt and enforces its own 3-per-year cap; we only invoke it at a good
-    /// moment. Requires `import StoreKit`.
+    /// prompt and enforces its own 3-per-year cap. Requires `import StoreKit`.
     @Environment(\.requestReview) private var requestReview
+    @Environment(\.scenePhase) private var scenePhase
+    /// Set by a completed export; cleared once the prompt is actually asked.
+    /// Survives a trip to another app so we ask when the user comes back.
+    @State private var reviewPending = false
+    /// Completed exports since install; every 3rd one asks for a review.
+    @AppStorage("review.completedExportCount") private var completedExportCount = 0
 
     func body(content: Content) -> some View {
         content
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { askForReviewIfPending() }
+            }
             .sheet(isPresented: Binding(
                 get: { viewModel.showShareSheet },
                 set: { viewModel.showShareSheet = $0 }
@@ -1034,10 +1052,8 @@ private struct SheetModifiers: ViewModifier {
                 applicationActivities: [SaveToPhotosActivity(onFinished: handleSaveToPhotosResult)],
                 excludedActivityTypes: [.saveToCameraRoll],
                 onComplete: { completed in
-                    // Only a share the user goes through with spends the free
-                    // allowance, and it counts as one delight moment.
+                    // A share the user goes through with counts as one delight moment.
                     guard completed else { return }
-                    viewModel.recordCompletedExport()
                     requestReviewAfterSuccessfulExport()
                 }
             ) {
@@ -1050,7 +1066,6 @@ private struct SheetModifiers: ViewModifier {
                 excludedActivityTypes: [.saveToCameraRoll],
                 onComplete: { completed in
                     guard completed else { return }
-                    viewModel.recordCompletedExport()
                     requestReviewAfterSuccessfulExport()
                 }
             ) {
@@ -1069,19 +1084,25 @@ private struct SheetModifiers: ViewModifier {
         }
     }
 
-    /// Records a successful export and, when the moment is right (enough prior
-    /// successes, not already asked on this version), asks the system to show
-    /// the App Store review prompt. Fired only when the user actually saved or
-    /// shared a result — never on cancel — which is the natural point of
-    /// accomplishment Apple recommends. A short delay lets the share sheet
-    /// finish dismissing so the system prompt doesn't fight it for the screen.
+    /// Asks for an App Store review on every 3rd completed save/share — never on
+    /// cancel. iOS itself caps the prompt at 3 per 365 days and silently no-ops
+    /// beyond that. If the share took the user to
+    /// another app, the ask waits until they come back (scenePhase → .active).
     private func requestReviewAfterSuccessfulExport() {
-        let manager = ReviewRequestManager.shared
-        manager.recordSuccessfulExport()
-        guard manager.shouldRequestReview() else { return }
-        manager.markReviewRequested()
+        completedExportCount += 1
+        guard completedExportCount % 3 == 0 else { return }
+        reviewPending = true
+        askForReviewIfPending()
+    }
+
+    private func askForReviewIfPending() {
+        guard reviewPending else { return }
         Task { @MainActor in
+            // Let the share sheet finish dismissing so the prompt doesn't fight it.
             try? await Task.sleep(for: .seconds(1.2))
+            guard reviewPending,
+                  UIApplication.shared.applicationState == .active else { return }
+            reviewPending = false
             requestReview()
         }
     }

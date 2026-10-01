@@ -55,7 +55,9 @@ public struct VideoLayerBuilder {
         config: WatermarkConfiguration,
         videoSize: CGSize,
         metadata: [String: Any] = [:],
-        isHDR: Bool = false
+        isHDR: Bool = false,
+        frameSample: CGImage? = nil,
+        brandMark: Bool = false
     ) throws -> (parentLayer: CALayer, videoLayer: CALayer, renderSize: CGSize) {
         // Match overlay rasterization to the export bit depth. Half-float only
         // for HDR; 8-bit for SDR so the CoreAnimation compositor / VT compression
@@ -108,7 +110,8 @@ public struct VideoLayerBuilder {
                 config: frameConfig,
                 geometry: geometry,
                 metadata: metadata,
-                format: overlayFormat
+                format: overlayFormat,
+                frameSample: frameSample
             )
             parentLayer.addSublayer(frameLayer)
         }
@@ -117,6 +120,9 @@ public struct VideoLayerBuilder {
         // They used to be inset by the frame width because the mat covered the
         // video's outer edge; with the mat outside there is nothing to dodge.
         let positioningExtent = videoLayer.frame
+
+        // Where user elements landed, so the free tier's mark can avoid them.
+        var occupied: [CGRect] = []
 
         // Build watermark layers in order: bottom → top (D-01, D-02)
         for watermark in config.watermarks {
@@ -130,6 +136,7 @@ public struct VideoLayerBuilder {
                 format: overlayFormat
             )
             parentLayer.addSublayer(watermarkLayer)
+            if watermark.paintsSomething { occupied.append(watermarkLayer.frame) }
         }
 
         // Retro date stamp — above watermark layers, parity with the photo path
@@ -164,6 +171,22 @@ public struct VideoLayerBuilder {
             // origin, so ciPosition maps directly to frame.origin (no flip).
             dateLayer.frame = CGRect(origin: ciPosition, size: scaledExtent.size)
             parentLayer.addSublayer(dateLayer)
+            occupied.append(dateLayer.frame)
+        }
+
+        // Free tier: the Markepi mark, placed once for the whole clip.
+        if brandMark {
+            let markImage = try renderToCGImage(BrandMark.image(for: videoSize), format: overlayFormat)
+            let size = CGSize(width: markImage.width, height: markImage.height)
+            let slot = BrandMark.slot(
+                mark: size, base: positioningExtent,
+                padding: WatermarkScaling.padding(millimetres: config.paddingMillimetres, baseSize: videoSize),
+                occupied: occupied)
+            let markLayer = CALayer()
+            markLayer.contents = markImage
+            markLayer.contentsGravity = .resizeAspect
+            markLayer.frame = CGRect(origin: slot.origin, size: size)
+            parentLayer.addSublayer(markLayer)
         }
 
         return (parentLayer, videoLayer, renderSize)
@@ -269,13 +292,15 @@ public struct VideoLayerBuilder {
         config: WhiteFrameConfig,
         geometry: FrameGeometry,
         metadata: [String: Any],
-        format: CIFormat
+        format: CIFormat,
+        frameSample: CGImage? = nil
     ) throws -> CALayer {
         let frameCIImage = try WhiteFrameRenderer.render(
             config: config,
             geometry: geometry,
             metadata: metadata,
-            scale: 1.0
+            scale: 1.0,
+            sourceImage: frameSample
         )
 
         let cgImage = try renderToCGImage(frameCIImage, format: format)

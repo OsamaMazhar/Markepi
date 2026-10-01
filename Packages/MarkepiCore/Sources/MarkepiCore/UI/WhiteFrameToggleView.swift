@@ -88,7 +88,10 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
                         // twice — the field's own placeholder is "e.g. Shot on".
                         // The stored value is left alone, so switching back to
                         // classic finds whatever was typed there.
-                        if styleBinding.wrappedValue == .classic {
+                        // The modern styles set the typed text before the
+                        // device on their first line, the way classic leads its
+                        // caption with it.
+                        if styleBinding.wrappedValue == .classic || styleBinding.wrappedValue.isModern {
                             Divider().padding(.leading, 16)
                             captionPrefixRow
                         }
@@ -127,8 +130,13 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
                         captionMillimetresRow
                         logoSection
                     }
-                    Divider().padding(.leading, 16)
-                    captionColorRow
+                    // The modern styles choose their own ink to suit their
+                    // surround; a colour picked for a white mat would vanish
+                    // on a dark one.
+                    if styleBinding.wrappedValue.offersCaptionColor {
+                        Divider().padding(.leading, 16)
+                        captionColorRow
+                    }
                 }
             }
         }
@@ -141,7 +149,9 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
     private var logoSection: some View {
         Divider().padding(.leading, 16)
         logoRow
-        if viewModel.config.whiteFrame?.logoEnabled != false {
+        // The modern styles size the mark from the caption and tint it to
+        // the ink, so its size and rendition are theirs, not the user's.
+        if viewModel.config.whiteFrame?.logoEnabled != false, styleBinding.wrappedValue.offersCaptionColor {
             Divider().padding(.leading, 16)
             logoMillimetresRow
             Divider().padding(.leading, 16)

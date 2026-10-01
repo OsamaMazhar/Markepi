@@ -420,8 +420,10 @@ struct FramedExportGeometryTests {
             preferred: .identity, displayed: videoSize, renderSize: tree.renderSize)
         let filled = CGRect(origin: .zero, size: videoSize).applying(transform)
 
-        #expect(filled.size.width == tree.renderSize.width, "\(style): left a margin across")
-        #expect(filled.size.height == tree.renderSize.height, "\(style): left a margin down")
+        // Within a thousandth of a pixel: the scale is a ratio, and some canvas
+        // widths (2028 over 1920) do not round-trip exactly in floating point.
+        #expect(abs(filled.size.width - tree.renderSize.width) < 0.001, "\(style): left a margin across")
+        #expect(abs(filled.size.height - tree.renderSize.height) < 0.001, "\(style): left a margin down")
     }
 
     @Test("A rotated video keeps the track's own transform")

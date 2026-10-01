@@ -1,0 +1,11 @@
+parts/
+music/
+patch.png
+web/frames/
+web/node_modules/
+web/out-*/
+web/log-*.json
+web/orig
+rec/
+out/
+__pycache__/

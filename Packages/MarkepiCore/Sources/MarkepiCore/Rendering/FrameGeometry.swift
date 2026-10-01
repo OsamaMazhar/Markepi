@@ -52,6 +52,10 @@ public struct FrameGeometry: Equatable, Sendable {
     /// is even on all sides, and zero for styles that cast none.
     public let shadowOffset: CGFloat
 
+    /// Radius the photo's corners are rounded to, in pixels. Zero for square
+    /// corners. The rounding is cut by the mat, never applied to the photo.
+    public let cornerRadius: CGFloat
+
     /// How much mat a shadow needs on an edge to land on it rather than run
     /// off the canvas.
     ///
@@ -164,6 +168,43 @@ public struct FrameGeometry: Equatable, Sendable {
         self.metrics = metrics
         let dpi = dpi ?? Self.resolveDPI(from: [:], sourceSize: sourceSize)
 
+        if let layout = ModernFrameLayout.of(config.style) {
+            // The modern styles size every edge as a multiple of the mat and
+            // draw their own shadows, so none of the keyline, mark-height or
+            // print-shadow rules below apply.
+            let mat = Self.pixels(millimetres: config.borderMillimetres, dpi: dpi)
+            let fontSize = Self.pixels(millimetres: config.captionTextMillimetres, dpi: dpi)
+            let side = (mat * layout.side).rounded()
+            let block = fontSize * ModernFrameLayout.blockToFont
+            let band: CGFloat
+            if !hasCaptionContent {
+                band = side
+            } else if config.style == .spine {
+                // The rail carries one rotated line and the mark above it.
+                band = max((mat * layout.band).rounded(), (fontSize * 3.2).rounded())
+            } else {
+                // Tall enough for the two-line block with air around it, even
+                // when the caption is set larger than the default.
+                band = max((mat * layout.band).rounded(), (block * 1.6 + side * 0.6).rounded())
+            }
+            self.keylineWidth = 0
+            self.captionFontSize = fontSize
+            self.logoHeight = (fontSize * 1.48).rounded()
+            self.shadowBlur = 0
+            self.shadowOffset = 0
+            self.cornerRadius = (min(sourceSize.width, sourceSize.height) * layout.cornerRadius).rounded()
+            self.top = side
+            self.left = side
+            self.right = config.style == .spine ? band : side
+            self.bottom = config.style == .spine ? side : band
+            let evenWidth = ((sourceSize.width + left + right) / 2).rounded(.up) * 2
+            let evenHeight = ((sourceSize.height + top + bottom) / 2).rounded(.up) * 2
+            self.framedSize = CGSize(width: evenWidth, height: evenHeight)
+            self.photoRect = CGRect(x: left, y: top, width: sourceSize.width, height: sourceSize.height)
+            return
+        }
+        self.cornerRadius = 0
+
         // Both styles measure the border the same way: a physical size on
         // paper. Classic used to take a percentage of the photo, so the printed
         // border moved with the camera's megapixels and no two exports matched.
@@ -259,6 +300,9 @@ public struct FrameGeometry: Equatable, Sendable {
                 // in it is not a style, it is a white stripe.
                 bottomEdge = sideEdge
             }
+        case .float, .tone, .swatch, .spine, .noir, .readout, .ambient, .aura,
+             .blend, .emboss, .sunlight, .glow:
+            bottomEdge = sideEdge  // Unreachable: the modern layout returned above.
         }
 
         self.top = sideEdge

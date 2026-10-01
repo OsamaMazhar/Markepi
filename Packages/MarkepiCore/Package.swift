@@ -33,7 +33,10 @@ let package = Package(
                 .copy("Resources/Logos"),
                 // Same reasoning as Logos: copied so the boundary file keeps
                 // its `Geo/` subdirectory and a fixed name at runtime.
-                .copy("Resources/Geo")
+                .copy("Resources/Geo"),
+                // Markepi's own artwork (the free-tier mark's icon), kept out
+                // of Logos/, which holds only camera-maker marks.
+                .copy("Resources/Brand")
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v6)

@@ -80,6 +80,20 @@ public enum FrameStyle: String, Codable, CaseIterable, Sendable, Identifiable {
     case gallery
     case `print`
     case banner
+    // The modern styles: the photo first, the surround chosen to set it off.
+    // Several read the photo itself for colour — see `PhotoPalette`.
+    case float
+    case tone
+    case swatch
+    case spine
+    case noir
+    case readout
+    case ambient
+    case aura
+    case blend
+    case emboss
+    case sunlight
+    case glow
 
     public var id: String { rawValue }
 
@@ -89,6 +103,18 @@ public enum FrameStyle: String, Codable, CaseIterable, Sendable, Identifiable {
         case .gallery: return "Gallery"
         case .print: return "Print"
         case .banner: return "Banner"
+        case .float: return "Float"
+        case .tone: return "Tone"
+        case .swatch: return "Swatch"
+        case .spine: return "Spine"
+        case .noir: return "Noir"
+        case .readout: return "Readout"
+        case .ambient: return "Ambient"
+        case .aura: return "Aura"
+        case .blend: return "Blend"
+        case .emboss: return "Emboss"
+        case .sunlight: return "Sunlight"
+        case .glow: return "Glow"
         }
     }
 
@@ -98,6 +124,36 @@ public enum FrameStyle: String, Codable, CaseIterable, Sendable, Identifiable {
         case .gallery: return "A gallery mat with device details and a brand mark"
         case .print: return "The photo lifted off the mat by a soft shadow"
         case .banner: return "A full-width photo over a caption bar"
+        case .float: return "A rounded photo lifted off a warm white card"
+        case .tone: return "A border in the photo's own deepest colour"
+        case .swatch: return "The photo's colours as a row of swatches"
+        case .spine: return "The caption on a slim rail beside the photo"
+        case .noir: return "A black border with quiet white type"
+        case .readout: return "One line of camera readings, like the viewfinder"
+        case .ambient: return "The photo, blurred, as its own backdrop"
+        case .aura: return "A soft gradient mixed from the photo's colours"
+        case .blend: return "A border graded from the photo's top edge to its bottom"
+        case .emboss: return "The photo pressed into a soft surface"
+        case .sunlight: return "Window light falling across the wall behind"
+        case .glow: return "The photo's own light spilling onto a dark ground"
+        }
+    }
+
+    /// The twelve modern styles, which share one caption layout and draw their
+    /// surround — shadows, backdrops, light — in `ModernFrameRenderer`.
+    var isModern: Bool {
+        switch self {
+        case .classic, .gallery, .print, .banner: return false
+        default: return true
+        }
+    }
+
+    /// Whether this style takes its colours or its backdrop from the photo, and
+    /// so needs a sample of it to render.
+    var readsPhoto: Bool {
+        switch self {
+        case .tone, .swatch, .aura, .blend, .ambient, .glow: return true
+        default: return false
         }
     }
 
@@ -133,13 +189,20 @@ public enum FrameStyle: String, Codable, CaseIterable, Sendable, Identifiable {
     /// `gallery` sets it between its two columns; `banner` sets it at the far
     /// left of the bar. Asked here rather than at each mark decision so the two
     /// cannot drift.
-    var drawsBrandMark: Bool { self == .gallery || self == .banner }
+    var drawsBrandMark: Bool { self == .gallery || self == .banner || isModern }
 
     /// Whether this style surrounds the photo with a mat at all.
     ///
     /// `banner` does not: the photo runs to three edges and the caption sits in
     /// a bar beneath it, which is the whole point of the look.
     var hasSideMat: Bool { self != .banner }
+
+    /// Whether the user's caption colour and mark rendition apply.
+    ///
+    /// Not for the modern styles: each sets its own ink and tints the mark to
+    /// match its surround, so a caption colour picked for a white mat would
+    /// vanish on `noir` or `tone`.
+    var offersCaptionColor: Bool { !isModern }
 
     /// Whether this style offers the keyline.
     ///
@@ -151,7 +214,7 @@ public enum FrameStyle: String, Codable, CaseIterable, Sendable, Identifiable {
     /// `banner` does not either, for a plainer reason: it has no mat on three
     /// sides, so there is nowhere to stroke a rule that would not either fall
     /// off the canvas or sit on the photograph.
-    var offersKeyline: Bool { self != .print && self != .banner }
+    var offersKeyline: Bool { self != .print && self != .banner && !isModern }
 
     /// Decodes leniently: a style written by a newer build falls back to
     /// `classic` rather than failing the whole config, so a template can move
@@ -372,6 +435,8 @@ public struct WhiteFrameConfig: Sendable, Codable {
         case .print: return FrameMetrics.defaultPrintCaptionMillimetres
         // Banner's bar is proportioned like gallery's, so its text is too.
         case .gallery, .banner: return FrameMetrics.defaultCaptionMillimetres
+        // The modern caption is two lines in its own band, like gallery's.
+        default: return FrameMetrics.defaultCaptionMillimetres
         }
     }
 

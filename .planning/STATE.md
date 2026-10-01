@@ -87,6 +87,7 @@ Last activity: 2026-07-05 - Completed quick task 260705-h1c: Make onboarding fea
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260924-uav | Ask for App Store review after every completed export | 2026-09-24 | 4859994 | [260924-uav-review-prompt-after-every-export](./quick/260924-uav-review-prompt-after-every-export/) |
 | 260624-tag | Implement the Photo Edit Extension removal audit | 2026-06-25 | working tree | [260624-tag-implement-the-photo-edit-extension-remov](./quick/260624-tag-implement-the-photo-edit-extension-remov/) |
 | 260624-t4x | Save the Photo Edit Extension removal audit findings in a Markdown file | 2026-06-24 | 4f0b038 | [260624-t4x-save-the-photo-edit-extension-removal-au](./quick/260624-t4x-save-the-photo-edit-extension-removal-au/) |
 | 260626-fix | Fix Phase 19 provenance/authorship review issues | 2026-06-26 | working tree | [260626-fix-phase-19-review-issues](./quick/260626-fix-phase-19-review-issues/) |

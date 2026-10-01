@@ -95,8 +95,13 @@ public actor WatermarkEngine {
         metadataOverride: [String: Any]? = nil,
         provenance: ProvenanceExportOptions? = nil,
         preserveSourceCredentials: Bool = false,
-        maxPixelDimension: CGFloat? = nil
+        maxPixelDimension: CGFloat? = nil,
+        tier: ExportTier = .pro
     ) async throws -> ProcessingResult {
+        let policy = ExportPolicy(tier: tier)
+        // A free export caps the size like a preview does (and a preview of a
+        // free export keeps the smaller of the two caps).
+        let maxPixelDimension = [maxPixelDimension, policy.maxPixelDimension].compactMap { $0 }.min()
         // 1. Load (validates size, extracts metadata + HDR + CIImage)
         let loaded = try ImageLoader.load(from: sourceURL)
 
@@ -141,6 +146,7 @@ public actor WatermarkEngine {
             config: config,
             metadata: graphMetadata,
             renderScale: renderScale,
+            brandMark: policy.brandMark,
             layout: &previewLayout
         )
 
@@ -158,7 +164,11 @@ public actor WatermarkEngine {
 
         // Destination + alpha decision are resolved BEFORE the render so they can
         // pick the render bit-depth (below); both are reused for the write step.
-        let destinationUTI = config.outputFormat.uti ?? loaded.sourceUTI
+        var destinationUTI = config.outputFormat.uti ?? loaded.sourceUTI
+        // The free tier writes lossy: a PNG/TIFF would defeat the size cap.
+        if policy.lossyQualityCap != nil, !["public.jpeg", "public.heic", "public.heif"].contains(destinationUTI) {
+            destinationUTI = loaded.sourceUTI == "public.heic" ? "public.heic" : "public.jpeg"
+        }
         let preserveAlpha = loaded.sourceHasAlpha
             && Self.outputFormatSupportsAlpha(destinationUTI)
 
@@ -206,6 +216,11 @@ public actor WatermarkEngine {
         #endif
 
         var outgoing: [String: Any] = loaded.metadata
+        if renderScale < 1, var exif = outgoing[kCGImagePropertyExifDictionary as String] as? [String: Any] {
+            exif[kCGImagePropertyExifPixelXDimension as String] = cgImage.width
+            exif[kCGImagePropertyExifPixelYDimension as String] = cgImage.height
+            outgoing[kCGImagePropertyExifDictionary as String] = exif
+        }
         var report: SourceProvenanceReport?
         var receiptRights = RightsMetadata()
         var receiptPrivacyProfile: MetadataPrivacyProfile = .preserveAll
@@ -242,8 +257,10 @@ public actor WatermarkEngine {
         // it verbatim only when nothing moved. Otherwise rotate it to match and,
         // when a white frame is applied, zero the gain under the border band so
         // the opaque SDR-white frame doesn't glow with residual HDR boost.
-        // A downscaled preview's base no longer matches the source-sized gain
-        // map, and a preview never needs one.
+        // A downscaled render keeps its map: placement is proportional and
+        // viewers stretch a gain map over the base, so a source-sized map still
+        // lines up (the export comparison's Pro card shows HDR from it). Only
+        // the policy drops it — the free tier exports SDR.
         // A frame enlarges the canvas, and a viewer stretches the gain map over
         // whatever it is attached to — so the map has to be seated in the framed
         // canvas, not left at the photo's own shape. The render already recorded
@@ -263,7 +280,7 @@ public actor WatermarkEngine {
                               height: photo.height * canvas.height)
             )
         }()
-        let alignedGainMap = renderScale < 1 ? nil : GainMapProcessor.aligned(
+        let alignedGainMap = !policy.keepsGainMap ? nil : GainMapProcessor.aligned(
             auxData: loaded.gainMapAuxData,
             type: loaded.gainMapType ?? .appleHDR,
             sourceOrientation: loaded.sourceOrientation,
@@ -276,7 +293,7 @@ public actor WatermarkEngine {
             gainMapAuxData: alignedGainMap,
             dngMetadata: loaded.dngMetadata,
             destinationUTI: destinationUTI,
-            quality: config.outputQuality,
+            quality: policy.lossyQualityCap.map { min($0, config.outputQuality) } ?? config.outputQuality,
             preserveAlpha: preserveAlpha,
             to: outputURL
         )
@@ -323,7 +340,7 @@ public actor WatermarkEngine {
                     appVersion: provenance?.appVersion ?? Self.hostAppVersion,
                     sourceState: report?.state ?? .unknown,
                     sourceEvidenceSummary: report?.evidence.map(\.summary) ?? [],
-                    visibleWatermarkApplied: !config.watermarks.isEmpty,
+                    visibleWatermarkApplied: !config.watermarks.isEmpty || policy.brandMark,
                     whiteFrameApplied: config.whiteFrame?.isEnabled == true,
                     privacyAction: (provenance?.privacyProfile ?? .preserveAll) == .preserveAll
                         ? nil : "Sensitive metadata removed",
@@ -492,13 +509,15 @@ public actor WatermarkEngine {
         sourceURL: URL,
         config: WatermarkConfiguration,
         onProgress: (@Sendable (Double, TimeInterval?) -> Void)? = nil,
-        provenance: ProvenanceExportOptions? = nil
+        provenance: ProvenanceExportOptions? = nil,
+        tier: ExportTier = .pro
     ) async throws -> ProcessingResult {
         let (outputURL, validation, receipt) = try await VideoProcessor.process(
             sourceURL: sourceURL,
             config: config,
             onProgress: onProgress,
-            provenance: provenance
+            provenance: provenance,
+            tier: tier
         )
 
         let sourceUTI = (try? sourceURL.resourceValues(forKeys: [.typeIdentifierKey]).typeIdentifier)
@@ -533,13 +552,15 @@ public actor WatermarkEngine {
         stillImageURL: URL,
         videoURL: URL,
         config: WatermarkConfiguration,
-        provenance: ProvenanceExportOptions? = nil
+        provenance: ProvenanceExportOptions? = nil,
+        tier: ExportTier = .pro
     ) async throws -> ProcessingResult {
         let pair = try await LivePhotoProcessor.process(
             stillImageURL: stillImageURL,
             videoURL: videoURL,
             config: config,
-            provenance: provenance
+            provenance: provenance,
+            tier: tier
         )
         // Determine source UTI from still image
         let sourceUTI = (try? stillImageURL.resourceValues(forKeys: [.typeIdentifierKey]).typeIdentifier)
@@ -632,6 +653,7 @@ public actor WatermarkEngine {
         config: WatermarkConfiguration,
         metadata: [String: Any],
         renderScale: CGFloat = 1,
+        brandMark: Bool = false,
         layout: inout RenderLayout
     ) throws -> CIImage {
         // Safety net: normalize orientation before positioning (Pitfall 3)
@@ -658,6 +680,9 @@ public actor WatermarkEngine {
         // Converted to normalized output coordinates once the mat (which moves
         // and enlarges the canvas) is known.
         var layerRects: [Int: CGRect] = [:]
+        var dateStampRect: CGRect?
+        // What the free mark must avoid: layers that actually draw something.
+        var occupiedRects: [CGRect] = []
 
         // Build layers in order: bottom layer first, top layer last (D-01)
         for (layerIndex, watermark) in config.watermarks.enumerated() {
@@ -723,7 +748,9 @@ public actor WatermarkEngine {
             position.x += positioningExtent.origin.x
             position.y += positioningExtent.origin.y
 
-            layerRects[layerIndex] = CGRect(origin: position, size: opacityAdjusted.extent.size)
+            let rect = CGRect(origin: position, size: opacityAdjusted.extent.size)
+            layerRects[layerIndex] = rect
+            if watermark.paintsSomething { occupiedRects.append(rect) }
             layers.append((opacityAdjusted, position))
         }
 
@@ -747,7 +774,17 @@ public actor WatermarkEngine {
             )
             position.x += positioningExtent.origin.x
             position.y += positioningExtent.origin.y
+            dateStampRect = CGRect(origin: position, size: scaled.extent.size)
             layers.append((scaled, position))
+        }
+
+        // Free tier: the Markepi mark, on the photo, clear of everything above.
+        if brandMark {
+            let mark = BrandMark.image(for: extent.size)
+            let slot = BrandMark.slot(
+                mark: mark.extent.size, base: positioningExtent, padding: effectivePadding,
+                occupied: occupiedRects + [dateStampRect].compactMap { $0 })
+            layers.append((mark, slot.origin))
         }
 
         // D-12: Composite watermark layers onto base (text → image, bottom to top)
@@ -776,7 +813,12 @@ public actor WatermarkEngine {
                 config: frameConfig,
                 geometry: geometry,
                 metadata: metadata,
-                scale: 1.0
+                scale: 1.0,
+                // Only the styles that take colour or backdrop from the photo
+                // pay for a sample, and a small one: palette work stays the
+                // same cost at 48MP as at a thumbnail.
+                sourceImage: frameConfig.style.readsPhoto
+                    ? Self.frameSample(of: watermarkedResult) : nil
             )
 
             // Core Image works bottom-left up while FrameGeometry is expressed
@@ -815,6 +857,19 @@ public actor WatermarkEngine {
         layout = Self.previewLayout(
             photoRect: extent, layerRects: layerRects, canvas: watermarkedResult.extent)
         return watermarkedResult
+    }
+
+    /// A copy of `image` at most 512px on its long edge, in sRGB, for the frame
+    /// styles that read the photo. Nil if it cannot be rendered — the frame
+    /// then falls back to a neutral surround rather than failing the export.
+    static func frameSample(of image: CIImage) -> CGImage? {
+        let extent = image.extent
+        guard extent.width > 0, extent.height > 0, extent.width.isFinite, extent.height.isFinite else { return nil }
+        let k = min(1, 512 / max(extent.width, extent.height))
+        let small = image.transformed(by: CGAffineTransform(scaleX: k, y: k))
+        return CIContextProvider.shared.createCGImage(
+            small, from: small.extent.integral, format: .RGBA8,
+            colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
     }
 
     /// Flips Core Image's y-up rects into the normalized, y-DOWN coordinates the

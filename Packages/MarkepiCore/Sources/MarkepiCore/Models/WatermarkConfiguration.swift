@@ -248,6 +248,19 @@ public enum WatermarkLayer: Sendable {
         case .signature(_, _, _, _, let isVisible): return isVisible
         }
     }
+
+    /// Whether the layer puts any ink on the photo. A blank text layer (the
+    /// editor's default before anything is typed) or a fully transparent one
+    /// still has a box, but must not count as taken space.
+    public var paintsSomething: Bool {
+        guard isVisible, opacity > 0 else { return false }
+        switch self {
+        case .text(let input, _, _, _, _):
+            return input.opacity > 0 && !input.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .image(let input, _, _, _, _): return input.opacity > 0
+        case .signature(let input, _, _, _, _): return !input.strokeData.isEmpty
+        }
+    }
 }
 
 // MARK: - WatermarkLayer Parametric Copies
