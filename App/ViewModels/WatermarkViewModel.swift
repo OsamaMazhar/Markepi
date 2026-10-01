@@ -133,35 +133,168 @@ final class WatermarkViewModel: WatermarkConfigurable {
     // MARK: - Premium / Export Gating
 
     /// Drives the paywall sheet (`ContentView`). Set by the crown button and by
-    /// the export gate when a free user hits the daily limit.
+    /// "Unlock full quality" on the export comparison.
     var showPaywall: Bool = false
 
-    /// Combines premium entitlement (App Group cache, kept fresh by
-    /// `StoreManager`) with the free daily quota. The single authority on
-    /// whether an export is allowed and what to count when one completes.
+    /// Turns the premium entitlement (App Group cache, kept fresh by
+    /// `StoreManager`) into the tier an export is produced in. Exports are
+    /// never refused: free users get the free tier.
     private let exportGate = ExportGate()
 
-    /// What the finished render will cost the free daily allowance, held until
-    /// the share actually completes. A share sheet opened and dismissed exports
-    /// nothing, so it must cost nothing.
-    private var pendingQuota: (photos: Int, videos: Int)?
+    /// The tier the export in progress renders in. Set just before rendering.
+    private var exportTier: ExportTier = .pro
 
-    /// Charges the allowance for the export the user actually completed —
-    /// called from the share sheet's completion, which only reports `true` when
-    /// something was saved or sent. Clearing it as it is spent means re-sharing
-    /// the same render is still one export.
-    func recordCompletedExport() {
-        guard let pending = pendingQuota else { return }
-        pendingQuota = nil
-        exportGate.record(photos: pending.photos, videos: pending.videos)
+    /// Free users see the Free vs Pro comparison on EVERY export — there is
+    /// deliberately no way to suppress it.
+    var showExportComparison: Bool = false
+
+    /// Set when the paywall was opened from the comparison, so closing it
+    /// either resumes the export in full quality (bought) or brings the
+    /// comparison back (didn't).
+    private var awaitingPurchaseResume = false
+
+    /// Export button: Pro exports straight away; Free sees the comparison first.
+    func renderAndPrepareShare() async {
+        guard currentPhoto != nil || hasMultiplePhotos else { return }
+        if exportGate.tier == .pro {
+            exportTier = .pro
+            await performExport()
+        } else {
+            showExportComparison = true
+        }
     }
 
-    /// Checks the gate for an export of the given size. Returns `true` when the
-    /// export may proceed; otherwise raises the paywall and returns `false`.
-    private func allowExportOrPaywall(photos: Int, videos: Int) -> Bool {
-        if exportGate.canExport(photos: photos, videos: videos) { return true }
-        showPaywall = true
-        return false
+    /// What the user picked on the comparison. Acted on once the sheet has
+    /// finished dismissing, so the share sheet / paywall never presents over
+    /// a sheet that is still on its way out.
+    enum ComparisonChoice { case exportFree, unlock }
+    var comparisonChoice: ComparisonChoice?
+
+    /// The comparison sheet closed: export free, open the paywall, or (swiped
+    /// away / no choice) cancel — nothing is rendered.
+    func comparisonClosed() async {
+        let choice = comparisonChoice
+        comparisonChoice = nil
+        switch choice {
+        case .exportFree:
+            exportTier = .free
+            await performExport()
+        case .unlock:
+            awaitingPurchaseResume = true
+            showPaywall = true
+        case nil:
+            break
+        }
+    }
+
+    /// The two cards of the comparison: the user's own edit as each tier
+    /// exports it, with what each file contains.
+    struct ExportComparison {
+        var pro: UIImage?
+        var free: UIImage?
+        var proSpecs: [String] = []
+        var freeSpecs: [String] = []
+        var itemCount = 1
+        var isVideo = false
+    }
+
+    /// Renders both tiers of the first item at card size and reads its specs.
+    func makeExportComparison() async -> ExportComparison {
+        let items = hasMultiplePhotos ? photos : [currentPhoto].compactMap { $0 }
+        guard let item = items.first else { return ExportComparison() }
+        var result = ExportComparison(itemCount: items.count, isVideo: item.mediaType == .video)
+
+        var imageURL = item.sourceURL
+        var frameURL: URL?
+        defer { if let frameURL { try? FileManager.default.removeItem(at: frameURL) } }
+        if item.mediaType == .video {
+            frameURL = try? await extractVideoFrameToTempImage(from: item.sourceURL)
+            if let frameURL { imageURL = frameURL }
+        }
+        result.pro = await comparisonImage(imageURL, video: item.mediaType == .video ? item.sourceURL : nil, tier: .pro)
+        result.free = await comparisonImage(imageURL, video: item.mediaType == .video ? item.sourceURL : nil, tier: .free)
+
+        let (size, isHDR) = item.mediaType == .video
+            ? await Self.videoFacts(item.sourceURL)
+            : Self.photoFacts(item.sourceURL)
+        if result.isVideo {
+            result.proSpecs = [Self.videoLabel(size), isHDR ? "HDR" : "SDR", "No watermark"]
+            let k = min(1, 1920 / max(size.width, size.height, 1))
+            result.freeSpecs = [Self.videoLabel(CGSize(width: size.width * k, height: size.height * k)), "SDR", "Markepi mark"]
+        } else {
+            result.proSpecs = [Self.photoLabel(size)] + (isHDR ? ["HDR"] : []) + ["No watermark"]
+            let k = min(1, ExportPolicy.freePhotoLongestSide / max(size.width, size.height, 1))
+            result.freeSpecs = [Self.photoLabel(CGSize(width: (size.width * k).rounded(), height: (size.height * k).rounded())),
+                                "SDR", "Markepi mark"]
+        }
+        return result
+    }
+
+    /// One card image: the edit rendered as `tier` exports it, at card size.
+    /// For a video, `imageURL` is an extracted frame captioned with the video's metadata.
+    private func comparisonImage(_ imageURL: URL, video: URL?, tier: ExportTier) async -> UIImage? {
+        var metadataOverride: [String: Any]?
+        if let video { metadataOverride = await VideoProcessor.captionMetadata(for: video) }
+        guard let out = try? await engine.process(
+            sourceURL: imageURL, config: config, metadataOverride: metadataOverride,
+            maxPixelDimension: 1200, tier: tier), let url = out.url else { return nil }
+        defer { try? FileManager.default.removeItem(at: url) }
+        // Decode with the gain map applied so the Pro card can show real HDR.
+        var reader = UIImageReader.Configuration()
+        reader.prefersHighDynamicRange = tier == .pro
+        return await UIImageReader(configuration: reader).image(contentsOf: url)
+    }
+
+    private static func photoLabel(_ size: CGSize) -> String {
+        let mp = size.width * size.height / 1_000_000
+        return "\(Int(size.width))×\(Int(size.height)) · " + (mp >= 10 ? String(format: "%.0f MP", mp) : String(format: "%.1f MP", mp))
+    }
+
+    private static func videoLabel(_ size: CGSize) -> String {
+        let short = Int(min(size.width, size.height).rounded())
+        switch short {
+        case 2160...: return "4K"
+        case 1440..<2160: return "1440p"
+        case 0: return "Video"
+        default: return "\(short)p"
+        }
+    }
+
+    /// Upright pixel size and whether the photo carries an HDR gain map.
+    private static func photoFacts(_ url: URL) -> (CGSize, Bool) {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let p = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] else { return (.zero, false) }
+        let w = p[kCGImagePropertyPixelWidth] as? Int ?? 0, h = p[kCGImagePropertyPixelHeight] as? Int ?? 0
+        let sideways = (5...8).contains((p[kCGImagePropertyOrientation] as? Int) ?? 1)
+        let hdr = CGImageSourceCopyAuxiliaryDataInfoAtIndex(src, 0, kCGImageAuxiliaryDataTypeHDRGainMap) != nil
+            || CGImageSourceCopyAuxiliaryDataInfoAtIndex(src, 0, kCGImageAuxiliaryDataTypeISOGainMap) != nil
+        return (sideways ? CGSize(width: h, height: w) : CGSize(width: w, height: h), hdr)
+    }
+
+    /// Displayed size and whether the clip is HDR (HLG / PQ).
+    private static func videoFacts(_ url: URL) async -> (CGSize, Bool) {
+        guard let track = try? await AVURLAsset(url: url).loadTracks(withMediaType: .video).first,
+              let (natural, transform, descs) = try? await track.load(.naturalSize, .preferredTransform, .formatDescriptions)
+        else { return (.zero, false) }
+        let size = natural.applying(transform)
+        let hdr = descs.contains { desc in
+            let transfer = (CMFormatDescriptionGetExtensions(desc) as NSDictionary?)?[kCVImageBufferTransferFunctionKey] as? String
+            return transfer?.contains("HLG") == true || transfer?.contains("2084") == true
+        }
+        return (CGSize(width: abs(size.width), height: abs(size.height)), hdr)
+    }
+
+    /// The paywall closed. If it was opened from the comparison, resume: a
+    /// purchase/restore exports in full quality, otherwise the comparison returns.
+    func paywallDismissed() async {
+        guard awaitingPurchaseResume else { return }
+        awaitingPurchaseResume = false
+        if exportGate.tier == .pro {
+            exportTier = .pro
+            await performExport()
+        } else {
+            showExportComparison = true
+        }
     }
 
     // MARK: - Batch Processing (Phase 13)
@@ -1015,15 +1148,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
         }
     }
 
-    func renderAndPrepareShare() async {
+    private func performExport() async {
         // Batch mode: when multiple photos are selected, trigger batch processing
         // and return — the single-item rendering path is skipped entirely.
         if hasMultiplePhotos {
-            // Gate the whole batch against the free daily allowance: a batch
-            // that would exceed either bucket raises the paywall instead of
-            // exporting a partial set.
-            guard allowExportOrPaywall(photos: batchSignableImageCount,
-                                       videos: batchVideoCount) else { return }
             if needsBatchC2PASigningNotice {
                 showBatchC2PASigningNotice = true
                 return
@@ -1037,18 +1165,15 @@ final class WatermarkViewModel: WatermarkConfigurable {
         // D-13: Branch by media type
         switch photo.mediaType {
         case .video:
-            guard allowExportOrPaywall(photos: 0, videos: 1) else { return }
             await renderAndShareVideo()
             return
 
         case .livePhoto:
-            // A Live Photo exports as a still image; it counts as one photo.
-            guard allowExportOrPaywall(photos: 1, videos: 0) else { return }
             await renderAndShareLivePhoto()
             return
 
         case .photo, .unknown:
-            guard allowExportOrPaywall(photos: 1, videos: 0) else { return }
+            break
         }
 
         // Photo rendering path
@@ -1064,12 +1189,11 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 sourceURL: sourceURL,
                 config: config,
                 provenance: prov,
-                preserveSourceCredentials: true
+                preserveSourceCredentials: true,
+                tier: exportTier
             )
             fullResResult = result
             renderingState = .done
-            // Charged when the share completes, not here — see `pendingQuota`.
-            pendingQuota = (photos: 1, videos: 0)
             if let url = result.url,
                let data = try? Data(contentsOf: url),
                let uiImage = UIImage(data: data) {
@@ -1105,6 +1229,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
 
         let exportConfig = config
         let provenance = exportProvenance(for: exportConfig)
+        let tier = exportTier
         let task = Task {
             defer {
                 UIApplication.shared.endBackgroundTask(backgroundTaskID)
@@ -1123,14 +1248,13 @@ final class WatermarkViewModel: WatermarkConfigurable {
                             )
                         }
                     },
-                    provenance: provenance
+                    provenance: provenance,
+                    tier: tier
                 )
                 await MainActor.run {
                     fullResResult = result
                     lastExportReceipt = result.provenanceReceipt
                     renderingState = .done
-                    // Charged when the share completes — see `pendingQuota`.
-                    pendingQuota = (photos: 0, videos: 1)
                     // D-14: Schedule notification for background completion
                     scheduleCompletionNotification(success: true)
                     // Auto-open the share sheet when the export finishes in the
@@ -1188,13 +1312,12 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 stillImageURL: stillURL,
                 videoURL: videoURL,
                 config: config,
-                provenance: exportProvenance(for: config)
+                provenance: exportProvenance(for: config),
+                tier: exportTier
             )
             fullResResult = result
             lastExportReceipt = result.provenanceReceipt
             renderingState = .done
-            // Live Photo exports count as one photo, charged on share.
-            pendingQuota = (photos: 1, videos: 0)
             if let url = result.url,
                let data = try? Data(contentsOf: url),
                let uiImage = UIImage(data: data) {
@@ -1212,13 +1335,12 @@ final class WatermarkViewModel: WatermarkConfigurable {
                     sourceURL: stillURL,
                     config: config,
                     provenance: exportProvenance(for: config),
-                    preserveSourceCredentials: true
+                    preserveSourceCredentials: true,
+                    tier: exportTier
                 )
                 fullResResult = stillResult
                 lastExportReceipt = stillResult.provenanceReceipt
                 renderingState = .done
-                // Still-only fallback still produced a shareable photo.
-                pendingQuota = (photos: 1, videos: 0)
                 errorMessage = "Live Photo animation could not be preserved. The still image has been watermarked."
                 showError = true
                 if let url = stillResult.url,
@@ -1408,6 +1530,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 items: items,
                 sharedConfig: self.config,
                 provenanceAppVersion: self.config.provenanceEnabled ? self.appVersion : nil,
+                tier: self.exportTier,
                 onProgress: { @Sendable progress in
                     Task { @MainActor in
                         self.renderingState = .batchProcessing(
@@ -1431,14 +1554,6 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 await MainActor.run {
                     self.batchResults = result
                     self.renderingState = .done
-                    // Count only the items that actually succeeded, split by
-                    // media type, against the free daily quota.
-                    let failedIDs = Set(result.failures.keys)
-                    let succeeded = items.filter { !failedIDs.contains($0.id) }
-                    self.pendingQuota = (
-                        photos: succeeded.filter { $0.mediaType != .video }.count,
-                        videos: succeeded.filter { $0.mediaType == .video }.count
-                    )
                     self.scheduleBatchCompletionNotification(
                         successCount: result.successCount,
                         failureCount: result.failureCount

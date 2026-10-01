@@ -555,6 +555,7 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
 
         let exportConfig = config
         let provenance = exportProvenance(for: exportConfig)
+        let tier = exportGate.tier
         let task = Task {
             do {
                 let result = try await engine.processVideo(
@@ -572,14 +573,13 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
                             )
                         }
                     },
-                    provenance: provenance
+                    provenance: provenance,
+                    tier: tier
                 )
                 await MainActor.run {
                     fullResResult = result
                     lastExportReceipt = result.provenanceReceipt
                     renderingState = .done
-                    // Count this completed video export against the shared quota.
-                    exportGate.record(videos: 1)
                     // Check HDR/audio warnings
                     if let validation = result.videoValidation {
                         if !validation.hdrPreserved {
@@ -661,15 +661,6 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
     /// Branches by media type: video uses `renderAndShareVideo()` which delegates
     /// to `engine.processVideo()`. Photo uses `engine.process()`.
     func renderAndPrepareShare() async {
-        // Enforce the free daily limit before rendering. Free users past the
-        // limit are pointed back to the app to upgrade (the extension has no
-        // paywall of its own).
-        guard exportGate.canExport(photos: isVideo ? 0 : 1, videos: isVideo ? 1 : 0) else {
-            errorMessage = "You’ve reached today’s free limit (3 photos or 1 video). Open Markepi to go unlimited."
-            showError = true
-            return
-        }
-
         if isVideo {
             await renderAndShareVideo()
             return
@@ -686,12 +677,11 @@ final class ShareExtensionViewModel: ShareExtensionRendering {
                 sourceURL: sourceURL,
                 config: config,
                 provenance: prov,
-                preserveSourceCredentials: true
+                preserveSourceCredentials: true,
+                tier: exportGate.tier
             )
             fullResResult = result
             renderingState = .done
-            // Count this completed photo export against the shared daily quota.
-            exportGate.record(photos: 1)
             if let url = result.url,
                let data = try? Data(contentsOf: url),
                let uiImage = UIImage(data: data) {

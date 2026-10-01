@@ -48,13 +48,32 @@ public struct VideoProcessor {
     /// - Returns: A tuple containing the output temp file URL and the post-export
     ///   validation result for surfacing HDR/audio warnings to the caller
     /// - Throws: `PipelineError` for any pipeline stage failure
+    /// Whether the export keeps HDR: only a Pro export of an HDR source does.
+    static func outputIsHDR(sourceIsHDR: Bool, policy: ExportPolicy) -> Bool {
+        sourceIsHDR && !policy.forcesSDRVideo
+    }
+
+    /// Export presets in priority order; the first that yields a session wins.
+    /// Free exports start at 1080p H.264, Pro at the highest quality available.
+    static func presetCandidates(outputIsHDR: Bool, policy: ExportPolicy) -> [String] {
+        let fallbacks = [AVAssetExportPreset1280x720, AVAssetExportPreset960x540,
+                         AVAssetExportPreset640x480, AVAssetExportPresetMediumQuality]
+        if let preset = policy.videoPreset { return [preset] + fallbacks }
+        return outputIsHDR
+            ? [AVAssetExportPresetHEVCHighestQuality, AVAssetExportPresetHighestQuality,
+               AVAssetExportPreset1920x1080] + fallbacks
+            : [AVAssetExportPresetHighestQuality, AVAssetExportPreset1920x1080] + fallbacks
+    }
+
     @available(iOS 18, macOS 15, *)
     public static func process(
         sourceURL: URL,
         config: WatermarkConfiguration,
         onProgress: (@Sendable (Double, TimeInterval?) -> Void)? = nil,
-        provenance: ProvenanceExportOptions? = nil
+        provenance: ProvenanceExportOptions? = nil,
+        tier: ExportTier = .pro
     ) async throws -> (outputURL: URL, validation: ExportValidator.ExportValidationResult, provenanceReceipt: ExportReceipt?) {
+        let policy = ExportPolicy(tier: tier)
         let asset = AVURLAsset(url: sourceURL)
 
         // Step 1: Load duration and validate video track
@@ -128,11 +147,13 @@ public struct VideoProcessor {
         // compression session down an unsupported-pixel-format path
         // (VT-CS err -12900) that aborts inside CoreMedia's XPC layer.
         let formatDescsForHDR = try await videoTrack.load(.formatDescriptions)
-        let isHDR = formatDescsForHDR.contains { desc in
+        let sourceIsHDR = formatDescsForHDR.contains { desc in
             let extensions = CMFormatDescriptionGetExtensions(desc) as NSDictionary?
             let transfer = extensions?[kCVImageBufferTransferFunctionKey] as? String
             return transfer?.contains("HLG") == true || transfer?.contains("2084") == true
         }
+        // Whether the OUTPUT is HDR: the free tier tone-maps HDR sources to SDR.
+        let isHDR = outputIsHDR(sourceIsHDR: sourceIsHDR, policy: policy)
 
         // Frame styles that take their colour or backdrop from the picture read
         // one frame, a tenth of the way in — past most fade-ins. The surround
@@ -153,7 +174,8 @@ public struct VideoProcessor {
             videoSize: videoSize,
             metadata: videoMetadata,
             isHDR: isHDR,
-            frameSample: frameSample
+            frameSample: frameSample,
+            brandMark: policy.brandMark
         )
 
         // Step 5: Configure AVVideoComposition (D-09, D-10)
@@ -187,7 +209,14 @@ public struct VideoProcessor {
 
             hdrPreservationAttempted = true
         }
-        // For SDR: leave color properties nil (system propagates SDR correctly)
+        else if sourceIsHDR {
+            // Free tier: an HDR source rendered into an explicit Rec. 709
+            // composition, which tone-maps it rather than clipping.
+            videoComposition.colorPrimaries = AVVideoColorPrimaries_ITU_R_709_2
+            videoComposition.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
+            videoComposition.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
+        }
+        // For an SDR source: leave color properties nil (system propagates SDR correctly)
 
         // An AVMutableVideoComposition handed to AVAssetExportSession MUST carry
         // at least one instruction with a layer instruction spanning the whole
@@ -217,13 +246,7 @@ public struct VideoProcessor {
         // Simulator). The synchronous `exportPresets(compatibleWith:)` is
         // deprecated and unreliable (returns []), so probe by construction:
         // try presets in priority order and take the first that succeeds.
-        let preferredPresets: [String] = isHDR
-            ? [AVAssetExportPresetHEVCHighestQuality, AVAssetExportPresetHighestQuality,
-               AVAssetExportPreset1920x1080, AVAssetExportPreset1280x720,
-               AVAssetExportPreset960x540, AVAssetExportPreset640x480, AVAssetExportPresetMediumQuality]
-            : [AVAssetExportPresetHighestQuality,
-               AVAssetExportPreset1920x1080, AVAssetExportPreset1280x720,
-               AVAssetExportPreset960x540, AVAssetExportPreset640x480, AVAssetExportPresetMediumQuality]
+        let preferredPresets = presetCandidates(outputIsHDR: isHDR, policy: policy)
 
         var resolvedSession: AVAssetExportSession?
         for candidate in preferredPresets {
@@ -328,7 +351,7 @@ public struct VideoProcessor {
             validationResult = try await ExportValidator.validate(
                 outputURL: outputURL,
                 sourceAsset: asset,
-                wasHDR: isHDR
+                wasHDR: isHDR   // a free SDR export of an HDR source isn't a warning
             )
         } catch {
             #if DEBUG

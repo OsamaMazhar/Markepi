@@ -182,6 +182,7 @@ public actor BatchProcessor {
         items: [BatchItem],
         sharedConfig: WatermarkConfiguration,
         provenanceAppVersion: String? = nil,
+        tier: ExportTier = .pro,
         onProgress: ProgressHandler? = nil
     ) async -> BatchProcessingResult {
         let batchStartTime = Date()
@@ -232,7 +233,8 @@ public actor BatchProcessor {
                                 totalCost: totalCost,
                                 elapsed: Date().timeIntervalSince(batchStartTime)))
                         },
-                        provenance: provenance
+                        provenance: provenance,
+                        tier: tier
                     )
                     // Pitfall #4: 0.5s inter-export delay to prevent
                     // AVAssetExportSession hardware decoder exhaustion
@@ -247,7 +249,8 @@ public actor BatchProcessor {
                         sourceURL: item.sourceURL,
                         config: config,
                         provenance: provenance,
-                        preserveSourceCredentials: true
+                        preserveSourceCredentials: true,
+                        tier: tier
                     )
                 }
 

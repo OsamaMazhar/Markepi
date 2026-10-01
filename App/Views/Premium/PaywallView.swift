@@ -5,8 +5,9 @@ import MarkepiCore
 
 /// Premium upgrade screen ("Markepi Pro").
 ///
-/// The free tier lets people export/share **3 photos or 1 video per day with
-/// every feature unlocked**; Premium simply lifts that daily limit. Three plans
+/// Everyone exports as much as they like with every feature. The free tier's
+/// files are capped at 2048 px, SDR, with a small Markepi mark; Premium exports
+/// in full resolution with HDR and no mark. Three plans
 /// are offered: a $4.99 one-time unlock, a $2.99/year subscription, or a
 /// $0.99/month subscription — all granting the same entitlement.
 ///
@@ -186,10 +187,10 @@ struct PaywallView: View {
         let badge = (compact ? 60 : 80) * scale
         // Copy flips once the user is entitled: the hero becomes a celebratory
         // confirmation rather than a sales pitch.
-        let title = store.isPremium ? "You're Markepi Pro" : "Unlock Unlimited Exports"
+        let title = store.isPremium ? "You're Markepi Pro" : "Export in Full Quality"
         let subtitle = store.isPremium
-            ? "Thanks for your support — no more daily limits."
-            : "Keep every feature — just lift the daily limit."
+            ? "Thanks for your support — every export is full quality."
+            : "Full resolution, HDR, and no Markepi watermark."
         return VStack(spacing: compact ? 10 : 14) {
             CrownBadge(size: badge, reduceMotion: reduceMotion,
                        glyphSize: (compact ? 26 : 34) * scale,
@@ -216,9 +217,9 @@ struct PaywallView: View {
         HStack(spacing: 14) {
             FeatureIconChip(systemName: "gift.fill")
             VStack(alignment: .leading, spacing: 3) {
-                Text("Free every day")
+                Text("Free, unlimited")
                     .font(.system(size: bodySize, weight: .semibold))
-                Text("Share 3 photos or 1 video a day with all features unlocked — fonts, frames, captions, and video.")
+                Text("Export as much as you like with every feature, up to 2048 px, in SDR, with a small Markepi mark.")
                     .font(.system(size: subSize))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -234,7 +235,7 @@ struct PaywallView: View {
 
     private var plansSection: some View {
         VStack(spacing: 10) {
-            Text("Go unlimited")
+            Text("Go full quality")
                 .font(.system(size: subSize * 0.95, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.75))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -316,17 +317,17 @@ struct PaywallView: View {
     /// paywall so it reads in both light and dark.
     private var proBenefitsCard: some View {
         VStack(spacing: 0) {
-            proPerk(icon: "infinity",
-                    title: "Unlimited exports",
-                    detail: "Save and share as many photos and videos as you like — no daily limit.")
-            perkDivider
-            proPerk(icon: "checkmark.seal",
-                    title: "Every feature, always free",
-                    detail: "Fonts, frames, captions, signatures, and date stamps are included for everyone — Pro just lifts the export cap.")
-            perkDivider
             proPerk(icon: "photo.on.rectangle.angled",
-                    title: "Full quality preserved",
-                    detail: "Full-resolution photos and videos with all metadata kept intact.")
+                    title: "Full resolution",
+                    detail: "Photos at their original size and videos up to 4K, with all metadata kept intact.")
+            perkDivider
+            proPerk(icon: "sun.max.fill",
+                    title: "HDR photos & videos",
+                    detail: "The HDR brightness from your camera is kept in every export.")
+            perkDivider
+            proPerk(icon: "eye.slash",
+                    title: "No Markepi watermark",
+                    detail: "Only your own text, logo and signature appear on your work.")
         }
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
@@ -663,7 +664,7 @@ private struct PurchaseCTALabel: View {
 
 // MARK: - Models
 
-/// A purchasable premium plan. All three lift the free daily export limit and
+/// A purchasable premium plan. All three unlock full-quality exports and
 /// grant the identical entitlement — the choice is purely billing cadence.
 enum PremiumPlan: String, CaseIterable, Identifiable {
     case lifetime
@@ -786,4 +787,160 @@ struct FeatureIconChip: View {
 #Preview {
     PaywallView()
         .environment(StoreManager())
+}
+
+// MARK: - Export comparison (free users, every export)
+
+/// Free vs Pro, shown to a free user on EVERY export before anything renders.
+/// Two cards built from the user's own edit — Pro as Pro exports it, Free with
+/// the Markepi mark where the export will put it — each with what its file
+/// contains. There is deliberately no "Don't show again".
+///
+/// The buttons only record the choice and dismiss; `ContentView` acts on it in
+/// the sheet's `onDismiss`, once this sheet is fully gone.
+struct ExportComparisonSheet: View {
+    let viewModel: WatermarkViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var comparison: WatermarkViewModel.ExportComparison?
+
+    private static let gold = Color(red: 0.96, green: 0.76, blue: 0.29)
+
+    var body: some View {
+        GeometryReader { geo in
+            VStack(spacing: 12) {
+                header
+                if sideBySide(in: geo.size) {
+                    HStack(spacing: 12) { proCard; freeCard }
+                } else {
+                    proCard
+                    freeCard
+                }
+                buttons
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 18)
+            .padding(.bottom, max(geo.safeAreaInsets.bottom, 10))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .background(Color(.systemBackground))
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .task { comparison = await viewModel.makeExportComparison() }
+    }
+
+    /// Cards side by side when that shows the photo larger than stacking
+    /// (landscape screens, or portrait photos on a wide sheet).
+    private func sideBySide(in size: CGSize) -> Bool {
+        let img = comparison?.pro?.size ?? CGSize(width: 4, height: 3)
+        guard img.width > 0, img.height > 0 else { return size.width > size.height }
+        let aspect = img.width / img.height
+        func fitted(_ w: CGFloat, _ h: CGFloat) -> CGFloat {
+            min(w, h * aspect) * min(w / aspect, h)
+        }
+        let h = size.height * 0.75   // what the header and buttons leave
+        return fitted(size.width / 2, h) > fitted(size.width, h / 2)
+    }
+
+    private var header: some View {
+        Text(headerText)
+            .markepiTypography(.sectionHeader)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private var headerText: String {
+        guard let c = comparison else { return "Choose your export" }
+        if c.itemCount > 1 { return "Export \(c.itemCount) items" }
+        return c.isVideo ? "Export video" : "Export photo"
+    }
+
+    private var proCard: some View {
+        card(label: "Markepi Pro", image: comparison?.pro, specs: comparison?.proSpecs ?? [], isPro: true)
+            .onTapGesture(perform: unlock)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Opens Markepi Pro")
+    }
+
+    private var freeCard: some View {
+        card(label: "Free", image: comparison?.free, specs: comparison?.freeSpecs ?? [], isPro: false)
+            .onTapGesture(perform: exportFree)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Exports with the free quality")
+    }
+
+    private func card(label: String, image: UIImage?, specs: [String], isPro: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        return VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                HStack(spacing: 5) {
+                    if isPro { Image(systemName: "star.fill").foregroundStyle(Self.gold) }
+                    Text(label)
+                }
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(isPro ? .primary : .secondary)
+                Spacer(minLength: 0)
+                HStack(spacing: 8) {
+                    ForEach(specs, id: \.self) { Text($0) }
+                }
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(isPro ? .primary : .secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            ZStack {
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFit()
+                        // Pro shows the photo's HDR highlights; Free is the SDR file it exports.
+                        .allowedDynamicRange(isPro ? .high : .standard)
+                } else {
+                    ProgressView()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(.tertiarySystemFill))
+        }
+        .background(Color(.secondarySystemBackground))
+        .clipShape(shape)
+        .overlay(shape.stroke(isPro ? Self.gold : Color(.separator), lineWidth: isPro ? 2 : 0.5))
+        .contentShape(shape)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(specs.joined(separator: ", "))")
+    }
+
+    private var buttons: some View {
+        HStack(spacing: 10) {
+            Button(action: unlock) {
+                Label("Unlock full quality", systemImage: "star.fill")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Self.gold)
+            .foregroundStyle(.black)
+
+            Button(action: exportFree) {
+                Text("Export free")
+                    .font(.body.weight(.semibold))
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.bordered)
+            .fixedSize()
+        }
+        .controlSize(.large)
+    }
+
+    private func unlock() {
+        viewModel.comparisonChoice = .unlock
+        dismiss()
+    }
+
+    private func exportFree() {
+        viewModel.comparisonChoice = .exportFree
+        dismiss()
+    }
 }

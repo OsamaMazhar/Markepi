@@ -72,37 +72,29 @@ Video:
 
 **Alternative considered:** scaling the photo after writing it with ImageIO thumbnailing. Rejected: it decodes twice, and a second write risks metadata loss.
 
-### 3. The free mark is a synthetic text layer appended at export time
+### 3. The free mark is drawn by the renderers, not added as a user layer
 
-`BrandMark.apply(to config:, canvasSize:, metadata:) -> WatermarkConfiguration` returns a copy of the config with one extra `.text` layer: "Markepi", white, opacity 0.85, with `shadow: true`, and a scale chosen so the cap height is about 4% of the photo's shorter side. The copy exists only inside the export call and is never assigned back to the view model, saved, or added to templates. That is how the spec's "never in preview, layers or saved configuration" holds.
+`BrandMark` (MarkepiCore/Rendering) produces the mark and picks its slot:
 
-`TextWatermarkInput` gains `shadow: Bool = false`, decoded leniently. `TextWatermarkRenderer` and the video text layer draw a soft dark shadow (blur ≈ 0.08 × font size, 45% black) when it is set. Users don't get a shadow toggle as part of this change.
+- `BrandMark.image(for:)` makes a lockup: the white Markepi app-icon tile (`Resources/Brand/markepi-white.png`, the "M" knocked out) on the left of "Markepi" in the bundled Cookie script, 6% of the frame's shorter side tall, with a blurred 55% black shadow, at 72% opacity. The lockup is flattened to a bitmap before the shadow, since a lazy graph streaks the text past its crop.
+- `buildFilterGraph(brandMark:)` for photos and `VideoLayerBuilder.buildLayers(brandMark:)` for video add it after the user's layers and the date stamp. Both already know where each of those landed (`layerRects`, the CALayer frames) in the photo's own coordinates. These are the same coordinates user layers are positioned in, so the mark can never land on a frame's mat.
+- The mark never enters `WatermarkConfiguration`, so it can't reach the preview, the Layers panel, templates or saved settings. `renderPreview` has no `brandMark` input at all.
 
-**Alternative considered:** a separate mark renderer drawn after compositing. Rejected: it would need its own photo and CALayer code and its own coordinate conversions. Appending a layer reuses the code that already handles orientation, frames, padding and video.
+**Alternative considered:** append a synthetic `.text` layer to a config copy, as the first draft planned. Rejected for these reasons:
+- It needed a new `shadow` field on `TextWatermarkInput`.
+- It needed a separate layout pass to find occupied space.
+- The renderers already hold the exact rects, which makes the in-renderer version smaller and exact.
 
-### 4. Slot choice from real layer frames
+### 4. Slot choice
 
-`BrandMarkPlacer` is pure and unit-tested:
+`BrandMark.slot(mark:base:padding:occupied:)` is pure and unit-tested:
 
-```swift
-static func slot(mark: CGSize, photo: CGRect, padding: CGFloat,
-                 occupied: [CGRect]) -> WatermarkPosition
-```
+- It walks `slotOrder = [.bottomRight, .bottomLeft, .topRight, .topLeft, .center, .bottomCenter, .topCenter]`.
+- Each candidate rect is built with `PositionCalculator`, the same maths the renderers use.
+- It returns the first slot with zero overlap, or else the least-overlap slot; ties keep the order.
+- Side middles are absent by construction.
 
-- It walks `[.bottomRight, .bottomLeft, .topRight, .topLeft, .center, .bottomCenter, .topCenter]`.
-- For each slot it builds the mark's candidate rect inside `photo` using `WatermarkPosition.translation`, the same maths the renderers use.
-- It returns the first slot with zero intersection with `occupied`. If every slot intersects, it returns the slot with the smallest intersection area, and ties keep list order.
-- Side middles are absent from the list by construction.
-
-`occupied` comes from a layout pass:
-
-- `buildFilterGraph` runs once on a clear `CIImage` of the export's canvas size; nothing is rendered, the graph is lazy.
-- It returns `RenderLayout.layerFrames` for the visible user layers. The date stamp's frame is now recorded there too, under a reserved key.
-- The same pass gives `photoRect`, so on framed exports the mark stays on the photo, never on the mat.
-
-Video calls the same pass with the video's natural size, so its slot is fixed for the whole clip. Batches call it per item, because aspect ratios differ.
-
-**Alternative considered:** using the preset `position` fields only. Rejected because dragged (`.custom`) layers and the date stamp would be ignored, which the spec forbids. The reverse, deriving occupancy from the last preview's layout, was also rejected: batches and videos have no matching preview.
+`occupied` is the visible user layers plus the date stamp. Dragged (`.custom`) layers count wherever they actually render. A video's slot is chosen once in the layer builder, so it is fixed for the whole clip.
 
 ### 5. The comparison sheet is an App-level view that gates export entry points
 
@@ -137,7 +129,7 @@ Actions:
 
 ### 6. Content Credentials
 
-Signing is untouched. Because the mark is a real layer, the existing `visibleWatermarkApplied: !config.watermarks.isEmpty` in the C2PA manifest request becomes true for Free exports without extra code. The receipt view will list "Markepi" among the watermarks, which is accurate.
+Signing is untouched. The manifest's `visibleWatermarkApplied` becomes `!config.watermarks.isEmpty || policy.brandMark`, so a signed Free export says a visible watermark was applied even when the user added none.
 
 ### 7. Paywall copy
 

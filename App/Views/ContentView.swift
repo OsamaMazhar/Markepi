@@ -137,7 +137,17 @@ struct ContentView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView(viewModel: viewModel)
             }
-            .sheet(isPresented: $viewModel.showPaywall) {
+            .sheet(isPresented: $viewModel.showExportComparison, onDismiss: {
+                Task { await viewModel.comparisonClosed() }
+            }) {
+                ExportComparisonSheet(viewModel: viewModel)
+                    // Page-sized on iPad, like the paywall: the default form
+                    // sheet leaves the two photos too small to compare.
+                    .presentationSizing(.page)
+            }
+            .sheet(isPresented: $viewModel.showPaywall, onDismiss: {
+                Task { await viewModel.paywallDismissed() }
+            }) {
                 PaywallView()
                     // iPad's default sheet is a ~540pt form sheet, which is what
                     // clipped the subscribe button off the bottom in 1.3 (2).
@@ -1042,10 +1052,8 @@ private struct SheetModifiers: ViewModifier {
                 applicationActivities: [SaveToPhotosActivity(onFinished: handleSaveToPhotosResult)],
                 excludedActivityTypes: [.saveToCameraRoll],
                 onComplete: { completed in
-                    // Only a share the user goes through with spends the free
-                    // allowance, and it counts as one delight moment.
+                    // A share the user goes through with counts as one delight moment.
                     guard completed else { return }
-                    viewModel.recordCompletedExport()
                     requestReviewAfterSuccessfulExport()
                 }
             ) {
@@ -1058,7 +1066,6 @@ private struct SheetModifiers: ViewModifier {
                 excludedActivityTypes: [.saveToCameraRoll],
                 onComplete: { completed in
                     guard completed else { return }
-                    viewModel.recordCompletedExport()
                     requestReviewAfterSuccessfulExport()
                 }
             ) {

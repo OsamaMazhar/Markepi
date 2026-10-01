@@ -73,7 +73,8 @@ public struct LivePhotoProcessor {
         stillImageURL: URL,
         videoURL: URL,
         config: WatermarkConfiguration,
-        provenance: ProvenanceExportOptions? = nil
+        provenance: ProvenanceExportOptions? = nil,
+        tier: ExportTier = .pro
     ) async throws -> LivePhotoPairResult {
         // Step 1: Watermark still frame via existing photo pipeline.
         // Live Photo processing is always a real export, so any Content
@@ -82,14 +83,16 @@ public struct LivePhotoProcessor {
             sourceURL: stillImageURL,
             config: config,
             provenance: provenance,
-            preserveSourceCredentials: true
+            preserveSourceCredentials: true,
+            tier: tier
         )
 
         // Step 2: Watermark video component via existing video pipeline
         let videoResult = try await WatermarkEngine.shared.processVideo(
             sourceURL: videoURL,
             config: config,
-            provenance: provenance
+            provenance: provenance,
+            tier: tier
         )
 
         guard let stillURL = stillResult.url else {

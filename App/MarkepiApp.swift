@@ -56,6 +56,12 @@ struct MarkepiApp: App {
     /// concurrently with the animation and is never blocked by it.
     @State private var showLaunchAnimation = true
 
+    init() {
+        // The free daily quota is gone (free = unlimited, reduced quality);
+        // drop its leftover counters from the App Group.
+        ExportGate.removeLegacyQuotaKeys()
+    }
+
     private var appearance: AppearancePreference {
         AppearancePreference(rawValue: appearancePreference) ?? .system
     }

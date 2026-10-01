@@ -34,7 +34,7 @@ A Pro photo export SHALL keep the source's full pixel dimensions, the user's cho
 
 ### Requirement: Free photo exports are reduced in size
 
-A Free photo export SHALL cap the longest side at 2048 pixels (smaller images keep their size) and SHALL be encoded with lossy quality no higher than 0.7 (a lossless output format choice is written as JPEG, or HEIC when the source is HEIC). For a typical 12 MP or larger camera photo the Free file SHALL be no more than 30% of the size of the Pro export of the same edit (a 10 MB Pro file exports at about 2 MB). Free exports SHALL keep the source's metadata (EXIF, GPS, date, device), with pixel-dimension fields matching the reduced image.
+A Free photo export SHALL cap the photo's longest side at 2048 pixels (smaller images keep their size; a frame's border is then added around the capped photo, as it is around a Pro photo) and SHALL be encoded with lossy quality no higher than 0.7 (a lossless output format choice is written as JPEG, or HEIC when the source is HEIC). For a typical 12 MP or larger camera photo the Free file SHALL be no more than 30% of the size of the Pro export of the same edit (a 10 MB Pro file exports at about 2 MB). Free exports SHALL keep the source's metadata (EXIF, GPS, date, device), with pixel-dimension fields matching the reduced image.
 
 #### Scenario: 12 MP photo, free
 - **WHEN** a free user exports a 4032×3024 photo whose Pro export is 10 MB

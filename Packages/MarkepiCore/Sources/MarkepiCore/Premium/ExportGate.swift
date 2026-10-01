@@ -1,53 +1,79 @@
+import AVFoundation
+import CoreGraphics
 import Foundation
 
-/// The single decision point that combines **premium entitlement** with the
-/// **free daily quota**.
+/// Which kind of file an export produces. Every export is unlimited; the tier
+/// only decides quality (see ``ExportPolicy``).
+public enum ExportTier: Sendable, Equatable {
+    /// No Markepi Pro entitlement: reduced size, SDR, Markepi mark.
+    case free
+    /// Markepi Pro: full resolution, HDR kept, no mark.
+    case pro
+}
+
+/// What an export of a given tier produces. One value so the photo, Live Photo,
+/// video and batch paths all read the same rule.
+public struct ExportPolicy: Sendable, Equatable {
+    /// Longest output side in pixels, or nil for the source's own size.
+    public let maxPixelDimension: CGFloat?
+    /// Upper bound on lossy compression quality (0…1), or nil for the user's setting.
+    public let lossyQualityCap: Float?
+    /// Whether an HDR gain map is carried over to photos.
+    public let keepsGainMap: Bool
+    /// Preferred `AVAssetExportSession` preset for video, or nil for the source-matched choice.
+    public let videoPreset: String?
+    /// Whether HDR video is tone-mapped to SDR Rec. 709.
+    public let forcesSDRVideo: Bool
+    /// Whether the export carries the automatic "Markepi" mark.
+    public let brandMark: Bool
+
+    public static let freePhotoLongestSide: CGFloat = 2048
+    public static let freeLossyQuality: Float = 0.7
+
+    public init(tier: ExportTier) {
+        switch tier {
+        case .pro:
+            maxPixelDimension = nil
+            lossyQualityCap = nil
+            keepsGainMap = true
+            videoPreset = nil
+            forcesSDRVideo = false
+            brandMark = false
+        case .free:
+            maxPixelDimension = Self.freePhotoLongestSide
+            lossyQualityCap = Self.freeLossyQuality
+            keepsGainMap = false
+            videoPreset = AVAssetExportPreset1920x1080
+            forcesSDRVideo = true
+            brandMark = true
+        }
+    }
+}
+
+/// The single place that turns the premium entitlement into an ``ExportTier``.
 ///
-/// Both the app and the Share Extension route every export through an
-/// `ExportGate` so the rule is defined in exactly one place:
-///
-/// * Premium users always pass and never consume quota.
-/// * Free users pass only while the relevant daily bucket has room, and each
-///   completed export is recorded against ``ExportQuota``.
-///
-/// The gate reads premium status from ``PremiumStatusStore`` (the App
-/// Group-cached flag), so it works identically in the app and the extension.
-/// In the app, `StoreManager` keeps that cache in lock-step with the live
-/// StoreKit entitlement.
+/// Reads the App Group-cached flag from ``PremiumStatusStore`` (kept current by
+/// `StoreManager`), so the tier is the same wherever it is asked. Exports are
+/// never refused: a free user simply gets the free tier.
 public struct ExportGate: Sendable {
-    private let quota: ExportQuota
     private let status: PremiumStatusStore
 
-    public init(quota: ExportQuota = .shared, status: PremiumStatusStore = .shared) {
-        self.quota = quota
+    public init(status: PremiumStatusStore = .shared) {
         self.status = status
     }
 
     /// Whether the user currently holds a premium entitlement.
     public var isPremium: Bool { status.isPremium }
 
-    /// Whether the user may export `photos` photos and `videos` videos right
-    /// now. Premium always returns `true`; free users are checked against the
-    /// remaining daily allowance in ``ExportQuota``.
-    public func canExport(photos: Int = 0, videos: Int = 0) -> Bool {
-        if status.isPremium { return true }
-        return quota.canExport(photos: photos, videos: videos)
-    }
+    /// The tier an export started now is produced in.
+    public var tier: ExportTier { status.isPremium ? .pro : .free }
 
-    /// Records a completed export against the free quota. A no-op for premium
-    /// users, who have no limit to track.
-    public func record(photos: Int = 0, videos: Int = 0) {
-        guard !status.isPremium else { return }
-        quota.record(photos: photos, videos: videos)
-    }
-
-    /// Photos a free user may still export today (0 shown as "limit reached").
-    public func remainingPhotos() -> Int {
-        status.isPremium ? .max : quota.remainingPhotos()
-    }
-
-    /// Videos a free user may still export today.
-    public func remainingVideos() -> Int {
-        status.isPremium ? .max : quota.remainingVideos()
+    /// Removes the counters left by the retired free daily quota (3 photos +
+    /// 1 video). Idempotent; called once at launch.
+    public static func removeLegacyQuotaKeys(suiteName: String = AppGroupConfigSync.suiteName) {
+        guard let defaults = UserDefaults(suiteName: suiteName) else { return }
+        for key in ["exportQuota.day", "exportQuota.photoCount", "exportQuota.videoCount"] {
+            defaults.removeObject(forKey: key)
+        }
     }
 }
