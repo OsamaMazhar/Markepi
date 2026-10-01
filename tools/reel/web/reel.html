@@ -1,0 +1,358 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Markepi Reel</title>
+<style>
+  @font-face { font-family: "DINC"; src: url("file:///System/Library/Fonts/Supplemental/DIN%20Condensed%20Bold.ttf"); }
+  @font-face { font-family: "Mono"; src: url("file:///System/Library/Fonts/SFNSMono.ttf"); }
+  /* Markepi palette, taken from the app icon: cobalt field, deep navy, icy white M */
+  :root { --brand: #2f62d6; --brand2: #164198; --ice: #cfe0ff; --deep: #06102a; --ink: #040a1c; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 886px; height: 1920px; overflow: hidden; background: #000; }
+  body { font-family: -apple-system, system-ui, sans-serif; color: #fff; -webkit-font-smoothing: antialiased; }
+  #stage { position: absolute; inset: 0; overflow: hidden; }
+  canvas { position: absolute; inset: 0; }
+  #fx { position: absolute; inset: 0; }
+  .din { font-family: "DINC", "DIN Condensed", Impact, sans-serif; font-weight: 800; text-transform: uppercase; }
+  .mono { font-family: "Mono", Menlo, monospace; }
+  #hud { position: absolute; inset: 0; pointer-events: none; }
+  #hud .tl { position: absolute; left: 44px; top: 58px; font-size: 19px; letter-spacing: 3px; color: rgba(255,255,255,.75); display: flex; gap: 14px; align-items: center; }
+  #hud .tl b { width: 12px; height: 12px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 12px var(--brand); display: inline-block; }
+  #hud .badge { position: absolute; left: 44px; bottom: 56px; display: flex; align-items: center; gap: 14px; }
+  #hud .badge .sq { width: 46px; height: 46px; border-radius: 10px; background: var(--brand); display: grid; place-items: center; box-shadow: 0 0 20px rgba(47,98,214,.6); }
+  #hud .badge .sq svg { width: 26px; height: 26px; }
+  #hud .badge .t { font-size: 30px; letter-spacing: 1px; line-height: 1; }
+  #hud .badge .s { font-size: 15px; letter-spacing: 3px; color: rgba(255,255,255,.6); margin-top: 6px; }
+  #shot { position: absolute; left: 50%; top: 330px; width: 712px; height: 1543px; margin-left: -356px; }
+  #shot canvas { border-radius: 58px; box-shadow: 0 0 0 2px rgba(255,255,255,.14), 0 40px 120px rgba(0,0,0,.7), 0 0 120px rgba(47,98,214,.4); }
+  #label { position: absolute; left: 50%; top: 150px; transform: translateX(-50%); display: flex; align-items: baseline; gap: 18px; white-space: nowrap; }
+  #label .n { font-size: 44px; color: var(--ice); }
+  #label .w { font-size: 96px; letter-spacing: 1px; line-height: .9; }
+  #label .sub { position: absolute; left: 50%; top: 108px; transform: translateX(-50%); font-size: 20px; letter-spacing: 5px; color: rgba(255,255,255,.7); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" width="886" height="1920"></canvas>
+  <div id="shot"><canvas id="shotc" width="712" height="1543"></canvas></div>
+  <div id="fx"></div>
+  <div id="hud"></div>
+</div>
+<script>
+// Every on-screen word (Markepi ships en-US only). Captions follow the ASO research: watermark, photo frames, EXIF, C2PA.
+const T = {
+  boot: "BOOT", loading: "LOADING", boot1: "LOAD FRAME ENGINE", boot2: "READ EXIF", boot3: "MATCH PHOTO COLOURS", boot4: "READY",
+  tagline: "PHOTO & VIDEO WATERMARK", k1: ["WATERMARK.", "FRAME.", "SHARE."], k1sub: "FRAMES · TEXT · LOGO · C2PA",
+  frames: "FRAMES", newFrames: "12 NEW STYLES", colours: "COLOURED BY YOUR OWN SHOT",
+  styles: ["FLOAT", "SWATCH", "TONE", "NOIR", "READOUT", "AMBIENT", "AURA", "BLEND", "EMBOSS", "SUNLIGHT"],
+  text: "TEXT", yourName: "YOUR NAME ON EVERY SHOT", typeIt: "TYPE YOUR NAME OR STUDIO", fonts: "IN BEAUTIFUL FONTS",
+  logoW: "LOGO", placeIt: "PLACE YOUR LOGO", anyCorner: "ANY CORNER OR THE CENTRE", onEvery: "ON EVERY PHOTO & VIDEO",
+  video: "VIDEO", videosToo: "VIDEOS TOO", sameMarks: "THE SAME MARKS ON EVERY CLIP",
+  kept: "EVERY DETAIL", preserved: "PRESERVED", exif: "REAL EXIF", hdr: "HDR", hdrKept: "KEPT INTACT", gps: "GPS · DATE", untouched: "UNTOUCHED",
+  styles12: "FRAME STYLES", logo: "LOGO", sig: "& SIGNATURE", pngs: "TRANSPARENT PNG",
+  shareWords: ["SHARE", "FROM", "PHOTOS."], shareIn: "SHARE IN", fromAnyApp: "FROM PHOTOS OR ANY APP",
+  tapShare: "TAP SHARE · PICK MARKEPI", opens: "STRAIGHT INTO THE EDITOR",
+  c2pa: "C2PA", seal: "CONTENT CREDENTIALS", signIt: "SIGN WITH ONE TAP", sealed: "CREATOR & COPYRIGHT SEALED IN",
+  private: "NO CLUTTER", onlyIfYouChoose: "SAVED ONLY IF YOU CHOOSE", photosAdded: "PHOTOS ADDED TO", cameraRoll: "YOUR CAMERA ROLL",
+  shareOut: "SHARE", anyApp: "STRAIGHT TO ANY APP", instantly: "INSTANTLY",
+  tag: ["WATERMARK", "FRAME", "SHARE"], onIphone: "ON IPHONE & IPAD",
+};
+const FPS = 30, W = 886, H = 1920;
+const $ = s => document.querySelector(s);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const prog = (t, a, d) => clamp((t - a) / d);
+const oExpo = t => t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);
+const iExpo = t => t <= 0 ? 0 : Math.pow(2, 10 * t - 10);
+const oBack = (t, c = 1.8) => 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2);
+const oCubic = t => 1 - Math.pow(1 - t, 3);
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+const ICE = "#cfe0ff";
+
+const APPICON = (px, r = .225) => `<img src="icon.png" style="width:${px}px;height:${px}px;border-radius:${px * r}px;display:block;box-shadow:0 18px 50px rgba(0,0,0,.45)">`;
+const ICON = {
+  frame: `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="8" rx="1"/></svg>`,
+  text: `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M5 6h14M12 6v13"/></svg>`,
+  video: `<svg viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>`,
+  share: `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>`,
+  seal: `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 2.1 3.2-.3.9 3.1 2.8 1.6-1.2 3 1.2 3-2.8 1.6-.9 3.1-3.2-.3L12 22l-2.4-2.1-3.2.3-.9-3.1L2.7 15.5l1.2-3-1.2-3 2.8-1.6.9-3.1 3.2.3z"/><path d="M8.5 12.2l2.3 2.3 4.7-4.7"/></svg>`,
+  logo: `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>`,
+  lock: `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`,
+};
+
+// ---------------- backgrounds ----------------
+const bg = $("#bg").getContext("2d");
+const R0 = rng(7);
+const DUST = Array.from({ length: 140 }, () => [R0() * W, R0() * H, .5 + R0() * 1.8, R0() * 6.28, 8 + R0() * 30]);
+function bgDark(t, glow = 1) {
+  bg.fillStyle = "#040a1c"; bg.fillRect(0, 0, W, H);
+  const g = bg.createRadialGradient(W / 2, H * .5, 0, W / 2, H * .5, 1100);
+  g.addColorStop(0, `rgba(30,70,170,${.55 * glow})`); g.addColorStop(1, "rgba(4,10,28,0)");
+  bg.fillStyle = g; bg.fillRect(0, 0, W, H);
+  bg.strokeStyle = "rgba(150,185,255,.07)"; bg.lineWidth = 1;
+  const off = (t * 18) % 60;
+  for (let x = -60 + off; x < W; x += 60) { bg.beginPath(); bg.moveTo(x, 0); bg.lineTo(x, H); bg.stroke(); }
+  for (let y = -60 + off; y < H; y += 60) { bg.beginPath(); bg.moveTo(0, y); bg.lineTo(W, y); bg.stroke(); }
+  bg.fillStyle = "rgba(150,185,255,.22)";
+  for (let x = off; x < W; x += 120) for (let y = off; y < H; y += 120) bg.fillRect(x - 3, y - .5, 6, 1), bg.fillRect(x - .5, y - 3, 1, 6);
+  for (const [x, y, r, p, s] of DUST) {
+    bg.fillStyle = `rgba(200,220,255,${.12 + .2 * Math.sin(t * 2 + p) ** 2})`;
+    bg.beginPath(); bg.arc(x + Math.sin(t * .6 + p) * 10, ((y - t * s) % H + H) % H, r, 0, 6.28); bg.fill();
+  }
+}
+function bgBrand(t, dots = true) { // the icon's cobalt field, light from the top-left like the icon
+  const g = bg.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, "#3a70dc"); g.addColorStop(.55, "#1f4fb4"); g.addColorStop(1, "#0f2e78");
+  bg.fillStyle = g; bg.fillRect(0, 0, W, H);
+  if (dots) {
+    bg.fillStyle = "rgba(255,255,255,.10)";
+    for (let y = 0; y < H; y += 34) for (let x = (y / 34) % 2 * 17; x < W; x += 34) {
+      const r = 1 + 3.2 * clamp(1 - Math.hypot(x - W * .85, y - H * (.2 + .05 * Math.sin(t))) / 900);
+      bg.beginPath(); bg.arc(x, y, r, 0, 6.28); bg.fill();
+    }
+  }
+}
+function bgRays(t) {
+  bgBrand(t, false);
+  bg.save(); bg.translate(W / 2, H * .42); bg.rotate(t * .25);
+  for (let i = 0; i < 24; i++) {
+    bg.rotate(Math.PI / 12); bg.fillStyle = i % 2 ? "rgba(255,255,255,.07)" : "rgba(255,255,255,0)";
+    bg.beginPath(); bg.moveTo(0, 0); bg.lineTo(-180, -2200); bg.lineTo(180, -2200); bg.closePath(); bg.fill();
+  }
+  bg.restore();
+  const g = bg.createRadialGradient(W / 2, H * .42, 0, W / 2, H * .42, 700);
+  g.addColorStop(0, "rgba(255,255,255,.35)"); g.addColorStop(1, "rgba(255,255,255,0)");
+  bg.fillStyle = g; bg.fillRect(0, 0, W, H);
+}
+
+// ---------------- footage ----------------
+const sc = $("#shotc").getContext("2d");
+const imgCache = new Map();
+async function frameImg(clip, f) {
+  const src = `frames/${clip}/${String(f).padStart(4, "0")}.jpg`;
+  if (!imgCache.has(src)) { const im = new Image(); im.src = src; await im.decode().catch(() => {}); imgCache.set(src, im); if (imgCache.size > 12) imgCache.delete(imgCache.keys().next().value); }
+  return imgCache.get(src);
+}
+function drawShot(im, g, seed) { // glitch slices + RGB split while g (0..1) is up
+  const w = 712, h = 1543; sc.clearRect(0, 0, w, h);
+  sc.save(); sc.beginPath(); sc.roundRect(0, 0, w, h, 58); sc.clip();
+  if (g < .01) { sc.drawImage(im, 0, 0, w, h); sc.restore(); return; }
+  const r = rng(seed), n = 14;
+  for (let i = 0; i < n; i++) {
+    const y0 = i * h / n, hh = h / n + 1, dx = (r() - .5) * 260 * g * (r() < .6 ? 1 : 0);
+    sc.drawImage(im, 0, y0 / h * im.height, im.width, hh / h * im.height, dx, y0, w, hh);
+  }
+  sc.globalCompositeOperation = "lighter"; sc.globalAlpha = .35 * g;
+  sc.drawImage(im, 18 * g, 0, w, h); sc.globalAlpha = .25 * g; sc.drawImage(im, -18 * g, 0, w, h);
+  sc.restore(); sc.globalAlpha = 1; sc.globalCompositeOperation = "source-over";
+}
+
+// ---------------- HUD ----------------
+function hud(show, label, sub, icon) {
+  const el = $("#hud");
+  if (!show) { el.innerHTML = ""; el.dataset.k = ""; return; }
+  const k = label + icon + sub;
+  if (el.dataset.k !== k) {
+    el.dataset.k = k;
+    el.innerHTML = `<div class="tl mono"><b></b>MARKEPI</div>
+      <div class="badge">${icon === "logo" ? `<div style="width:46px;height:46px">${APPICON(46)}</div>` : `<div class="sq">${ICON[icon]}</div>`}<div><div class="t din" style="white-space:nowrap">${label}</div><div class="s mono">${sub}</div></div></div>`;
+  }
+}
+
+// ---------------- scenes ----------------
+const fx = $("#fx");
+function fit(el, maxW) {
+  const r = document.createRange(); let fs = parseFloat(getComputedStyle(el).fontSize);
+  for (let i = 0; i < 60; i++) { r.selectNodeContents(el); if (r.getBoundingClientRect().width <= maxW) break; fs *= .96; el.style.fontSize = fs + "px"; }
+}
+function mount(key, html) {
+  if (fx.dataset.k === key) return;
+  fx.dataset.k = key; fx.innerHTML = html; fx.style.transform = ""; fx.style.filter = "";
+  fx.querySelectorAll("#k .w").forEach(e => fit(e, 746));
+  fx.querySelectorAll("[data-fit]").forEach(e => fit(e, +e.dataset.fit));
+}
+const words = list => list.map(w => `<div class="w din" style="display:block">${w}</div>`).join("");
+function slam(els, lt, start, step, from = 1.9) {
+  els.forEach((e, i) => {
+    const k = prog(lt, start + i * step, .32), s = oBack(k, 2.2);
+    e.style.transform = `scale(${lerp(from, 1, s)}) skewX(${lerp(-14, 0, oExpo(k))}deg)`;
+    e.style.opacity = k > 0 ? 1 : 0; e.style.filter = `blur(${lerp(14, 0, oExpo(k))}px)`;
+  });
+}
+function exitSmear(lt, dur, d = .22) {
+  const k = iExpo(prog(lt, dur - d, d));
+  fx.style.transform = `translateX(${-k * 1100}px) skewX(${k * 18}deg)`; fx.style.filter = `blur(${k * 14}px)`;
+}
+function shake(lt, at, amt = 16) { const k = Math.exp(-((lt - at) * 14)) * (lt > at); return `translate(${Math.sin(lt * 90) * amt * k}px, ${Math.cos(lt * 77) * amt * k}px)`; }
+
+const SCENES = [];
+const S = (dur, draw, o = {}) => SCENES.push({ dur, draw, ...o });
+
+// 2 · logo reveal: ring draws, the M icon pops, then floods the screen
+S(1.1, (lt, d, f) => {
+  bgDark(lt + 1); hud(true, "MARKEPI", T.tagline, "logo");
+  mount("logo", `<svg style="position:absolute;left:0;top:0" width="886" height="1920"><circle id="ring" cx="443" cy="860" r="250" fill="none" stroke="rgba(207,224,255,.6)" stroke-width="3"/></svg>
+    <div id="disc" style="position:absolute;left:443px;top:860px;width:340px;height:340px;margin:-170px;filter:drop-shadow(0 0 60px rgba(47,98,214,.7))">${APPICON(340)}</div>
+    <div id="lt" class="mono" style="position:absolute;left:0;right:0;top:1210px;text-align:center;font-size:24px;letter-spacing:10px">${T.tagline}</div>`);
+  const ring = $("#ring"), L = 2 * Math.PI * 250;
+  ring.style.strokeDasharray = L; ring.style.strokeDashoffset = L * (1 - oExpo(prog(lt, 0, .45)));
+  ring.setAttribute("r", 250 + 60 * oExpo(prog(lt, .35, .5)));
+  ring.style.opacity = 1 - prog(lt, .45, .3);
+  const pop = oBack(prog(lt, .15, .45)), flood = iExpo(prog(lt, d - .3, .3));
+  $("#disc").style.transform = `scale(${pop * (1 + flood * 9)}) rotate(${lerp(-90, 0, oExpo(prog(lt, .15, .5)))}deg)`;
+  $("#disc img").style.opacity = 1 - flood * .4;
+  const tl = $("#lt"); tl.style.opacity = prog(lt, .45, .2) * (1 - flood); tl.style.letterSpacing = `${lerp(30, 10, oExpo(prog(lt, .45, .5)))}px`;
+});
+// 3 · kinetic type on the icon's cobalt
+S(1.6, (lt, d, f) => {
+  bgBrand(lt); hud(true, "MARKEPI", T.k1sub, "logo");
+  mount("k1", `<div id="k" style="position:absolute;left:70px;top:600px;font-size:250px;line-height:.86">${words(T.k1)}</div>
+    <div id="seal" style="position:absolute;right:70px;top:200px;width:150px;height:150px;border-radius:50%;border:3px dashed rgba(255,255,255,.6);display:grid;place-items:center"><div style="width:96px;height:96px;border-radius:50%;background:#fff;display:grid;place-items:center"><svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="#2f62d6" stroke-width="2.6" stroke-linecap="round"><path d="M12 3v18M5 12h14"/></svg></div></div>`);
+  const ws = [...fx.querySelectorAll(".w")]; ws[1].style.color = ICE;
+  slam(ws, lt, .02, .2);
+  $("#k").style.transform = shake(lt, .55, 10);
+  $("#seal").style.transform = `rotate(${lt * 120}deg) scale(${oBack(prog(lt, .3, .4))})`;
+  exitSmear(lt, d);
+}, { reset: true });
+
+// footage scene factory: parts play back to back inside one rounded phone screen
+function footage(parts, meta) {
+  const dur = parts.reduce((s, p) => s + p.n / FPS, 0);
+  S(dur, async (lt, d, f, sceneStart) => {
+    bgDark(lt + sceneStart); hud(true, meta.badge, meta.badgeSub, meta.icon);
+    $("#hud .badge").style.display = "none"; // the phone runs to the bottom edge; the top label carries the name
+    let acc = 0, p = parts[0], plt = lt;
+    for (const q of parts) { if (lt < acc + q.n / FPS) { p = q; plt = lt - acc; break; } acc += q.n / FPS; p = q; plt = lt - acc; }
+    const fi = Math.min(p.last || 9999, (p.from || 1) + Math.round(Math.floor(plt * FPS) * (p.step || 1)));
+    const im = await frameImg(p.clip, fi);
+    const enter = prog(lt, 0, .32), leave = prog(lt, d - .18, .18);
+    const cut = parts.indexOf(p) > 0 && !meta.hardCuts ? Math.max(0, 1 - plt / .12) : 0;
+    drawShot(im, Math.max(1 - enter, leave, cut * .6), Math.floor(lt * FPS) + 3);
+    const shot = $("#shot");
+    shot.style.display = "block";
+    shot.style.transform = `scale(${lerp(1.14, 1, oExpo(enter)) * lerp(1, .94, iExpo(leave))})`;
+    shot.style.opacity = Math.min(1, enter * 3) * (1 - iExpo(leave));
+    mount("ft" + meta.n, `<div id="label"><span class="n din">${meta.n}</span><span class="w din" data-fit="620">${meta.word}</span><div class="sub mono"></div></div>
+      <div class="br" style="position:absolute;left:65px;top:315px;width:60px;height:60px;border-left:4px solid var(--brand);border-top:4px solid var(--brand)"></div>
+      <div class="br" style="position:absolute;right:65px;top:315px;width:60px;height:60px;border-right:4px solid var(--brand);border-top:4px solid var(--brand)"></div>
+      <div class="br" style="position:absolute;left:65px;top:1827px;width:60px;height:60px;border-left:4px solid var(--brand);border-bottom:4px solid var(--brand)"></div>
+      <div class="br" style="position:absolute;right:65px;top:1827px;width:60px;height:60px;border-right:4px solid var(--brand);border-bottom:4px solid var(--brand)"></div>`);
+    fx.style.transform = ""; fx.style.filter = "";
+    const lab = $("#label"), lk = oExpo(prog(lt, .05, .45));
+    lab.style.opacity = lk * (1 - leave); lab.style.transform = `translateX(-50%) translateY(${lerp(-60, 0, lk)}px)`;
+    lab.querySelector(".w").style.letterSpacing = `${lerp(20, 1, lk)}px`;
+    const sub = lab.querySelector(".sub"); if (sub.textContent !== p.sub) { sub.textContent = p.sub; sub.dataset.at = lt; }
+    sub.style.opacity = Math.min(1, (lt - +sub.dataset.at) / .12) * (1 - leave);
+    fx.querySelectorAll(".br").forEach((b, i) => { const k = oBack(prog(lt, .1 + i * .04, .4)); b.style.opacity = k > 0 ? 1 : 0; b.style.transform = `scale(${lerp(1.8, 1, k)})`; });
+  }, { footage: true });
+}
+
+// 01 · frames: one beat per style, the style's name as the sub-caption
+footage(["float", "swatch", "tone", "noir", "readout", "ambient", "aura", "blend", "emboss", "sunlight"].map((s, i) =>
+  ({ clip: "st_" + s, n: 10, sub: `${T.newFrames} · ${T.styles[i]}` })),
+  { n: "01", word: T.frames, badge: T.newFrames, badgeSub: T.colours, icon: "frame", hardCuts: true });
+// 02 · text watermark
+footage([{ clip: "typing", n: 80, from: 12, step: 1.2, sub: T.typeIt }, { clip: "typed", n: 24, last: 15, sub: T.yourName }],
+  { n: "02", word: T.text, badge: T.text, badgeSub: T.fonts, icon: "text" });
+// 03 · logo placement
+footage([{ clip: "lg_tl", n: 34, from: 6, sub: T.placeIt }, { clip: "lg_c", n: 24, from: 6, sub: T.anyCorner },
+  { clip: "lg_br", n: 26, from: 12, sub: T.anyCorner }, { clip: "lg_close", n: 30, last: 33, sub: T.onEvery }],
+  { n: "03", word: T.logoW, badge: T.logoW, badgeSub: T.placeIt, icon: "logo" });
+// 04 · video
+footage([{ clip: "video", n: 60, from: 8, sub: T.sameMarks }], { n: "04", word: T.video, badge: T.videosToo, badgeSub: T.sameMarks, icon: "video" });
+
+// bento: what every export keeps
+S(1.3, (lt, d, f) => {
+  bgDark(lt + 9); hud(true, T.kept, T.preserved, "logo");
+  $("#shot").style.display = "none";
+  const card = (x, y, w, h, bgc, fg, title, body) => `<div class="bc" style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;border-radius:34px;background:${bgc};color:${fg};padding:34px;box-shadow:0 30px 70px rgba(0,0,0,.45);overflow:hidden">
+      <div class="din" data-fit="${w - 68}" style="font-size:66px;line-height:1;white-space:nowrap">${title}</div>${body}</div>`;
+  mount("bento", `
+    ${card(60, 330, 470, 520, "linear-gradient(160deg,#3a70dc,#1f4fb4)", "#fff", T.exif, `<div class="mono" style="font-size:22px;opacity:.9;margin-top:24px;line-height:1.9">48mm · ƒ/1.8<br>1/17 · ISO 4000<br>iPhone 15 Pro Max</div>`)}
+    ${card(556, 330, 270, 520, "#fff", "#06102a", T.hdr, `<div class="mono" style="font-size:18px;opacity:.6;margin-top:10px">${T.hdrKept}</div><div id="hdrbar" style="position:absolute;left:30px;right:30px;bottom:110px;height:18px;border-radius:9px;background:linear-gradient(90deg,#06102a,#2f62d6,#cfe0ff,#fff)"></div>`)}
+    ${card(60, 880, 766, 330, "linear-gradient(120deg,#cfe0ff,#ffffff)", "#06102a", "12 " + T.styles12, `<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:26px">${T.styles.slice(0, 6).map(c => `<span class="din" style="font-size:40px;padding:10px 20px 2px;border-radius:40px;background:#06102a;color:#cfe0ff">${c}</span>`).join("")}</div>`)}
+    ${card(60, 1240, 470, 520, "#0b1a44", "#fff", T.logo, `<div class="din" style="font-size:52px;color:#cfe0ff;margin-top:6px">${T.sig}</div><div class="mono" style="margin-top:22px;font-size:20px;opacity:.6;line-height:1.8">${T.pngs}</div><div style="position:absolute;left:34px;bottom:40px;font:italic 64px 'Snell Roundhand','Savoye LET',cursive;color:#fff">Northlight</div>`)}
+    ${card(556, 1240, 270, 520, "linear-gradient(160deg,#2f62d6,#164198)", "#fff", T.c2pa, `<div style="width:120px;height:120px;margin-top:40px">${ICON.seal}</div><div class="mono" style="font-size:18px;margin-top:26px;line-height:1.7;opacity:.85">${T.gps}<br>${T.untouched}</div>`)}`);
+  fx.querySelectorAll(".bc").forEach((c, i) => {
+    const k = oBack(prog(lt, .04 + i * .07, .42), 1.6);
+    c.style.transform = `translateY(${lerp(140, 0, k)}px) scale(${lerp(.7, 1, k)}) rotate(${lerp(i % 2 ? 6 : -6, 0, oExpo(prog(lt, .04 + i * .07, .5)))}deg)`;
+    c.style.opacity = clamp(k * 2);
+  });
+  $("#hdrbar").style.transform = `scaleX(${oExpo(prog(lt, .3, .6))})`; $("#hdrbar").style.transformOrigin = "0 50%";
+  fx.style.transform = ""; fx.style.filter = ""; exitSmear(lt, d);
+}, { reset: true });
+
+// SHARE FROM PHOTOS kinetic, then the share-in footage and C2PA
+S(1.0, (lt, d, f) => {
+  bgBrand(lt + 2); hud(true, T.shareIn, T.fromAnyApp, "share");
+  $("#shot").style.display = "none";
+  mount("k2", `<div id="k" style="position:absolute;left:70px;top:640px;font-size:270px;line-height:.86">${words(T.shareWords)}</div>`);
+  const ws = [...fx.querySelectorAll(".w")]; ws[ws.length - 1].style.color = ICE;
+  slam(ws, lt, 0, .15); $("#k").style.transform = shake(lt, .4, 10); exitSmear(lt, d);
+}, { reset: true });
+footage([{ clip: "sheet_in", n: 45, from: 12, sub: T.tapShare }, { clip: "arrive", n: 45, from: 10, sub: T.opens }],
+  { n: "05", word: T.shareIn, badge: T.shareIn, badgeSub: T.fromAnyApp, icon: "share" });
+footage([{ clip: "sign", n: 45, from: 28, sub: T.signIt }, { clip: "signed", n: 60, from: 36, sub: T.sealed }],
+  { n: "06", word: T.c2pa, badge: T.c2pa, badgeSub: T.seal, icon: "seal" });
+
+// no camera-roll clutter: counter to zero
+S(1.2, (lt, d, f) => {
+  bgDark(lt + 13); hud(true, T.private, T.onlyIfYouChoose, "lock");
+  $("#shot").style.display = "none";
+  mount("priv", `<div id="lk" style="position:absolute;left:343px;top:420px;width:200px;height:200px;border-radius:40px;background:var(--brand);display:grid;place-items:center;box-shadow:0 0 80px rgba(47,98,214,.75)"><div style="width:120px;height:120px">${ICON.lock}</div></div>
+    <div id="num" class="din" style="position:absolute;left:0;right:0;top:720px;text-align:center;font-size:400px;line-height:1"></div>
+    <div class="din" id="cap1" style="position:absolute;left:0;right:0;top:1130px;text-align:center;font-size:84px;white-space:nowrap;line-height:1.05" data-fit="800">${T.photosAdded}<br>${T.cameraRoll}</div>
+    <div class="mono" id="cap2" style="position:absolute;left:0;right:0;top:1340px;text-align:center;font-size:22px;letter-spacing:6px;color:rgba(255,255,255,.65)">${T.onlyIfYouChoose}</div>`);
+  const k = oCubic(prog(lt, .05, .6)), v = Math.round(lerp(999, 0, k));
+  $("#num").textContent = v.toLocaleString("en-US"); $("#num").style.color = v === 0 ? ICE : "#fff";
+  $("#lk").style.transform = `scale(${oBack(prog(lt, 0, .35))}) rotate(${lerp(-30, 0, oExpo(prog(lt, 0, .4)))}deg)`;
+  ["#cap1", "#cap2"].forEach((s, i) => { const kk = oExpo(prog(lt, .55 + i * .1, .35)); $(s).style.opacity = kk; $(s).style.transform = `translateY(${lerp(40, 0, kk)}px)`; });
+  fx.style.transform = `scale(${lerp(1.1, 1, oExpo(prog(lt, 0, .3)))})`; fx.style.filter = ""; exitSmear(lt, d);
+}, { reset: true });
+footage([{ clip: "share_out", n: 26, from: 14, sub: T.anyApp }, { clip: "share_out", n: 40, from: 92, last: 108, sub: T.instantly }], { n: "07", word: T.shareOut, badge: T.instantly, badgeSub: T.anyApp, icon: "share" });
+
+// finale: rays, confetti in the icon's colours, lock-up
+const RC = rng(99), CONF = Array.from({ length: 120 }, () => ({ x: RC() * W, vx: (RC() - .5) * 500, vy: -700 - RC() * 900, r: RC() * 6.28, vr: (RC() - .5) * 14, c: ["#fff", "#cfe0ff", "#2f62d6", "#06102a"][Math.floor(RC() * 4)], w: 10 + RC() * 14 }));
+function finale(lt, d, f) {
+  bgRays(lt); hud(false);
+  $("#shot").style.display = "none";
+  mount("fin", `<div id="lg" style="position:absolute;left:318px;top:500px;width:250px;height:250px">${APPICON(250)}</div>
+    <div id="wm" style="position:absolute;left:0;right:0;top:800px;text-align:center;font-size:150px;font-weight:800;letter-spacing:-5px">Markepi</div>
+    <div id="tg" style="position:absolute;left:50%;top:1000px;transform:translateX(-50%);padding:22px 40px 14px;border-radius:14px;background:#06102a;white-space:nowrap" class="din"><span data-fit="760" style="font-size:60px;white-space:nowrap;display:inline-block">${T.tag[0]} · <span style="color:#cfe0ff">${T.tag[1]}</span> · ${T.tag[2]}</span></div>
+    <div id="ft" class="mono" style="position:absolute;left:0;right:0;top:1150px;text-align:center;font-size:22px;letter-spacing:8px;color:rgba(255,255,255,.85)">${T.onIphone}</div>`);
+  const k = oBack(prog(lt, 0, .45), 2); $("#lg").style.transform = `scale(${k}) rotate(${lerp(-120, 0, oExpo(prog(lt, 0, .5)))}deg)`;
+  const w = oExpo(prog(lt, .15, .45)); $("#wm").style.opacity = w; $("#wm").style.transform = `scale(${lerp(1.5, 1, w)})`; $("#wm").style.filter = `blur(${lerp(12, 0, w)}px)`;
+  const t2 = oBack(prog(lt, .35, .35)); $("#tg").style.transform = `translateX(-50%) scale(${t2})`;
+  $("#ft").style.opacity = prog(lt, .6, .3);
+  fx.style.transform = ""; fx.style.filter = "";
+  const tt = lt - .1; if (tt > 0) for (const p of CONF) {
+    const x = p.x + p.vx * tt * .6, y = 900 + p.vy * tt + 1500 * tt * tt, r = p.r + p.vr * tt;
+    bg.save(); bg.translate(x, y); bg.rotate(r); bg.fillStyle = p.c; bg.globalAlpha = clamp(1.7 - tt * 1.2); bg.fillRect(-p.w / 2, -p.w / 4, p.w, p.w / 2); bg.restore();
+  }
+  bg.globalAlpha = 1;
+}
+const FIN = 1.6;
+S(FIN, finale, { reset: true });
+// cold open: the finale's last frame, so the reel loops on itself, then a smash cut
+SCENES.unshift({ dur: .5, reset: true, draw: (lt, d, f) => {
+  finale(FIN - 1 / FPS, FIN, f);
+  const k = iExpo(prog(lt, .28, .22));
+  fx.style.transform = `scale(${1 + k * 2.2})`; fx.style.filter = `blur(${k * 24}px)`; fx.style.opacity = 1 - k;
+  $("#bg").style.opacity = 1 - k;
+}});
+
+let acc = 0; for (const s of SCENES) { s.start = acc; acc += s.dur; }
+window.TOTAL_FRAMES = Math.round(acc * FPS);
+window.renderAt = async function (frame) {
+  const t = frame / FPS;
+  let s = SCENES.find(x => t >= x.start && t < x.start + x.dur) || SCENES[SCENES.length - 1];
+  if (!s.footage) $("#shot").style.display = "none";
+  fx.style.opacity = 1; $("#bg").style.opacity = 1;
+  await s.draw(t - s.start, s.dur, frame, s.start);
+};
+Promise.all([document.fonts.load('800 100px "DINC"'), document.fonts.load('20px "Mono"'),
+  new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = "icon.png"; })]).then(() => document.fonts.ready).then(() => window.READY = true);
+</script>
+</body>
+</html>

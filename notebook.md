@@ -149,3 +149,17 @@ borders (Frame panel pops out) · 03 Real EXIF (Readout + EXIF pills) · 04b Add
 text · 05b logo & signature · 06 videos · 07c share sheet pop-out · 08c C2PA
 signed records pop-out. `b` = photo pops out, `c` = controls pop out; both were
 rendered, Osama picked b for text/logo, c for borders/share/C2PA.
+
+## 9. App preview video (reel)
+
+Full runbook: `tools/reel/GUIDE.md`. Shape: record each flow in the simulator
+(`tools/reel/rec.sh` + the axe helpers above) → `build.py` converts to CFR 30 and
+cuts segments by frame index → `web/reel.html` (deterministic `renderAt(frame)`,
+scenes + phone footage in the app-icon palette) → `render.mjs` (Edge + Playwright →
+ffmpeg) → Stable Audio music on the M5, picked by energy envelope, loudnorm −14 LUFS
+→ `upload_asc.py` (IPHONE_67, poster frame on the logo lock-up). Shipped on 1.5:
+29.6 s, chapters frames · text · logo · video · share-in · C2PA · share.
+
+Lessons: read cut times off contact sheets of the CFR video, not wall-clock marks
+(~2 s lag); keep under 30 s; show demo marks on a dark frame so white logos read;
+the share sheet populates late, so cut around the empty state.
