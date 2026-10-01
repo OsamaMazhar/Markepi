@@ -114,7 +114,7 @@ public struct VideoProcessor {
         let compositionAudioCount = composition.tracks(withMediaType: .audio).count
         if compositionAudioCount != audioTracks.count {
             #if DEBUG
-            os_log(.error, "MarkepiCore VideoProcessor: Audio track count mismatch — source=%{public}d, composition=%{public}d",
+            os_log(.error, log: .markepi, "MarkepiCore VideoProcessor: Audio track count mismatch — source=%{public}d, composition=%{public}d",
                    audioTracks.count, compositionAudioCount)
             #endif
         }
@@ -257,7 +257,7 @@ public struct VideoProcessor {
         }
         guard let exportSession = resolvedSession else {
             #if DEBUG
-            os_log(.error, "MarkepiCore VideoProcessor: no export preset produced a session for the composition")
+            os_log(.error, log: .markepi, "MarkepiCore VideoProcessor: no export preset produced a session for the composition")
             #endif
             throw PipelineError.videoExportSessionCreationFailed
         }
@@ -292,7 +292,7 @@ public struct VideoProcessor {
         let outputURL = try TempFileManager.createTempFile(uti: outputFileType.rawValue as CFString)
         exportSession.outputURL = outputURL
         #if DEBUG
-        os_log(.default,
+        os_log(.default, log: .markepi,
                "MarkepiCore VideoProcessor: exporting as %{public}@ → %{public}@ (renderSize=%{public}@, hdr=%d)",
                outputFileType.rawValue, outputURL.lastPathComponent, "\(videoSize)", isHDR)
         #endif
@@ -367,20 +367,20 @@ public struct VideoProcessor {
         // Log validation warnings
         #if DEBUG
         for warning in validationResult.warnings {
-            os_log(.default, "MarkepiCore ExportValidator: %{public}@", warning)
+            os_log(.default, log: .markepi, "MarkepiCore ExportValidator: %{public}@", warning)
         }
         #endif
 
         // D-10: Log HDR fallback warning
         if isHDR && hdrPreservationAttempted && !validationResult.hdrPreserved {
             #if DEBUG
-            os_log(.default, "MarkepiCore VideoProcessor: HDR was flattened to SDR during watermark compositing")
+            os_log(.default, log: .markepi, "MarkepiCore VideoProcessor: HDR was flattened to SDR during watermark compositing")
             #endif
         }
 
         if !validationResult.audioTrackCountMatch {
             #if DEBUG
-            os_log(.default, "MarkepiCore VideoProcessor: Audio track count mismatch in output")
+            os_log(.default, log: .markepi, "MarkepiCore VideoProcessor: Audio track count mismatch in output")
             #endif
         }
 
@@ -431,7 +431,7 @@ public struct VideoProcessor {
            !provenance.rights.creator.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let warning = "Video Content Credentials not available for this format"
             #if DEBUG
-            os_log(.default, "MarkepiCore VideoProcessor: %{public}@", warning)
+            os_log(.default, log: .markepi, "MarkepiCore VideoProcessor: %{public}@", warning)
             #endif
             finalValidation = ExportValidator.ExportValidationResult(
                 hdrPreserved: validationResult.hdrPreserved,
@@ -703,7 +703,7 @@ public struct VideoProcessor {
     #if DEBUG
     private static func logVideoError(_ stage: String, _ error: Error) {
         let ns = error as NSError
-        os_log(.error,
+        os_log(.error, log: .markepi,
                "MarkepiCore VideoProcessor: %{public}@ failed — \"%{public}@\" [domain=%{public}@ code=%d underlying=%{public}@]",
                stage,
                error.localizedDescription,

@@ -9,7 +9,7 @@ import CoreText
 #endif
 
 #if DEBUG
-private let frameLog = Logger(subsystem: "com.watermark.core", category: "WhiteFrame")
+private let frameLog = Logger.markepi("WhiteFrame")
 #endif
 
 /// Renders a white frame border with device metadata text as a CIImage

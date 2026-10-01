@@ -136,7 +136,7 @@ public struct ImageLoader {
             let minDimension = min(width, height)
             if minDimension < 4000 {
                 #if DEBUG
-                os_log(.default, "[MarkepiCore] DNG image has short-side dimension %d px — may have loaded embedded JPEG preview instead of full RAW data", minDimension)
+                os_log(.default, log: .markepi, "[MarkepiCore] DNG image has short-side dimension %d px — may have loaded embedded JPEG preview instead of full RAW data", minDimension)
                 #endif
             }
         }
@@ -170,7 +170,7 @@ public struct ImageLoader {
         // create-failure is gone.
         let colorSpace: CGColorSpace? = ciImage.colorSpace
         #if DEBUG
-        os_log(.debug, "[MarkepiCore] loaded image: hasGainMap=%{public}@ ciColorSpaceModel=%{public}d profileName=%{public}@",
+        os_log(.debug, log: .markepi, "[MarkepiCore] loaded image: hasGainMap=%{public}@ ciColorSpaceModel=%{public}d profileName=%{public}@",
                gainMapAuxData != nil ? "yes" : "no",
                colorSpace?.model.rawValue ?? -99,
                (props[kCGImagePropertyProfileName] as? String) ?? "nil")

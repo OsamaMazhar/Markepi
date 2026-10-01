@@ -43,7 +43,7 @@ public struct AppGroupConfigSync {
     public static func save(_ config: WatermarkConfiguration) {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
             #if DEBUG
-            os_log(.error, "[AppGroupConfigSync] Failed to open UserDefaults suite '%@'", suiteName)
+            os_log(.error, log: .markepi, "[AppGroupConfigSync] Failed to open UserDefaults suite '%@'", suiteName)
             #endif
             return
         }
@@ -54,7 +54,7 @@ public struct AppGroupConfigSync {
             defaults.set(schemaVersion, forKey: schemaVersionKey)
         } catch {
             #if DEBUG
-            os_log(.error, "[AppGroupConfigSync] Failed to encode config: %@", error.localizedDescription)
+            os_log(.error, log: .markepi, "[AppGroupConfigSync] Failed to encode config: %@", error.localizedDescription)
             #endif
         }
     }
@@ -68,7 +68,7 @@ public struct AppGroupConfigSync {
     public static func load() -> WatermarkConfiguration? {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
             #if DEBUG
-            os_log(.error, "[AppGroupConfigSync] Failed to open UserDefaults suite '%@'", suiteName)
+            os_log(.error, log: .markepi, "[AppGroupConfigSync] Failed to open UserDefaults suite '%@'", suiteName)
             #endif
             return nil
         }
@@ -91,7 +91,7 @@ public struct AppGroupConfigSync {
             return config
         } catch {
             #if DEBUG
-            os_log(.error, "[AppGroupConfigSync] Failed to decode config: %@", error.localizedDescription)
+            os_log(.error, log: .markepi, "[AppGroupConfigSync] Failed to decode config: %@", error.localizedDescription)
             #endif
             return nil
         }
@@ -123,7 +123,7 @@ public struct AppGroupConfigSync {
         let dropped = originalCount - config.watermarks.count
         if dropped > 0 {
             #if DEBUG
-            os_log(.error,
+            os_log(.error, log: .markepi,
                    "[AppGroupConfigSync] Dropped %d image watermark layer(s) with undecodable PNG data from persisted config",
                    dropped)
             #endif

@@ -97,7 +97,7 @@ public final class StoreManager {
         } catch {
             loadFailed = true
             #if DEBUG
-            os_log(.error, "[StoreManager] Failed to load products: %{public}@",
+            os_log(.error, log: .markepi, "[StoreManager] Failed to load products: %{public}@",
                    error.localizedDescription)
             #endif
         }

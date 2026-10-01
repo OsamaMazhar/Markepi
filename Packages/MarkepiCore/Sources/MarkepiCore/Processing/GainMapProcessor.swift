@@ -5,7 +5,7 @@ import ImageIO
 import os.log
 
 #if DEBUG
-private let gainMapLog = Logger(subsystem: "com.watermark.core", category: "GainMap")
+private let gainMapLog = Logger.markepi("GainMap")
 #endif
 
 /// The auxiliary gain-map flavor extracted from a source image.

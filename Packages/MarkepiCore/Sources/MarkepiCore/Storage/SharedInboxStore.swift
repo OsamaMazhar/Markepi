@@ -2,7 +2,7 @@ import Foundation
 import os.log
 
 #if DEBUG
-private let inboxLog = Logger(subsystem: "com.osamamazhar.markepi", category: "SharedInbox")
+private let inboxLog = Logger.markepi("SharedInbox")
 #endif
 
 /// Hands shared media from the Share Extension to the main app via the App Group
@@ -34,7 +34,7 @@ public enum SharedInboxStore {
         guard let container = FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
             #if DEBUG
-            os_log(.error, "[SharedInboxStore] App Group container unavailable for '%@'", appGroupIdentifier)
+            os_log(.error, log: .markepi, "[SharedInboxStore] App Group container unavailable for '%@'", appGroupIdentifier)
             #endif
             return nil
         }

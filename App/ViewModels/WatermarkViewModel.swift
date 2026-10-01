@@ -1404,7 +1404,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 try await center.add(request)
             } catch {
                 #if DEBUG
-                os_log(.error, "Failed to schedule notification: %{public}@",
+                os_log(.error, log: .markepi, "Failed to schedule notification: %{public}@",
                        error.localizedDescription)
                 #endif
             }
@@ -1693,7 +1693,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
                 try await center.add(request)
             } catch {
                 #if DEBUG
-                os_log(.error, "Failed to schedule batch notification: %{public}@",
+                os_log(.error, log: .markepi, "Failed to schedule batch notification: %{public}@",
                        error.localizedDescription)
                 #endif
             }
@@ -1842,7 +1842,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
         guard !isImportingShares else { return }
         let pending = SharedInboxStore.pendingURLs()
         #if DEBUG
-        os_log("[Markepi] importPendingShares: %d pending item(s)", pending.count)
+        os_log("[Markepi] importPendingShares: %d pending item(s)", log: .markepi, pending.count)
         #endif
         guard !pending.isEmpty else { return }
         isImportingShares = true
