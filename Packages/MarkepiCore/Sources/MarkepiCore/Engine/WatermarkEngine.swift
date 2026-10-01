@@ -6,7 +6,7 @@ import os.log
 import UniformTypeIdentifiers
 
 #if DEBUG
-private let engineLog = Logger(subsystem: "com.watermark.core", category: "Engine")
+private let engineLog = Logger.markepi("Engine")
 #endif
 
 /// Actor-isolated photo watermarking engine (Pattern 3).

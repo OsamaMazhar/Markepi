@@ -5,7 +5,7 @@ import os.log
 import MarkepiCore
 
 #if DEBUG
-private let shareLog = Logger(subsystem: "com.osamamazhar.markepi", category: "ShareExtension")
+private let shareLog = Logger.markepi("ShareExtension")
 #endif
 
 /// UIKit entry point for the share extension.

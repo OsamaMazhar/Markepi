@@ -68,7 +68,7 @@ public final class TemplateStore {
     private func loadTemplates() {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
             #if DEBUG
-            os_log(.error, "[TemplateStore] Failed to open App Group suite '%@'", suiteName)
+            os_log(.error, log: .markepi, "[TemplateStore] Failed to open App Group suite '%@'", suiteName)
             #endif
             return
         }
@@ -80,7 +80,7 @@ public final class TemplateStore {
 
         guard var decoded = try? JSONDecoder().decode([Template].self, from: data) else {
             #if DEBUG
-            os_log(.error, "[TemplateStore] Failed to decode templates from UserDefaults")
+            os_log(.error, log: .markepi, "[TemplateStore] Failed to decode templates from UserDefaults")
             #endif
             templates = []
             return
@@ -333,7 +333,7 @@ public final class TemplateStore {
     private func persist() throws {
         guard let data = try? JSONEncoder().encode(templates) else {
             #if DEBUG
-            os_log(.error, "[TemplateStore] Failed to encode templates")
+            os_log(.error, log: .markepi, "[TemplateStore] Failed to encode templates")
             #endif
             return
         }
@@ -345,7 +345,7 @@ public final class TemplateStore {
 
         guard let defaults = UserDefaults(suiteName: suiteName) else {
             #if DEBUG
-            os_log(.error, "[TemplateStore] Failed to open App Group suite '%@'", suiteName)
+            os_log(.error, log: .markepi, "[TemplateStore] Failed to open App Group suite '%@'", suiteName)
             #endif
             return
         }
@@ -358,7 +358,7 @@ public final class TemplateStore {
         guard let defaults = UserDefaults(suiteName: suiteName),
               let data = try? JSONEncoder().encode(templates) else {
             #if DEBUG
-            os_log(.error, "[TemplateStore] Failed to save templates to defaults")
+            os_log(.error, log: .markepi, "[TemplateStore] Failed to save templates to defaults")
             #endif
             return
         }

@@ -97,14 +97,14 @@ public struct LivePhotoProcessor {
 
         guard let stillURL = stillResult.url else {
             #if DEBUG
-            os_log(.error, "MarkepiCore LivePhotoProcessor: Still image processing produced no output URL")
+            os_log(.error, log: .markepi, "MarkepiCore LivePhotoProcessor: Still image processing produced no output URL")
             #endif
             throw PipelineError.renderFailed
         }
 
         guard let videoOutputURL = videoResult.url else {
             #if DEBUG
-            os_log(.error, "MarkepiCore LivePhotoProcessor: Video processing produced no output URL")
+            os_log(.error, log: .markepi, "MarkepiCore LivePhotoProcessor: Video processing produced no output URL")
             #endif
             throw PipelineError.renderFailed
         }

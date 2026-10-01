@@ -7,7 +7,7 @@ import MarkepiCore
 /// in step, and none of it leaves a trace to inspect afterwards. Read it on a
 /// device with:
 /// `log stream --device --predicate 'category == "drag"'`
-private let dragLog = Logger(subsystem: "com.osamamazhar.markepi", category: "drag")
+private let dragLog = Logger.markepi("drag")
 #endif
 
 struct PreviewView: View {
