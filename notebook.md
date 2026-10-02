@@ -150,12 +150,6 @@ text · 05b logo & signature · 06 videos · 07c share sheet pop-out · 08c C2PA
 signed records pop-out. `b` = photo pops out, `c` = controls pop out; both were
 rendered, Osama picked b for text/logo, c for borders/share/C2PA.
 
-Files: `tools/screenshots/final/` holds the uploaded set (`APP_IPHONE_65_*`,
-`APP_IPAD_PRO_3GEN_129_*`, filename order = display order). Kept on disk but
-git-ignored: `src/` (personal demo photos — the repo is public), `cap/` (raw
-captures), `drafts/` (renders). `bg/` regenerates the backgrounds on the M5;
-`ipadframe/build.swift` rebuilds the iPad bezel from Simulator.app's chrome.
-
 ## 9. App preview video (reel)
 
 Full runbook: `tools/reel/GUIDE.md`. Shape: record each flow in the simulator
