@@ -163,3 +163,18 @@ ffmpeg) → Stable Audio music on the M5, picked by energy envelope, loudnorm �
 Lessons: read cut times off contact sheets of the CFR video, not wall-clock marks
 (~2 s lag); keep under 30 s; show demo marks on a dark frame so white logos read;
 the share sheet populates late, so cut around the empty state.
+
+## 10. Running a lifetime sale
+
+- Two lifetime products: `markepi.pro.lifetime` (normal, the reference price) and
+  `markepi.pro.lifetime.sale` ("Markepi Pro – Special Offer"). Both grant Pro.
+- No sale = the sale product priced the same as normal ($4.99). Sale = schedule a
+  lower price for the sale product in ASC with a start and end date; the paywall
+  then strikes the normal price, shows the sale price + SALE, buys the sale
+  product, and the start screen's crown shows SALE. No app update.
+- Leave 30+ days at the normal price between sales: EU reference-price rules
+  require the struck price to be the lowest of the prior 30 days.
+- Test without ASC: DEBUG Settings → Simulate Sale (or `defaults write <app
+  group plist path> debug.simulateSale -bool YES`). Launch with
+  `SIMCTL_CHILD_MARKEPI_SALE_CURRENCY=VND SIMCTL_CHILD_MARKEPI_SALE_PRICE=129000`
+  to check long currencies.

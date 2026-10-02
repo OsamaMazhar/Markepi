@@ -7,13 +7,18 @@ import Foundation
 /// App Store Connect. A typo means `Product.products(for:)` silently drops the
 /// product and the paywall renders an empty slot.
 ///
-/// All three products grant the *same* entitlement — unlimited exports. The
+/// Every product grants the *same* entitlement — unlimited exports. The
 /// lifetime unlock is a one-time non-consumable; monthly and annual are
 /// auto-renewable subscriptions in a single subscription group so StoreKit
 /// treats them as upgrade/downgrade/crossgrade of one another.
 public enum PremiumProduct: String, CaseIterable, Sendable {
     /// One-time non-consumable unlock — lifts the daily limit forever.
     case lifetime = "markepi.pro.lifetime"
+
+    /// The same lifetime unlock at a sale price. Idle at the normal price; a
+    /// sale is on exactly when App Store Connect prices it lower (see
+    /// ``LifetimeOffer``). Grants the same entitlement as `lifetime`.
+    case lifetimeSale = "markepi.pro.lifetime.sale"
 
     /// Auto-renewable monthly subscription.
     case monthly = "markepi.pro.monthly"
@@ -32,7 +37,7 @@ public enum PremiumProduct: String, CaseIterable, Sendable {
 
     /// Whether this product is one of the auto-renewable subscriptions. Used to
     /// decide when the paywall must show the auto-renew legal disclosure.
-    public var isSubscription: Bool { self != .lifetime }
+    public var isSubscription: Bool { self == .monthly || self == .annual }
 
     /// All product identifiers, for `Product.products(for:)`.
     public static var allIdentifiers: [String] { allCases.map(\.rawValue) }

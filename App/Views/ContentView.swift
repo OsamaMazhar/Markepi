@@ -330,9 +330,13 @@ struct ContentView: View {
                     Button {
                         viewModel.showPaywall = true
                     } label: {
-                        PremiumCrownIcon(isPremium: store.isPremium, reduceMotion: reduceMotion)
+                        PremiumCrownIcon(isPremium: store.isPremium,
+                                         onSale: !store.isPremium && store.lifetimeOffer?.isOnSale == true,
+                                         reduceMotion: reduceMotion)
                     }
-                    .accessibilityLabel(store.isPremium ? "Markepi Pro" : "Upgrade to Premium")
+                    .accessibilityLabel(store.isPremium ? "Markepi Pro"
+                                        : store.lifetimeOffer?.isOnSale == true ? "Upgrade to Premium, on sale"
+                                        : "Upgrade to Premium")
                 }
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -1149,10 +1153,11 @@ struct SettingsView: View {
                 Section {
                     Toggle("Force Premium", isOn: $store.debugForcePremium)
                     Toggle("Always Show Onboarding", isOn: $debugAlwaysShowOnboarding)
+                    Toggle("Simulate Sale", isOn: $store.debugSimulateSale)
                 } header: {
                     Text("Developer")
                 } footer: {
-                    Text("Debug builds only. Force Premium unlocks every premium feature without a purchase. Always Show Onboarding replays the welcome flow on every launch for testing. This section does not exist in App Store builds.")
+                    Text("Debug builds only. Force Premium unlocks every premium feature without a purchase. Always Show Onboarding replays the welcome flow on every launch for testing. Simulate Sale shows the lifetime plan at a sale price. This section does not exist in App Store builds.")
                 }
                 #endif
 
@@ -1337,6 +1342,8 @@ private extension View {
 /// sweep and leaves the grey resting state.
 private struct PremiumCrownIcon: View {
     let isPremium: Bool
+    /// A lifetime sale is on: the crown and "SALE" share one gold capsule.
+    var onSale = false
     let reduceMotion: Bool
 
     /// Only free users get the attention-drawing sweep; Pro users have nothing
@@ -1369,6 +1376,39 @@ private struct PremiumCrownIcon: View {
     @State private var sweep = false
 
     var body: some View {
+        if onSale { saleLabel } else { crown }
+    }
+
+    /// Crown + "SALE" in gold, inside the toolbar's own glass capsule (no
+    /// second capsule — glass on glass) — the sale is said on the button
+    /// itself, not in a word hanging under it. The gold sweep runs across the
+    /// whole label (none under Reduce Motion).
+    private var saleLabel: some View {
+        let label = HStack(spacing: 5) {
+            Image(systemName: "crown.fill")
+            Text("SALE").font(.footnote.weight(.heavy)).tracking(0.6)
+        }
+        return label
+            .foregroundStyle(Self.gold)
+            .overlay {
+                if !reduceMotion {
+                    GeometryReader { geo in
+                        Self.goldGlow
+                            .frame(width: geo.size.width * 0.6)
+                            .offset(x: sweep ? -geo.size.width * 0.7 : geo.size.width * 1.1)
+                            .animation(.easeInOut(duration: 1.3).delay(1.4)
+                                .repeatForever(autoreverses: false), value: sweep)
+                    }
+                    .mask { label }
+                    .allowsHitTesting(false)
+                }
+            }
+            .padding(.horizontal, 4)
+            .fixedSize()
+            .onAppear { sweep = !reduceMotion }
+    }
+
+    private var crown: some View {
         Image(systemName: "crown.fill")
             .symbolRenderingMode(.monochrome)
             // Rest state: gold when entitled, otherwise a muted grey.
