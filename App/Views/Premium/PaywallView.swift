@@ -247,14 +247,8 @@ struct PaywallView: View {
                     .font(.system(size: bodySize * 1.25, weight: isSelected ? .bold : .regular))
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.6))
 
-                let offer = plan == .lifetime ? store.lifetimeOffer : nil
-                let original = offer?.originalDisplayPrice
-                // On sale the badge slot says SALE (one badge per card) and the
-                // normal price sits struck under the sale price.
-                PlanRowContent(title: plan.title, subtitle: plan.subtitle,
-                               badge: original != nil ? "SALE" : plan.badge,
-                               badgeIsSale: original != nil,
-                               price: displayPrice(for: plan), original: original,
+                PlanRowContent(title: plan.title, subtitle: plan.subtitle, badge: plan.badge,
+                               price: displayPrice(for: plan),
                                bodySize: bodySize, subSize: subSize)
             }
             .padding(.horizontal, 16)
@@ -378,11 +372,8 @@ struct PaywallView: View {
 
     /// Live price when StoreKit has loaded the product; otherwise the static
     /// fallback so the paywall still reads correctly offline / in previews.
-    /// The lifetime plan quotes ``StoreManager/lifetimeOffer``: the sale price
-    /// while a sale is on.
     private func displayPrice(for plan: PremiumPlan) -> String {
-        if plan == .lifetime, let offer = store.lifetimeOffer { return offer.displayPrice }
-        return store.product(for: plan.premiumProduct)?.displayPrice ?? plan.price
+        store.product(for: plan.premiumProduct)?.displayPrice ?? plan.price
     }
 
     private var ctaTitle: String {
@@ -397,12 +388,7 @@ struct PaywallView: View {
     private func purchase() async {
         guard !isWorking else { return }
         isWorking = true
-        // Lifetime buys whichever product the offer names (sale or normal).
-        let outcome = if selectedPlan == .lifetime, let product = store.lifetimePurchaseProduct {
-            await store.purchase(product)
-        } else {
-            await store.purchase(selectedPlan.premiumProduct)
-        }
+        let outcome = await store.purchase(selectedPlan.premiumProduct)
         isWorking = false
 
         switch outcome {
@@ -660,9 +646,7 @@ struct PlanRowContent: View {
     let title: String
     let subtitle: String
     let badge: String?
-    var badgeIsSale = false
     let price: String
-    var original: String? = nil
     let bodySize: CGFloat
     let subSize: CGFloat
 
@@ -671,20 +655,16 @@ struct PlanRowContent: View {
             HStack(spacing: 12) {
                 info
                 Spacer(minLength: 8)
-                VStack(alignment: .trailing, spacing: 0) { current; struck }
+                current
             }
             VStack(alignment: .leading, spacing: 6) {
                 info
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) { current; struck }
-                    VStack(alignment: .leading, spacing: 0) { current; struck }
-                }
+                current
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(original.map { "\(title), on sale, was \($0), now \(price). \(subtitle)" }
-                            ?? "\(title)\(badge.map { ", \($0)" } ?? ""), \(price). \(subtitle)")
+        .accessibilityLabel("\(title)\(badge.map { ", \($0)" } ?? ""), \(price). \(subtitle)")
     }
 
     private var info: some View {
@@ -714,11 +694,10 @@ struct PlanRowContent: View {
             Text(badge)
                 .font(.system(size: subSize * 0.78, weight: .heavy))
                 .tracking(0.5)
-                .foregroundStyle(badgeIsSale ? Color.black.opacity(0.85) : Color.accentColor)
+                .foregroundStyle(Color.accentColor)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(badgeIsSale ? AnyShapeStyle(Self.gold) : AnyShapeStyle(Color.accentColor.opacity(0.16)),
-                            in: Capsule())
+                .background(Color.accentColor.opacity(0.16), in: Capsule())
                 .lineLimit(1)
                 .fixedSize()
         }
@@ -732,33 +711,17 @@ struct PlanRowContent: View {
             .fixedSize()
     }
 
-    @ViewBuilder private var struck: some View {
-        if let original {
-            Text(original)
-                .font(.system(size: subSize, weight: .semibold))
-                .strikethrough(true, color: .secondary)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .fixedSize()
-        }
-    }
-
-    /// The Pro crown's metallic gold.
-    static let gold = LinearGradient(
-        colors: [Color(red: 1.00, green: 0.88, blue: 0.52), Color(red: 0.97, green: 0.72, blue: 0.22)],
-        startPoint: .top, endPoint: .bottom)
 }
 
 #Preview("Plan rows") {
-    let pairs = [("$4.99", "$1.99"), ("Rp 79.000", "Rp 32.000"), ("₫129.000", "₫49.000"), ("CHF 5.00", "CHF 2.00")]
+    let prices = ["$4.99", "Rp 79.000", "₫129.000", "CHF 5.00"]
     ScrollView {
         VStack(alignment: .leading, spacing: 14) {
             ForEach([250.0, 300.0, 560.0], id: \.self) { width in
                 Text("width \(Int(width))").font(.caption).foregroundStyle(.secondary)
-                ForEach(pairs, id: \.0) { original, price in
+                ForEach(prices, id: \.self) { price in
                     PlanRowContent(title: "One-Time Unlock", subtitle: "Pay once — yours forever",
-                                   badge: "SALE", badgeIsSale: true, price: price, original: original,
-                                   bodySize: 16, subSize: 14)
+                                   badge: "Best value", price: price, bodySize: 16, subSize: 14)
                         .frame(width: width).padding(12)
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
                 }

@@ -30,13 +30,5 @@ public enum DebugPremium {
         get { defaults?.bool(forKey: key) ?? false }
         set { defaults?.set(newValue, forKey: key) }
     }
-
-    /// Whether the paywall shows a simulated lifetime sale (see
-    /// ``StoreManager/debugSimulateSale``). Stored like ``isForced`` so it can
-    /// be flipped with `defaults write` on a Simulator.
-    public static var simulatesSale: Bool {
-        get { defaults?.bool(forKey: "debug.simulateSale") ?? false }
-        set { defaults?.set(newValue, forKey: "debug.simulateSale") }
-    }
 }
 #endif
