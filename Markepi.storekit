@@ -28,6 +28,21 @@
       "productID" : "markepi.pro.lifetime",
       "referenceName" : "Markepi Pro Lifetime",
       "type" : "NonConsumable"
+    },
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : true,
+      "internalID" : "6818532912",
+      "localizations" : [
+        {
+          "description" : "One-time unlock of full-quality exports",
+          "displayName" : "Markepi Pro – Special Offer",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "markepi.pro.lifetime.sale",
+      "referenceName" : "Markepi Pro Lifetime Sale",
+      "type" : "NonConsumable"
     }
   ],
   "settings" : {
@@ -38,7 +53,7 @@
     "_developerTeamID" : "829378375Z",
     "_disableDialogs" : false,
     "_failTransactionsEnabled" : false,
-    "_lastSynchronizedDate" : 804629343.22465396,
+    "_lastSynchronizedDate" : 812702058.87142205,
     "_locale" : "en_US",
     "_renewalBillingIssuesEnabled" : false,
     "_storefront" : "USA",
@@ -47,6 +62,9 @@
     ],
     "_timeRate" : 0
   },
+  "subscriptionBundleGroups" : [
+
+  ],
   "subscriptionGroups" : [
     {
       "id" : "22202135",
@@ -140,8 +158,11 @@
       ]
     }
   ],
+  "subscriptionSuiteGroups" : [
+
+  ],
   "version" : {
-    "major" : 5,
-    "minor" : 0
+    "major" : 6,
+    "minor" : 3
   }
 }

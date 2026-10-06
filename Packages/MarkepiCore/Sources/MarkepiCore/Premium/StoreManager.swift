@@ -12,14 +12,14 @@ import os.log
 /// Share Extension and the export gate see the same premium status without
 /// running their own StoreKit listener.
 ///
-/// All three products grant the same entitlement, so `isPremium` is simply
+/// Every product grants the same entitlement, so `isPremium` is simply
 /// "owns any product in the catalog".
 @MainActor
 @Observable
 public final class StoreManager {
 
     /// Loaded products, ordered to match ``PremiumProduct/allCases``
-    /// (lifetime, monthly, annual).
+    /// (lifetime, lifetime sale, monthly, annual).
     public private(set) var products: [Product] = []
 
     /// Identifiers the user currently owns (active, non-revoked entitlements).
@@ -52,6 +52,14 @@ public final class StoreManager {
             statusStore.set(isPremium)
         }
     }
+
+    /// Debug-only: show a sale built from the normal lifetime price (40% of
+    /// it, ending in .99), so the sale UI can be checked in any storefront —
+    /// or with no products loaded at all — without App Store Connect. Absent
+    /// in Release builds.
+    public var debugSimulateSale: Bool = DebugPremium.simulatesSale {
+        didSet { DebugPremium.simulatesSale = debugSimulateSale }
+    }
     #endif
 
     private let statusStore: PremiumStatusStore
@@ -80,6 +88,52 @@ public final class StoreManager {
     /// load (offline / not yet configured in App Store Connect).
     public func product(for premium: PremiumProduct) -> Product? {
         products.first { $0.id == premium.rawValue }
+    }
+
+    // MARK: - Lifetime sale
+
+    /// What the lifetime plan shows and buys. Never on sale for a Pro user:
+    /// there is nothing left to sell them.
+    public var lifetimeOffer: LifetimeOffer? {
+        let normal = product(for: .lifetime).map(Self.price)
+        var sale = product(for: .lifetimeSale).map(Self.price)
+        #if DEBUG
+        var normalPrice = normal
+        if debugSimulateSale {
+            let base = product(for: .lifetime)
+            // MARKEPI_SALE_CURRENCY=VND MARKEPI_SALE_PRICE=129000 previews long currencies.
+            let env = ProcessInfo.processInfo.environment
+            let code = env["MARKEPI_SALE_CURRENCY"]
+            let style = code.map { Decimal.FormatStyle.Currency(code: $0) }
+                ?? base?.priceFormatStyle ?? Decimal.FormatStyle.Currency(code: "USD")
+            let full = env["MARKEPI_SALE_PRICE"].flatMap { Decimal(string: $0) }
+                ?? base?.price ?? Decimal(string: "4.99")!
+            // 40% of the price, up to the next whole unit, minus 0.01: $4.99 → $1.99.
+            var cut = full * Decimal(string: "0.4")!, up = Decimal()
+            NSDecimalRound(&up, &cut, 0, .up)
+            let price = up - Decimal(string: "0.01")!
+            if normal == nil || code != nil {
+                normalPrice = .init(id: PremiumProduct.lifetime.rawValue, price: full,
+                                    displayPrice: full.formatted(style))
+            }
+            sale = .init(id: normalPrice!.id, price: price, displayPrice: price.formatted(style))
+        }
+        #else
+        let normalPrice = normal
+        #endif
+        guard let offer = LifetimeOffer.make(normal: normalPrice, sale: sale) else { return nil }
+        guard isPremium, offer.isOnSale else { return offer }
+        return LifetimeOffer.make(normal: normalPrice, sale: nil)
+    }
+
+    private static func price(_ p: Product) -> LifetimeOffer.Price {
+        .init(id: p.id, price: p.price, displayPrice: p.displayPrice)
+    }
+
+    /// The loaded product a lifetime purchase should buy (sale or normal).
+    public var lifetimePurchaseProduct: Product? {
+        guard let id = lifetimeOffer?.purchaseID else { return nil }
+        return products.first { $0.id == id }
     }
 
     // MARK: - Product loading

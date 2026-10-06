@@ -1,0 +1,378 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Markepi Wide Promo</title>
+<style>
+  :root { --brand: #2f62d6; --ice: #cfe0ff; --deep: #06102a; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+  body { font-family: -apple-system, "SF Pro Display", system-ui, sans-serif; color: #fff; -webkit-font-smoothing: antialiased; }
+  .abs { position: absolute; }
+  #stage { position: absolute; inset: 0; overflow: hidden; background: var(--deep); }
+  .blob { position: absolute; width: 1500px; height: 1500px; margin: -750px 0 0 -750px; border-radius: 50%; }
+  #cam { position: absolute; inset: 0; transform-origin: 50% 50%; }
+
+  /* hook: tilted scrolling wall of App Store slides */
+  #wallWrap { position: absolute; inset: 0; perspective: 1800px; }
+  #wall { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d; }
+  .col { position: absolute; top: 0; width: 330px; }
+  .col img { display: block; width: 330px; height: 717px; margin-bottom: 34px; border-radius: 34px; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+  #wallDim { position: absolute; inset: 0; background: radial-gradient(ellipse 55% 60% at 50% 50%, rgba(6,16,42,.82), rgba(6,16,42,.35) 70%, rgba(6,16,42,.1)); }
+  #hook { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #hook .w { font-size: 168px; font-weight: 800; letter-spacing: -6px; line-height: .98; text-shadow: 0 10px 60px rgba(0,0,0,.5); }
+  #hook .w span { color: var(--ice); }
+  #hook .sub { margin-top: 34px; font-size: 40px; font-weight: 600; color: rgba(255,255,255,.85); letter-spacing: -.5px; }
+
+  /* shared left column copy */
+  .copy { position: absolute; left: 150px; top: 50%; width: 760px; transform: translateY(-50%); }
+  .chip { display: inline-flex; align-items: center; gap: 12px; padding: 10px 20px 10px 14px; border-radius: 999px; background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.18); font-size: 22px; font-weight: 700; letter-spacing: 4px; }
+  .chip i { width: 12px; height: 12px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 14px #5b8bff; }
+  .line { overflow: hidden; padding-bottom: 8px; }
+  .line > div { will-change: transform; }
+  .h { font-size: 112px; font-weight: 800; letter-spacing: -4px; line-height: 1.02; }
+  .h em { font-style: normal; color: var(--ice); }
+  .s { font-size: 30px; font-weight: 500; color: rgba(255,255,255,.72); line-height: 1.3; margin-top: 18px; }
+
+  /* live phone */
+  #phone { position: absolute; left: 1330px; top: 540px; width: 448px; height: 946px; margin: -473px 0 0 -224px; border-radius: 74px;
+    background: linear-gradient(140deg, #e7854a, #8a3f1c 40%, #d4733c 60%, #5c2810); padding: 5px; transform-style: preserve-3d;
+    box-shadow: 0 60px 140px rgba(0,0,0,.65), 0 0 160px rgba(255,138,70,.25); }
+  #phone .in { width: 100%; height: 100%; border-radius: 69px; background: #000; padding: 13px; position: relative; }
+  #phone canvas { width: 412px; height: 894px; border-radius: 57px; display: block; }
+  #phone .island { position: absolute; left: 50%; top: 26px; width: 118px; height: 34px; margin-left: -59px; border-radius: 20px; background: #000; }
+  #ticker { height: 132px; overflow: hidden; margin-top: 26px; }
+  #tickStrip div { height: 132px; font-size: 118px; font-weight: 800; letter-spacing: -3px; line-height: 132px;
+    background: linear-gradient(90deg, #ffb27a, #ff7a3d); -webkit-background-clip: text; color: transparent; }
+
+  /* coverflow */
+  #cf { position: absolute; left: 1330px; top: 540px; width: 0; height: 0; perspective: 1600px; transform-style: preserve-3d; }
+  .card { position: absolute; width: 420px; height: 913px; margin: -456px 0 0 -210px; border-radius: 44px; overflow: hidden;
+    box-shadow: 0 50px 120px rgba(0,0,0,.6), 0 0 0 1.5px rgba(255,255,255,.12); background: #000; }
+  .card img { width: 100%; height: 100%; display: block; }
+  .card .sweep { position: absolute; top: -20%; left: 0; width: 45%; height: 140%; transform: translateX(-160%) rotate(14deg);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent); }
+  .cfText { position: absolute; left: 150px; top: 50%; width: 820px; transform: translateY(-50%); }
+  .count { font-size: 26px; font-weight: 700; letter-spacing: 4px; color: rgba(255,255,255,.55); margin-top: 22px; font-variant-numeric: tabular-nums; }
+  .count b { color: #fff; }
+  #bar { position: absolute; left: 150px; bottom: 120px; width: 420px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.14); }
+  #bar i { display: block; height: 100%; width: 0; border-radius: 2px; background: linear-gradient(90deg, #5b8bff, #cfe0ff); }
+
+  /* drop */
+  #fanWrap { position: absolute; inset: 0; perspective: 2000px; }
+  #fan { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d; }
+  .fcard { position: absolute; width: 360px; height: 782px; margin: -391px 0 0 -180px; border-radius: 38px; overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,.6); }
+  .fcard img { width: 100%; height: 100%; display: block; }
+  #fanDim { position: absolute; inset: 0; background: rgba(4,10,28,.55); }
+  #big { position: absolute; inset: 0; display: grid; place-items: center; }
+  #big div { font-size: 250px; font-weight: 900; letter-spacing: -10px; text-shadow: 0 20px 80px rgba(0,0,0,.6); white-space: nowrap; }
+
+  /* endcard */
+  #end { position: absolute; inset: 0; }
+  #end .mid { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; }
+  #icon { width: 220px; height: 220px; border-radius: 50px; box-shadow: 0 30px 90px rgba(0,0,0,.5), 0 0 140px rgba(91,139,255,.55); }
+  #word { margin-top: 34px; font-size: 140px; font-weight: 800; letter-spacing: -5px; line-height: 1; display: flex; }
+  #word span { display: inline-block; }
+  #tag { margin-top: 18px; font-size: 44px; font-weight: 600; color: rgba(255,255,255,.88); letter-spacing: -.5px; }
+  #feat { margin-top: 14px; font-size: 26px; font-weight: 600; letter-spacing: 3px; color: var(--ice); opacity: .8; }
+  #pill { margin-top: 40px; padding: 20px 46px; border-radius: 999px; background: #fff; color: #0a1740; font-size: 34px; font-weight: 800; letter-spacing: -.5px; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+  .side { position: absolute; top: 540px; width: 380px; height: 826px; margin: -413px 0 0 -190px; border-radius: 42px; overflow: hidden; box-shadow: 0 50px 120px rgba(0,0,0,.6); }
+  .side img { width: 100%; height: 100%; display: block; }
+
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
+  #vig { position: absolute; inset: 0; background: radial-gradient(ellipse 75% 75% at 50% 50%, transparent 55%, rgba(0,0,0,.55)); pointer-events: none; }
+  #grain { position: absolute; inset: 0; width: 1920px; height: 1080px; opacity: .07; mix-blend-mode: overlay; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"><div class="blob" id="b1"></div><div class="blob" id="b2"></div><div class="blob" id="b3"></div></div>
+  <div id="cam">
+    <div id="hookScene">
+      <div id="wallWrap"><div id="wall"></div></div>
+      <div id="wallDim"></div>
+      <div id="hook">
+        <div class="line"><div class="w" id="hw1">Watermark.</div></div>
+        <div class="line"><div class="w" id="hw2"><span>Frame.</span></div></div>
+        <div class="line"><div class="w" id="hw3">Share.</div></div>
+        <div class="sub" id="hsub">Without cluttering your camera roll.</div>
+      </div>
+    </div>
+
+    <div id="liveScene">
+      <div class="copy" id="liveCopy">
+        <div class="chip" id="lchip"><i></i>PHOTO FRAMES</div>
+        <div class="line" style="margin-top:28px"><div class="h" id="lh1">12 new</div></div>
+        <div class="line"><div class="h" id="lh2">photo frames.</div></div>
+        <div id="ticker"><div id="tickStrip"></div></div>
+        <div class="line"><div class="s" id="ls">Real camera data. Colored by your own shot.</div></div>
+      </div>
+      <div id="phone"><div class="in"><canvas id="screen" width="712" height="1546"></canvas><div class="island"></div></div></div>
+    </div>
+
+    <div id="cfScene">
+      <div id="cfTexts"></div>
+      <div id="cf"></div>
+      <div id="bar"><i></i></div>
+    </div>
+
+    <div id="dropScene">
+      <div id="fanWrap"><div id="fan"></div></div>
+      <div id="fanDim"></div>
+      <div id="big"><div id="bigWord"></div></div>
+    </div>
+
+    <div id="end">
+      <div class="side" id="sideL"><img src="slides/01-iPhone67.jpg"></div>
+      <div class="side" id="sideR"><img src="slides/08-iPhone67.jpg"></div>
+      <div class="mid">
+        <img id="icon" src="icon.png">
+        <div id="word"></div>
+        <div id="tag">Watermark &amp; frame your photos.</div>
+        <div id="feat">PHOTOS &amp; VIDEOS · REAL EXIF · C2PA</div>
+        <div id="pill">Download now on the App Store</div>
+      </div>
+    </div>
+  </div>
+  <div id="flash"></div>
+  <div id="vig"></div>
+  <canvas id="grain" width="480" height="270"></canvas>
+</div>
+
+<script src="node_modules/gsap/dist/gsap.min.js"></script>
+<script>
+const FPS = 30;
+// music-stolen-128bpm.wav: first beat 0.459 s, drop on beat 32 (15.46 s)
+const BEAT = 60 / 128, B0 = 0.459, b = k => B0 + k * BEAT;
+const DURATION = b(50);                // ~23.9 s
+const $ = s => document.querySelector(s);
+const clamp = (v, a = 0, c = 1) => Math.min(c, Math.max(a, v));
+const slide = n => `slides/0${n}-iPhone67.jpg`;
+
+// ---------- build DOM ----------
+const wall = $("#wall");
+const WALL = [[1, 4, 7, 2], [5, 8, 3, 6], [9, 2, 5, 1], [4, 7, 9, 3], [6, 1, 8, 5], [3, 9, 2, 7]];
+WALL.forEach((ns, i) => {
+  const c = document.createElement("div"); c.className = "col"; c.style.left = (i - 3) * 364 + "px";
+  // two copies so the scroll can wrap
+  c.innerHTML = [...ns, ...ns].map(n => `<img src="${slide(n)}">`).join(""); wall.appendChild(c);
+});
+const STYLES = [["noir", "Noir"], ["aura", "Aura"], ["sunlight", "Sunlight"], ["readout", "Readout"], ["float", "Float"], ["swatch", "Swatch"], ["ambient", "Ambient"], ["emboss", "Emboss"]];
+$("#tickStrip").innerHTML = STYLES.map(s => `<div>${s[1]}</div>`).join("");
+
+const CF = [
+  [3, "BORDERS", ["Custom", "<em>borders.</em>"], "Size, caption and keyline. Per style or for all."],
+  [4, "EXIF", ["Real camera", "<em>data.</em>"], "Camera, lens, aperture, shutter and ISO. Added for you."],
+  [5, "TEXT", ["Your name,", "<em>beautifully.</em>"], "Text watermarks in fonts that look the part."],
+  [6, "LOGO", ["Logo &amp;", "<em>signature.</em>"], "Transparent PNG logos and a hand-drawn signature."],
+  [7, "VIDEO", ["Videos", "<em>too.</em>"], "The same frames and marks on every clip."],
+  [8, "SHARE", ["Share", "<em>instantly.</em>"], "Straight to any app. Nothing saved to your camera roll."],
+  [9, "C2PA", ["Content", "<em>Credentials.</em>"], "Creator and copyright sealed into your photos."],
+];
+CF.forEach(([n, chip, h, s], j) => {
+  const c = document.createElement("div"); c.className = "card"; c.innerHTML = `<img src="${slide(n)}"><div class="sweep"></div>`; $("#cf").appendChild(c);
+  const t = document.createElement("div"); t.className = "cfText"; t.id = "cft" + j;
+  t.innerHTML = `<div class="line"><div class="chip"><i></i>${chip}</div></div>
+    <div class="line" style="margin-top:24px"><div class="h">${h[0]}</div></div><div class="line"><div class="h">${h[1]}</div></div>
+    <div class="line"><div class="s">${s}</div></div><div class="line"><div class="count"><b>0${j + 1}</b> / 07</div></div>`;
+  $("#cfTexts").appendChild(t);
+});
+const cfCards = [...document.querySelectorAll(".card")];
+
+const FAN = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+FAN.forEach((n, i) => { const c = document.createElement("div"); c.className = "fcard"; c.innerHTML = `<img src="${slide(n)}">`; $("#fan").appendChild(c); });
+const fanCards = [...document.querySelectorAll(".fcard")];
+const BIG = ["Frames.", "Text.", "Logos.", "Signatures.", "Videos.", "Real EXIF.", "C2PA.", "One tap."];
+$("#word").innerHTML = [..."Markepi"].map(ch => `<span>${ch}</span>`).join("");
+
+// ---------- timeline (GSAP, paused, seeked per frame) ----------
+const S = { cf: -3.2, fanIn: 0, fanOut: 0, fanPan: 0 };   // proxies read by renderAt
+const tl = gsap.timeline({ paused: true, defaults: { ease: "expo.out" } });
+
+// hook
+tl.fromTo("#wallWrap", { opacity: 0, scale: 1.35 }, { opacity: 1, scale: 1, duration: 2.2, ease: "power3.out" }, 0);
+[["#hw1", 1], ["#hw2", 3], ["#hw3", 5]].forEach(([s, k]) =>
+  tl.fromTo(s, { yPercent: 160, scale: 1.25, opacity: 0, filter: "blur(18px)" }, { yPercent: 0, scale: 1, opacity: 1, filter: "blur(0px)", duration: .55 }, b(k) - .08));
+tl.fromTo("#hsub", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .6 }, b(6.5));
+tl.to("#hook", { scale: 1.6, opacity: 0, filter: "blur(16px)", duration: .45, ease: "power3.in" }, b(8) - .4);
+tl.to("#wallWrap", { scale: 4, opacity: 0, duration: .6, ease: "power3.in" }, b(8) - .45);
+tl.to("#wallDim", { opacity: 0, duration: .3 }, b(8) - .3);
+tl.set("#hookScene", { display: "none" }, b(8) + .2);
+
+// live phone: 12 frame styles
+tl.set("#liveScene", { display: "block" }, b(8) - .3);
+tl.fromTo("#phone", { x: 700, rotationY: -55, rotationZ: 8, scale: .7 }, { x: 0, rotationY: -14, rotationZ: 0, scale: .96, duration: 1.1 }, b(8) - .3);
+tl.fromTo("#lchip", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: .6 }, b(8));
+tl.fromTo(["#lh1", "#lh2"], { yPercent: 110 }, { yPercent: 0, duration: .7, stagger: .08 }, b(8) + .08);
+tl.fromTo("#ticker", { opacity: 0 }, { opacity: 1, duration: .3 }, b(8) + .2);
+tl.fromTo("#ls", { yPercent: 110 }, { yPercent: 0, duration: .7 }, b(9));
+tl.to("#phone", { x: -260, rotationY: 30, scale: .55, opacity: 0, duration: .55, ease: "power3.in" }, b(16) - .5);
+tl.to(["#lchip", "#lh1", "#lh2", "#ticker", "#ls"], { opacity: 0, x: -80, duration: .4, ease: "power3.in", stagger: .03 }, b(16) - .5);
+tl.set("#liveScene", { display: "none" }, b(16) + .1);
+
+// coverflow: lands on beat 16, advances every 2 beats
+tl.set("#cfScene", { display: "block" }, b(16) - .3);
+tl.to(S, { cf: 0, duration: .9 }, b(16) - .25);
+for (let j = 1; j < CF.length; j++) tl.to(S, { cf: j, duration: .62, ease: "expo.inOut" }, b(16 + 2 * j) - .31);
+CF.forEach((_, j) => {
+  const at = j === 0 ? b(16) : b(16 + 2 * j);
+  const lines = `#cft${j} .line > div`;
+  tl.fromTo(lines, { yPercent: 160 }, { yPercent: 0, duration: .6, stagger: .045 }, at - .05);
+  tl.fromTo(`.card:nth-child(${j + 1}) .sweep`, { xPercent: -160 }, { xPercent: 320, duration: .9, ease: "power2.inOut" }, at + .05);
+  if (j < CF.length - 1) tl.to(lines, { yPercent: -160, duration: .3, ease: "power3.in", stagger: .02 }, b(16 + 2 * (j + 1)) - .32);
+});
+tl.fromTo("#bar i", { width: "0%" }, { width: "100%", duration: b(30) - b(16), ease: "none" }, b(16));
+// build-up into the drop
+tl.to("#cft6 .line > div", { yPercent: -160, duration: .35, ease: "power3.in", stagger: .02 }, b(31) - .1);
+tl.to("#cf", { scale: .78, z: -200, duration: b(32) - b(30), ease: "power2.in" }, b(30));
+tl.to("#cfScene", { opacity: 0, duration: .15 }, b(32) - .12);
+tl.set("#cfScene", { display: "none" }, b(32) + .05);
+
+// drop
+tl.set("#dropScene", { display: "block" }, b(32) - .05);
+tl.set("#flash", { opacity: .85 }, b(32)).to("#flash", { opacity: 0, duration: .5, ease: "power2.out" }, b(32));
+tl.to(S, { fanIn: 1, duration: .9 }, b(32) - .05);
+tl.fromTo(S, { fanPan: 0 }, { fanPan: 1, duration: b(40) - b(32), ease: "none" }, b(32));
+tl.to(S, { fanOut: 1, duration: .7, ease: "expo.in" }, b(40) - .7);
+tl.to("#fanDim", { opacity: 0, duration: .3 }, b(40) - .3);
+tl.set("#dropScene", { display: "none" }, b(40) + .05);
+
+// endcard
+tl.set("#end", { display: "block" }, b(40) - .1);
+tl.set("#flash", { opacity: .6 }, b(40)).to("#flash", { opacity: 0, duration: .6, ease: "power2.out" }, b(40));
+tl.fromTo("#icon", { scale: 0, rotation: -30 }, { scale: 1, rotation: 0, duration: 1, ease: "back.out(1.8)" }, b(40));
+tl.fromTo("#word span", { yPercent: 120, opacity: 0 }, { yPercent: 0, opacity: 1, duration: .7, stagger: .045 }, b(41));
+tl.fromTo("#tag", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .8 }, b(42));
+tl.fromTo("#feat", { opacity: 0, y: 20 }, { opacity: .8, y: 0, duration: .8 }, b(43));
+tl.fromTo("#pill", { opacity: 0, scale: .6 }, { opacity: 1, scale: 1, duration: .8, ease: "back.out(2)" }, b(44));
+tl.fromTo("#sideL", { x: -700, rotation: -30, opacity: 0 }, { x: 0, rotation: -9, opacity: 1, duration: 1.2 }, b(40) + .1);
+tl.fromTo("#sideR", { x: 700, rotation: 30, opacity: 0 }, { x: 0, rotation: 9, opacity: 1, duration: 1.2 }, b(40) + .2);
+tl.fromTo("#end", { scale: 1 }, { scale: 1.07, duration: DURATION - b(40), ease: "none" }, b(40));
+tl.to("#stage", { opacity: 0, duration: .5, ease: "power1.in" }, DURATION - .5);
+tl.set({}, {}, DURATION);
+["#liveScene", "#cfScene", "#dropScene", "#end"].forEach(s => gsap.set(s, { display: "none" }));
+gsap.set("#sideL", { left: 290 }); gsap.set("#sideR", { left: 1630 });
+
+// ---------- per-frame procedural layer ----------
+const PAL = [ // [t, blob1, blob2, blob3]
+  [0, [47, 98, 214], [110, 60, 200], [10, 30, 90]],
+  [b(8), [230, 110, 50], [47, 98, 214], [90, 30, 20]],
+  [b(16), [230, 110, 50], [120, 60, 190], [20, 40, 110]],   // borders
+  [b(18), [120, 70, 210], [47, 98, 214], [30, 20, 90]],     // exif
+  [b(20), [220, 120, 60], [60, 90, 200], [40, 30, 90]],     // text
+  [b(22), [20, 150, 140], [40, 100, 200], [10, 60, 70]],    // logo
+  [b(24), [40, 110, 210], [70, 140, 200], [10, 30, 90]],    // video
+  [b(26), [200, 50, 110], [110, 50, 200], [60, 10, 50]],    // share
+  [b(28), [20, 160, 150], [47, 98, 214], [10, 60, 70]],     // c2pa
+  [b(32), [47, 98, 214], [230, 110, 50], [110, 60, 200]],
+  [b(40), [47, 98, 214], [91, 139, 255], [18, 48, 122]],
+];
+function pal(t) {
+  let i = 0; while (i < PAL.length - 1 && PAL[i + 1][0] <= t) i++;
+  const a = PAL[i], c = PAL[Math.min(i + 1, PAL.length - 1)];
+  const k = c === a ? 0 : clamp((t - c[0] + .6) / .6);   // 0.6 s cross-fade before each key
+  return [1, 2, 3].map(j => a[j].map((v, q) => Math.round(v + (c[j][q] - v) * k)));
+}
+const blobs = [$("#b1"), $("#b2"), $("#b3")];
+const screen = $("#screen").getContext("2d");
+const grain = $("#grain").getContext("2d"), gImg = grain.createImageData(480, 270);
+const FR = {};    // footage frames, preloaded
+const ease = t => 1 - Math.pow(1 - t, 3);
+
+function renderAt(f) {
+  const t = f / FPS;
+  // velocity for coverflow motion blur: sample one frame back
+  tl.seek(Math.max(0, t - 1 / FPS), false); const cfPrev = S.cf;
+  tl.seek(t, false);
+
+  // background blobs drift
+  const cols = pal(t);
+  const pos = [[560 + 220 * Math.sin(t * .31), 300 + 160 * Math.cos(t * .27)], [1450 + 200 * Math.cos(t * .23), 820 + 140 * Math.sin(t * .35)], [960 + 300 * Math.sin(t * .17 + 2), 540 + 200 * Math.cos(t * .21 + 1)]];
+  blobs.forEach((el, i) => {
+    el.style.left = pos[i][0] + "px"; el.style.top = pos[i][1] + "px";
+    el.style.background = `radial-gradient(circle, rgba(${cols[i]},${i === 2 ? .5 : .75}) 0%, rgba(${cols[i]},0) 62%)`;
+  });
+
+  // beat pulse (camera punch): soft before the drop, hard after
+  const k = Math.floor((t - B0) / BEAT), ph = (t - B0) / BEAT - k;
+  const amp = t >= b(32) && t < b(40) ? .045 : (t < b(8) && k >= 1 ? .012 : 0);
+  const punch = k >= 0 ? amp * Math.exp(-ph * 6) : 0;
+  const drift = 1 + .015 * Math.sin(t * .4);
+  $("#cam").style.transform = `scale(${(1 + punch) * drift})`;
+
+  // hook wall: tilted columns scrolling in alternating directions
+  wall.style.transform = `rotateX(24deg) rotateY(-10deg) rotateZ(-14deg) translateZ(${-200 + t * 40}px)`;
+  [...wall.children].forEach((c, i) => {
+    const h = 4 * 751, sp = (i % 2 ? 1 : -1) * (70 + 12 * i);
+    c.style.transform = `translateY(${-h * .5 - 900 + (((t * sp) % h) + h) % h - h / 2}px)`;
+  });
+
+  // live phone
+  if (t > b(8) - .4 && t < b(16) + .2) {
+    const si = clamp(Math.floor((t - b(8)) / BEAT), 0, STYLES.length - 1);
+    const fi = clamp(Math.floor((t - b(8 + si)) * FPS), 0, 11);
+    const img = FR[STYLES[si][0]][t < b(8) ? 0 : fi];
+    screen.drawImage(img, 0, 0, 712, 1546);
+    const rp = clamp((t - b(8 + si)) / .22);
+    const pos = si + (si > 0 ? ease(rp) - 1 : 0);
+    $("#tickStrip").style.transform = `translateY(${-pos * 132}px)`;
+    $("#phone").style.translate = `0 ${Math.sin(t * 1.6) * 10}px`;
+  }
+
+  // coverflow
+  if (t > b(16) - .4 && t < b(32) + .1) {
+    const v = Math.abs(S.cf - cfPrev) * FPS;    // slides per second
+    cfCards.forEach((c, i) => {
+      const d = i - S.cf, a = Math.abs(d);
+      const x = d * 470 - Math.sign(d) * Math.max(0, a - 1) * 120;
+      c.style.transform = `translateX(${x}px) translateZ(${-a * 260}px) rotateY(${clamp(-d * 32, -50, 50)}deg) translateY(${Math.sin(t * 1.3 + i) * 8}px)`;
+      c.style.opacity = d < 0 ? clamp(1 + d * 1.6) : clamp(1.6 - a * .55);
+      c.style.zIndex = 100 - Math.round(a * 10);
+      c.style.filter = `brightness(${1 - clamp(a * .35, 0, .6)}) blur(${Math.min(4, v * .9).toFixed(2)}px)`;
+    });
+  }
+
+  // drop fan: cards rise in, pan across, then implode into the icon
+  if (t > b(32) - .1 && t < b(40) + .1) {
+    $("#fan").style.transform = `rotateX(14deg) rotateZ(-7deg) translateX(${560 - S.fanPan * 1120}px)`;
+    fanCards.forEach((c, i) => {
+      const d = i - 4, inP = clamp(S.fanIn * 1.6 - Math.abs(d) * .08), o = S.fanOut;
+      const x = d * 400 * (1 - o), y = (1 - ease(inP)) * 1100 + (i % 2 ? 40 : -40) * (1 - o);
+      c.style.transform = `translate(${x}px, ${y}px) rotate(${(1 - inP) * d * 8 + o * d * 20}deg) scale(${1 - o * .8})`;
+      c.style.opacity = 1 - o;
+    });
+    const wi = clamp(Math.floor((t - b(32)) / BEAT), 0, BIG.length - 1);
+    const w = $("#bigWord"); w.textContent = t >= b(32) ? BIG[wi] : "";
+    const wp = (t - b(32 + wi)) / BEAT;
+    w.style.transform = `scale(${1 + .3 * Math.exp(-wp * 9)})`;
+    w.style.opacity = clamp(wp * 10) * (1 - S.fanOut);
+    w.style.color = wi % 2 ? "#cfe0ff" : "#fff";
+  }
+
+  // endcard idle float
+  if (t > b(40) - .2) {
+    $("#icon").style.translate = `0 ${Math.sin(t * 1.4) * 6}px`;
+    $("#sideL").style.translate = `0 ${Math.sin(t * 1.1) * 14}px`;
+    $("#sideR").style.translate = `0 ${Math.cos(t * 1.1) * 14}px`;
+  }
+
+  // film grain (seeded per frame -> deterministic)
+  let s = (f * 9301 + 49297) % 233280 || 1;
+  const d = gImg.data;
+  for (let i = 0; i < d.length; i += 4) { s = (s * 16807) % 2147483647; const g = s & 255; d[i] = d[i + 1] = d[i + 2] = g; d[i + 3] = 255; }
+  grain.putImageData(gImg, 0, 0);
+}
+
+// ---------- preload ----------
+const load = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => i.decode().then(() => ok(i)); i.onerror = () => no(src); i.src = src; });
+(async () => {
+  await Promise.all(STYLES.map(async ([s]) => { FR[s] = await Promise.all([...Array(12).keys()].map(i => load(`frames/st_${s}/${String(i + 1).padStart(4, "0")}.jpg`))); }));
+  await Promise.all([...document.images].map(i => i.decode()));
+  await document.fonts.ready;
+  window.TOTAL_FRAMES = Math.round(DURATION * FPS);
+  window.renderAt = renderAt;
+  window.READY = true;
+})();
+</script>
+</body>
+</html>

@@ -1,10 +1,14 @@
-"""Puts ~/Desktop/Markepi-Reel.mp4 in the en-US IPHONE_67 app preview set of a version (replacing what is there).
+"""Puts out/Markepi-Reel.mp4 in an en-US iPhone app preview set of a version (replacing what is there).
 
-    ASC_ISSUER_ID=… python3 upload_asc.py [version]     # default 1.5
+    ASC_ISSUER_ID=… python3 upload_asc.py [version] [preview type]   # default 1.5 IPHONE_67
+
+The 886×1920 reel is valid for IPHONE_67 and IPHONE_65; upload to both, or the
+6.5" listing (where the screenshots live) shows no video.
 """
 import jwt, time, requests, os, sys, hashlib
 APP, VER = "6782552371", (sys.argv[1] if len(sys.argv) > 1 else "1.5")
-PATH = os.path.expanduser("~/Desktop/Markepi-Reel.mp4")
+TYPE = sys.argv[2] if len(sys.argv) > 2 else "IPHONE_67"
+PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "Markepi-Reel.mp4")
 KEY = open(os.path.expanduser("~/.appstoreconnect/AuthKey_U5B2XBFUSU.p8")).read()
 B = "https://api.appstoreconnect.apple.com/v1"
 
@@ -25,8 +29,8 @@ vs = {v["attributes"]["versionString"]: v["id"] for v in
 l = next(x for x in ok(requests.get(f"{B}/appStoreVersions/{vs[VER]}/appStoreVersionLocalizations", headers=H()))["data"]
          if x["attributes"]["locale"] == "en-US")
 sets = ok(requests.get(f"{B}/appStoreVersionLocalizations/{l['id']}/appPreviewSets", headers=H()))["data"]
-s = next((x for x in sets if x["attributes"]["previewType"] == "IPHONE_67"), None) or ok(requests.post(
-    f"{B}/appPreviewSets", headers=H(), json={"data": {"type": "appPreviewSets", "attributes": {"previewType": "IPHONE_67"},
+s = next((x for x in sets if x["attributes"]["previewType"] == TYPE), None) or ok(requests.post(
+    f"{B}/appPreviewSets", headers=H(), json={"data": {"type": "appPreviewSets", "attributes": {"previewType": TYPE},
     "relationships": {"appStoreVersionLocalization": {"data": {"type": "appStoreVersionLocalizations", "id": l["id"]}}}}}))["data"]
 for old in ok(requests.get(f"{B}/appPreviewSets/{s['id']}/appPreviews", headers=H()))["data"]:
     ok(requests.delete(f"{B}/appPreviews/{old['id']}", headers=H())); print("removed", old["id"])

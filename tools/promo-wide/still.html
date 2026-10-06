@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- Reddit-comment still: node still.mjs -> stills/markepi-reddit-still.png -->
+<html><head><meta charset="utf-8">
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  body { width: 1920px; height: 1080px; overflow: hidden; background: #07080d; color: #fff;
+         font-family: -apple-system, "SF Pro Display", system-ui, sans-serif; -webkit-font-smoothing: antialiased; position: relative; }
+  .blob { position: absolute; border-radius: 50%; filter: blur(140px); opacity: .55; }
+  #copy { position: absolute; left: 100px; top: 0; bottom: 0; width: 540px; display: flex; flex-direction: column; justify-content: center; }
+  #brand { display: flex; align-items: center; gap: 24px; margin-bottom: 48px; }
+  #brand img { width: 112px; height: 112px; border-radius: 26px; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+  #brand span { font-size: 54px; font-weight: 700; letter-spacing: -1px; }
+  h1 { font-size: 90px; line-height: 1.0; font-weight: 800; letter-spacing: -3px; }
+  p { margin-top: 28px; font-size: 30px; line-height: 1.35; color: rgba(255,255,255,.78); }
+  #pill { margin-top: 48px; align-self: flex-start; padding: 20px 36px; border-radius: 999px; background: #fff; color: #000; font-size: 26px; font-weight: 700; }
+  #shots { position: absolute; right: 50px; top: 0; bottom: 0; width: 1200px; display: flex; align-items: center; justify-content: center; gap: 24px; }
+  #shots img { border-radius: 28px; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+</style></head>
+<body>
+  <div class="blob" style="width:900px;height:900px;left:-200px;top:-300px;background:#3a2bd8"></div>
+  <div class="blob" style="width:800px;height:800px;right:-150px;bottom:-350px;background:#ff6a1a"></div>
+  <div class="blob" style="width:600px;height:600px;right:500px;top:-250px;background:#0aa3a3;opacity:.35"></div>
+
+  <div id="copy">
+    <div id="brand"><img src="icon.png"><span>Markepi</span></div>
+    <h1>Watermark.<br>Frame. Share.</h1>
+    <p>Frames from your real camera data. Your name, logo or signature on photos and videos. No camera-roll clutter.</p>
+    <div id="pill">Free on the App Store · iPhone &amp; iPad</div>
+  </div>
+
+  <!-- three flat cards side by side, centre largest (no tilt, no overlap) -->
+  <div id="shots">
+    <img src="slides/04-iPhone67.jpg" style="height:780px">
+    <img src="slides/01-iPhone67.jpg" style="height:920px">
+    <img src="slides/07-iPhone67.jpg" style="height:780px">
+  </div>
+</body></html>

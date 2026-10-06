@@ -160,9 +160,11 @@ struct PaywallView: View {
                         Button {
                             dismiss()
                         } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.white.opacity(0.9), .white.opacity(0.22))
+                            // A bare glyph: the toolbar's glass button is the
+                            // circle (a filled circle icon nested a second one).
+                            Image(systemName: "xmark")
+                                .font(.body.weight(.bold))
+                                .foregroundStyle(.white)
                         }
                         .accessibilityLabel("Close")
                     }
@@ -197,7 +199,7 @@ struct PaywallView: View {
                        verified: store.isPremium)
             VStack(spacing: 5) {
                 Text(title)
-                    .font(.system(size: titleSize * (compact ? 0.82 : 1.0), weight: .bold))
+                    .font(.system(size: titleSize * (compact ? 0.86 : 1.05), weight: .heavy))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                 Text(subtitle)
@@ -213,32 +215,20 @@ struct PaywallView: View {
 
     // MARK: - Free tier card
 
+    /// What staying free means, in one line — the plans are the focus.
     private var freeCard: some View {
-        HStack(spacing: 14) {
-            FeatureIconChip(systemName: "gift.fill")
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Free, unlimited")
-                    .font(.system(size: bodySize, weight: .semibold))
-                Text("Export as much as you like with every feature, up to 2048 px, in SDR, with a small Markepi mark.")
-                    .font(.system(size: subSize))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity)
-        .markepiGlassCard()
+        (Text(Image(systemName: "gift.fill")) + Text("  Free: unlimited, up to 2048 px, with a Markepi mark"))
+            .font(.system(size: subSize, weight: .medium))
+            .foregroundStyle(.white.opacity(0.8))
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
     }
 
     // MARK: - Plans
 
     private var plansSection: some View {
         VStack(spacing: 10) {
-            Text("Go full quality")
-                .font(.system(size: subSize * 0.95, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.75))
-                .frame(maxWidth: .infinity, alignment: .leading)
             ForEach(PremiumPlan.allCases) { plan in
                 planCard(plan)
             }
@@ -253,37 +243,22 @@ struct PaywallView: View {
             }
         } label: {
             HStack(spacing: 14) {
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .font(.system(size: bodySize * 1.05))
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: bodySize * 1.25, weight: isSelected ? .bold : .regular))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.6))
 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Text(plan.title)
-                            .font(.system(size: bodySize, weight: .semibold))
-                            .foregroundStyle(.primary)
-                        if let badge = plan.badge {
-                            Text(badge)
-                                .font(.system(size: subSize * 0.8, weight: .bold))
-                                .foregroundStyle(Color.accentColor)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 2)
-                                .background(Color.accentColor.opacity(0.16), in: Capsule())
-                        }
-                    }
-                    Text(plan.subtitle)
-                        .font(.system(size: subSize))
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 8)
-
-                Text(displayPrice(for: plan))
-                    .font(.system(size: bodySize, weight: .semibold))
-                    .foregroundStyle(.primary)
+                let offer = plan == .lifetime ? store.lifetimeOffer : nil
+                let original = offer?.originalDisplayPrice
+                // On sale the badge slot says SALE (one badge per card) and the
+                // normal price sits struck under the sale price.
+                PlanRowContent(title: plan.title, subtitle: plan.subtitle,
+                               badge: original != nil ? "SALE" : plan.badge,
+                               badgeIsSale: original != nil,
+                               price: displayPrice(for: plan), original: original,
+                               bodySize: bodySize, subSize: subSize)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.vertical, 16)
             .background {
                 RoundedRectangle(cornerRadius: MarkepiRadius.xxl, style: .continuous)
                     .fill(.regularMaterial)
@@ -297,11 +272,10 @@ struct PaywallView: View {
             .overlay {
                 RoundedRectangle(cornerRadius: MarkepiRadius.xxl, style: .continuous)
                     .strokeBorder(isSelected ? Color.accentColor : Color.white.opacity(0.12),
-                                  lineWidth: isSelected ? 2 : 1)
+                                  lineWidth: isSelected ? 3 : 1)
             }
-            .shadow(color: isSelected ? Color.accentColor.opacity(0.32) : .black.opacity(0.18),
-                    radius: isSelected ? 12 : 10, y: isSelected ? 5 : 6)
-            .scaleEffect(isSelected ? 1.0 : 0.985)
+            .shadow(color: isSelected ? Color.accentColor.opacity(0.3) : .black.opacity(0.12),
+                    radius: 10, y: 4)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
@@ -404,8 +378,11 @@ struct PaywallView: View {
 
     /// Live price when StoreKit has loaded the product; otherwise the static
     /// fallback so the paywall still reads correctly offline / in previews.
+    /// The lifetime plan quotes ``StoreManager/lifetimeOffer``: the sale price
+    /// while a sale is on.
     private func displayPrice(for plan: PremiumPlan) -> String {
-        store.product(for: plan.premiumProduct)?.displayPrice ?? plan.price
+        if plan == .lifetime, let offer = store.lifetimeOffer { return offer.displayPrice }
+        return store.product(for: plan.premiumProduct)?.displayPrice ?? plan.price
     }
 
     private var ctaTitle: String {
@@ -420,7 +397,12 @@ struct PaywallView: View {
     private func purchase() async {
         guard !isWorking else { return }
         isWorking = true
-        let outcome = await store.purchase(selectedPlan.premiumProduct)
+        // Lifetime buys whichever product the offer names (sale or normal).
+        let outcome = if selectedPlan == .lifetime, let product = store.lifetimePurchaseProduct {
+            await store.purchase(product)
+        } else {
+            await store.purchase(selectedPlan.premiumProduct)
+        }
         isWorking = false
 
         switch outcome {
@@ -630,10 +612,10 @@ private struct PurchaseCTALabel: View {
             Text(title).opacity(isWorking ? 0 : 1)
             if isWorking { ProgressView().tint(.white) }
         }
-        .font(.headline)
+        .font(.title3.weight(.bold))
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        .padding(.vertical, 17)
         .background(gradient, in: Capsule())
         .overlay {
             GeometryReader { geo in
@@ -659,6 +641,134 @@ private struct PurchaseCTALabel: View {
                 sweep = true
             }
         }
+    }
+}
+
+// MARK: - Plan row
+
+/// One plan's text: title (+ badge) and subtitle on the left, the price on
+/// the right, vertically centred — the same for every plan, so prices line
+/// up. On sale the normal price sits struck directly under the sale price and
+/// the badge reads SALE in gold.
+///
+/// Two layouts, the first that fits the real width wins: price column on the
+/// right; or prices under the text (long currencies like "₫129.000", large
+/// Dynamic Type). Prices are fixed-size — they move, never truncate or shrink —
+/// and the subtitle reports no ideal width, so it wraps instead of forcing the
+/// price down. No device checks: iPad and landscape fall out of the width.
+struct PlanRowContent: View {
+    let title: String
+    let subtitle: String
+    let badge: String?
+    var badgeIsSale = false
+    let price: String
+    var original: String? = nil
+    let bodySize: CGFloat
+    let subSize: CGFloat
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                info
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 0) { current; struck }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                info
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) { current; struck }
+                    VStack(alignment: .leading, spacing: 0) { current; struck }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(original.map { "\(title), on sale, was \($0), now \(price). \(subtitle)" }
+                            ?? "\(title)\(badge.map { ", \($0)" } ?? ""), \(price). \(subtitle)")
+    }
+
+    private var info: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { titleText; badgeView }
+                VStack(alignment: .leading, spacing: 4) { titleText; badgeView }
+            }
+            Text(subtitle)
+                .font(.system(size: subSize, weight: .medium))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                // Wrap rather than claim a full line in the fit test.
+                .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var titleText: some View {
+        Text(title)
+            .font(.system(size: bodySize * 1.05, weight: .bold))
+            .foregroundStyle(.primary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder private var badgeView: some View {
+        if let badge {
+            Text(badge)
+                .font(.system(size: subSize * 0.78, weight: .heavy))
+                .tracking(0.5)
+                .foregroundStyle(badgeIsSale ? Color.black.opacity(0.85) : Color.accentColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(badgeIsSale ? AnyShapeStyle(Self.gold) : AnyShapeStyle(Color.accentColor.opacity(0.16)),
+                            in: Capsule())
+                .lineLimit(1)
+                .fixedSize()
+        }
+    }
+
+    private var current: some View {
+        Text(price)
+            .font(.system(size: bodySize * 1.3, weight: .heavy))
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .fixedSize()
+    }
+
+    @ViewBuilder private var struck: some View {
+        if let original {
+            Text(original)
+                .font(.system(size: subSize, weight: .semibold))
+                .strikethrough(true, color: .secondary)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
+        }
+    }
+
+    /// The Pro crown's metallic gold.
+    static let gold = LinearGradient(
+        colors: [Color(red: 1.00, green: 0.88, blue: 0.52), Color(red: 0.97, green: 0.72, blue: 0.22)],
+        startPoint: .top, endPoint: .bottom)
+}
+
+#Preview("Plan rows") {
+    let pairs = [("$4.99", "$1.99"), ("Rp 79.000", "Rp 32.000"), ("₫129.000", "₫49.000"), ("CHF 5.00", "CHF 2.00")]
+    ScrollView {
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach([250.0, 300.0, 560.0], id: \.self) { width in
+                Text("width \(Int(width))").font(.caption).foregroundStyle(.secondary)
+                ForEach(pairs, id: \.0) { original, price in
+                    PlanRowContent(title: "One-Time Unlock", subtitle: "Pay once — yours forever",
+                                   badge: "SALE", badgeIsSale: true, price: price, original: original,
+                                   bodySize: 16, subSize: 14)
+                        .frame(width: width).padding(12)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                }
+                PlanRowContent(title: "Annual", subtitle: "Billed yearly, cancel anytime", badge: "Save 75%",
+                               price: "$2.99", bodySize: 16, subSize: 14)
+                    .frame(width: width).padding(12)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+            }
+        }
+        .padding()
     }
 }
 
