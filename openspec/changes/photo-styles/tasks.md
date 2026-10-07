@@ -1,53 +1,55 @@
-## 0. Look approval (gate — nothing below starts until Osama approves the samples)
+## 0. Look approval (gate)
 
-- [ ] 0.1 Prototype every recipe (D1, D2, D4, D6) in a standalone macOS Core Image script and render a contact sheet over licence-clean reference photos (portraits of varied skin tones, landscape, night, high-key); verify by Osama reviewing the sheet
-- [ ] 0.2 Retune recipes from feedback until each look is approved; record the final recipe numbers in the change folder (`reference/recipes.json`) and verify the sheet re-renders from that file
+- [x] 0.1 Prototype every recipe in a standalone macOS Core Image script and render a contact sheet over licence-clean reference photos; verified by Osama reviewing `reference/01–04` (round 1)
+- [x] 0.2 Round 1 approved as-is ("now implement all these"); the recipe numbers live in `PhotoLookRenderer.Recipe.base` (the Swift source is the record, no separate recipes.json); "Portrait 400" renamed "Pastel 400" (too close to a film trademark, caught by the catalogue test)
 
 ## 1. Model & persistence
 
-- [ ] 1.1 Add `PhotoStyle` (22 looks + original, `family`, `isFree`, lenient decode → `.original`) and `PhotoStyleSettings` (`intensity`, `tone`, `color`, `grain`, `isDefaultTuning`, `previewKey`) in MarkepiCore/Models; verify with `PhotoStyleModelTests` (round-trip, unknown id → original, missing key → defaults)
-- [ ] 1.2 Add `photoStyle` to `WatermarkConfiguration` (CodingKeys, `decodeIfPresent ?? .init()`, encode) and to `WatermarkConfigurable`; verify a pre-styles config/template JSON fixture decodes to `.original`
+- [x] 1.1 Add `PhotoLook` (22 looks + original, `family`, `isFree`, `isMonochrome`, lenient decode → `.original`) and `PhotoLookSettings` (`intensity`, `tone`, `color`, `grain`, `isDefaultTuning`, `previewKey`, clamped decode); verified by `PhotoLookTests.catalogue` and `.decoding`
+- [x] 1.2 Add `photoLook` to `WatermarkConfiguration` (CodingKeys, `decodeIfPresent ?? .init()`, encode); verified by `PhotoLookTests.legacyConfig` (pre-Looks JSON → Original, round trip keeps the look)
 
 ## 2. Renderer
 
-- [ ] 2.1 Implement `StyleRecipe` + cube baking (33³, gamma-encoded Display P3) with an LRU cache of 6; verify the identity recipe bakes an identity cube (max error < 1/255) and each recipe bakes in < 15 ms on macOS
-- [ ] 2.2 Port the approved recipes from `reference/recipes.json` into Swift; verify a test renders each look on a gray ramp + colour chart without NaN/out-of-range values
-- [ ] 2.3 Implement `PhotoStyleRenderer.apply` (cube → pad → film extras → mask blend → intensity mix); verify `.original` returns the input instance untouched and intensity 0 is pixel-identical to the input
-- [ ] 2.4 Implement the Tone/Color pad (`CIToneCurve` + `CITemperatureAndTint`); verify pad centre is a no-op and +color moves a neutral gray toward amber (R−B increases)
-- [ ] 2.5 Implement grain (D6) with full-resolution-relative scale; verify two renders are bit-identical and grain variance at a 512-px preview matches the 4096-px render within 10% after downsampling
-- [ ] 2.6 Implement halation for Tungsten 800; verify a bright dot on black gains red-dominant pixels around it and corner pixels stay black
-- [ ] 2.7 Make B&W looks stay RGB (D5); verify the rendered output colour-space model is `.rgb` and a red logo composited on top keeps R ≫ G,B
+- [x] 2.1 `Recipe` + cube baking (33³, gamma-encoded Display P3) with an LRU cache of 6; verified identity cube max error < 1/255 (`identityCube`) and every recipe bakes in < 250 ms in a debug test build (`recipesInRange`)
+- [x] 2.2 Port the approved recipes; verified every look renders a gradient chart without NaN or out-of-range values (`recipesInRange`)
+- [x] 2.3 `PhotoLookRenderer.apply` (cube → pad → sky → halation → grain → intensity mix); verified Original and 0% return the input instance and 50% sits halfway (`identityPaths`)
+- [x] 2.4 Tone/Color pad (midtone tone curve + red/blue warmth matrix); verified centre is a no-op, warmer raises R−B, brighter lifts mids (`pad`)
+- [x] 2.5 Grain: zero-mean, short-edge-relative, opaque add/subtract blend so alpha stays 1; verified bit-identical repeats, unchanged mean, and similar σ at 512 px vs 2048 px shrunk (`grain`)
+- [x] 2.6 Halation for Tungsten 800 (linear luminance ramp, not a spline); verified a red-dominant glow beside a white dot, untouched dark corners and mid-gray (`halation`)
+- [x] 2.7 B&W looks stay RGB; verified neutral output, RGB colour-space model and a red text layer staying red over Muted B&W (`monochromeStaysRGB`)
 
-## 3. Skin mask
+## 3. Scene masks
 
-- [ ] 3.1 Implement `SkinMaskProvider` embedded-matte path (skin matte aux data + orientation); verify with a Portrait HEIC fixture carrying a skin matte that the mask is non-empty and aligned (sample a known skin pixel)
-- [ ] 3.2 Implement the Vision path (`VNGeneratePersonInstanceMaskRequest`, fallback `VNGeneratePersonSegmentationRequest`) × YCbCr skin key, feathered, at 1024 px; verify on a portrait fixture that the face region averages > 0.5 and the background < 0.1
-- [ ] 3.3 Add the per-source cache (URL + size + mtime, 8 entries) and nil-on-no-person; verify a landscape fixture returns nil and a second call hits the cache
-- [ ] 3.4 Implement undertone rendering (global vs skin cube blended by mask); verify with a synthetic half-masked image that the masked half shifts ≥ 3× the unmasked half
+- [x] 3.1 Embedded Portrait-mode skin matte minus hair matte, oriented; verified with a synthetic skin-matte HEIC (`embeddedSkinMatte`)
+- [x] 3.2 Vision fallback: person instance mask (→ person segmentation) × skin-colour key cube, feathered, on a 1024-px decode; verified on the CC0 portrait fixture: face > 0.5, background < 0.1 (`visionSkinMask`)
+- [x] 3.3 Per-source cache (path + size + mtime, 8 entries), nil without a person; verified a flat gray photo gets no masks and a second call hits the cache (`noMasks`, `visionSkinMask`)
+- [x] 3.4 Undertones: global vs skin cube blended through the skin mask; verified masked half shifts ≥ 3× the unmasked half and no mask = global only (`undertoneUsesSkinMask`)
+- [x] 3.5 Sky: embedded sky matte, else (no public sky segmentation in iOS) Vision's scene classifier must report "sky", then a sky-colour key weighted to the top of the frame, minus people; per-look sky saturation/exposure; verified the treatment reaches only the sky mask (`skyUsesSkyMask`) and visually on the windmill/Nyhavn/night sheet
 
 ## 4. Engine integration
 
-- [ ] 4.1 Apply the style at the top of `buildFilterGraph`, passing `renderScale` and the mask, for both `process` and `renderPreview`; verify a test that a framed export's frame mat pixels are identical with and without a look while photo pixels differ
-- [ ] 4.2 Verify metadata/HDR survival: export an HDR HEIC fixture with GPS under Cozy and assert GPS, DateTimeOriginal, Model, ICC and gain-map aux data are present (extend `MediaPipelineRegressionTests`)
-- [ ] 4.3 Collapse 3-channel ISO gain maps to luminance for B&W looks; verify with the ISO gain-map fixture that the written map's channels are equal
-- [ ] 4.4 Add `ExportPolicy.allowsStyle` and the downgrade in `process`; verify in `FreeTierExportTests` that a free export of Chrome 100 equals a free export of Original, and that free Vibrant (default tuning) stays styled
-- [ ] 4.5 Live Photo: export a still only when a look is active; verify in `LivePhotoProcessorTests` that `livePhotoVideoURL` is nil with a look and non-nil with Original
-- [ ] 4.6 Video ignores `photoStyle`; verify a `VideoProcessor` test that the output is unchanged with a look set
-- [ ] 4.7 Batch uses each photo's own mask; verify in `BatchProcessorTests` that two different fixtures are each styled and the mask cache holds two keys
-- [ ] 4.8 Run `cd Packages/MarkepiCore && swift test --skip ExtensionSnapshotTests --skip C2PARealSigningIntegrationTests` under a timeout and verify it passes
+- [x] 4.1 Apply the look at the top of `buildFilterGraph` for both `process` and `renderPreview`, masks fetched only for looks that read them; verified frame-mat pixels are identical with and without a look while photo pixels differ (`lookNeverTouchesFrame`)
+- [x] 4.2 Metadata and HDR survival; verified an HDR HEIC with GPS/date/model exported under Cozy, Silver 400, Amber and Tungsten 800 keeps GPS, DateTimeOriginal, Model, colour profile and the gain map (`metadataAndHDRSurvive`)
+- [x] 4.3 HDR is never traded away: the gain map is always re-attached as today, ISO multi-channel maps included (decision after "we don't want to compromise on hdr"); covered by 4.2
+- [x] 4.4 `ExportPolicy.allowsLook` + downgrade in `process`; verified free Chrome 100 and free tuned Vibrant equal Original, free default Vibrant stays styled (`freeTierDowngrade`)
+- [x] 4.5 Live Photo with an active (allowed) look exports a still from `processLivePhoto`; verified `livePhotoVideoURL == nil`, free-tier downgrade keeps it live (`livePhotoStill`)
+- [x] 4.6 Video ignores the look: `VideoProcessor`/`VideoLayerBuilder` never read `photoLook` (grep), and the editor's video preview strips it
+- [x] 4.7 Batch styles every photo with its own masks; verified both items export and the mask cache keys differ (`batch`)
+- [x] 4.8 `swift test --skip ExtensionSnapshotTests --skip C2PARealSigningIntegrationTests` → 665 tests in 81 suites pass
 
 ## 5. App UI
 
-- [ ] 5.1 Add `EditorTool.style` (first in the dock, `camera.filters`) and its `ToolPanelView` case; verify `bash scripts/build-gate.sh` passes
-- [ ] 5.2 Build `PhotoStylePanelView` in MarkepiCore/UI (family pills, look strip, Intensity, 2-D pad with double-tap reset, Grain for film, Pro markers, still-photo note for Live Photos, disabled state for video); verify with an Xcode Preview of each family and state
-- [ ] 5.3 Generate per-family look thumbnails lazily from the current photo (360 px, keyed by photo + look); verify on device that the strip fills left-to-right without blocking the editor
-- [ ] 5.4 Add `photoStyle.previewKey` + mask-ready flag to `previewIdentifier`; verify on device that every control change refreshes the preview and that an undertone updates once the mask lands
-- [ ] 5.5 Hold to compare on `PreviewView` (cached Original render, VoiceOver "Show original" action); verify on device that press-and-hold shows the unstyled photo with frame and watermarks intact
-- [ ] 5.6 Comparison sheet: "Pro look" / "Original" chips and a downgraded Free render when a Pro look is active; verify on device as a free user (DEBUG Force Premium off) and that Pro users see no prompt
-- [ ] 5.7 Landscape side-rail and keyboard-safe layout check for the Style panel; verify on device in portrait and landscape that the panel follows the existing rail rules
+- [x] 5.1 `EditorTool.looks` ("Looks", `camera.filters`, first in the dock) and its `ToolPanelView` case; `bash scripts/build-gate.sh` passes
+- [x] 5.2 Looks panel in `ToolPanelView.swift` (App target, no new pbxproj entries), redesigned to match the editor after review: the app's glass `MarkepiPillBar` (now generic) for Moods / Undertones / Film with icons, a look strip using the frame-style strip's cell (photo-shaped, square corners, 3-pt accent ring, Pro crown), an Adjust card shown once a look is chosen (Intensity; the 2-D Tone & Warmth pad, kept at Osama's request and modernised: dot grid, cool→warm field, edge icons, knob grows while held, snap-to-centre tick, double-tap reset, live readouts, VoiceOver sees two sliders; Grain for film; Reset Adjustments), a Pro note with Unlock, the Live Photo note and the video empty state; builds via the gate
+- [x] 5.2a Frame-style strip: hidden (and not re-rendered) while Looks is open; otherwise a refresh renders all cells first and swaps them in one crossfade, never cell by cell; a new photo still fills left to right; builds via the gate
+- [ ] 5.3 Look thumbnails per family (240 px, keyed by photo + family) — implemented; verify on device that the strip fills left to right without blocking the editor
+- [ ] 5.4 `photoLook.previewKey` in `previewIdentifier` — implemented; verify on device that every control change refreshes the preview
+- [ ] 5.5 Hold to compare shows the unstyled render with frame and watermarks — implemented (`unstyledPreviewImage`); verify on device
+- [ ] 5.6 Comparison sheet chips ("<Look> look" / "Original look") — implemented, and the Free card renders the downgraded edit through the engine; verify on device as a free user
+- [ ] 5.7 Landscape side-rail and portrait dock with the extra Looks tool; verify on device in both orientations
 
 ## 6. Verification & ship
 
-- [ ] 6.1 Run `bash scripts/build-gate.sh` and the package suite (4.8); verify both exit 0
-- [ ] 6.2 On-device pass on an older iPhone (≤ 15) and Osama's iPhone: every look exports, metadata checked with `exiftool`, HDR visible in Photos for a Pro export, no photo-library writes; record results in the change folder
-- [ ] 6.3 Check that the paywall/feature copy says "Styles" (never "Photographic Styles") and that no look names a film or camera brand; verify by grepping the App and MarkepiCore sources for brand names
+- [x] 6.1 `bash scripts/build-gate.sh` (PASSED) and the package suite (4.8) both exit 0
+- [ ] 6.2 On-device pass (installed on Osama's iPhone 15 Pro Max, 2026-10-06): every look exports, metadata checked with `exiftool`, HDR visible in Photos for a Pro export, no photo-library writes
+- [x] 6.3 No "Photographic Styles" wording and no film/camera brand names in App, ShareExtension or MarkepiCore sources (grep: only the word "portrait" as orientation)

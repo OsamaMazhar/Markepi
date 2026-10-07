@@ -1,0 +1,5 @@
+[
+ {"id": "music-piano-s7", "model": "stable_audio", "output": "assets/audio/music-piano-s7.wav", "prompt": "Calm happy solo piano, gentle and warm, light uplifting melody in a major key, soft felt piano, airy and optimistic, relaxed tempo around 90 BPM, clean modern recording, instrumental, no vocals, no drums", "params": {"seconds": 32, "seed": 7, "fade_in": 0.05, "normalize": true}},
+ {"id": "music-piano-s21", "model": "stable_audio", "output": "assets/audio/music-piano-s21.wav", "prompt": "Calm happy solo piano, gentle and warm, light uplifting melody in a major key, soft felt piano, airy and optimistic, relaxed tempo around 90 BPM, clean modern recording, instrumental, no vocals, no drums", "params": {"seconds": 32, "seed": 21, "fade_in": 0.05, "normalize": true}},
+ {"id": "music-piano-s42", "model": "stable_audio", "output": "assets/audio/music-piano-s42.wav", "prompt": "Bright cheerful piano with soft light strings underneath, calm and happy, gentle flowing arpeggios in a major key, warm and hopeful, around 95 BPM, instrumental, no vocals, no drums", "params": {"seconds": 32, "seed": 42, "fade_in": 0.05, "normalize": true}}
+]

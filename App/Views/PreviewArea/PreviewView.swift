@@ -118,7 +118,7 @@ struct PreviewView: View {
     var body: some View {
         Group {
             if let preview = viewModel.previewImage {
-                Image(uiImage: isComparing ? (viewModel.originalSourceImage ?? preview) : preview)
+                Image(uiImage: isComparing ? (viewModel.unstyledPreviewImage ?? viewModel.originalSourceImage ?? preview) : preview)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     // NOTE: do NOT add `.drawingGroup()` here. It flattens the

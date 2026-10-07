@@ -10,7 +10,7 @@ The system SHALL offer a photo style chosen from four groups:
 - **Original**: no style.
 - **Moods**: Vibrant, Natural, Luminous, Dramatic, Quiet, Cozy, Ethereal, Muted B&W, Stark B&W.
 - **Undertones**: Neutral, Cool Rose, Rose Gold, Gold, Amber.
-- **Film**: Portrait 400, Golden 200, Chrome 100, Velvet 50, Classic Neg, Tungsten 800, Silver 400, Faded.
+- **Film**: Pastel 400, Golden 200, Chrome 100, Velvet 50, Classic Neg, Tungsten 800, Silver 400, Faded.
 
 Original SHALL be the default. Style names SHALL NOT use camera-maker or film-maker trademarks. The feature SHALL NOT be called "Photographic Styles" anywhere in the app or its store copy.
 
@@ -19,7 +19,7 @@ Original SHALL be the default. Style names SHALL NOT use camera-maker or film-ma
 - **THEN** the style is Original and the exported photo's pixels are identical to an export made without the style feature
 
 #### Scenario: Browsing the catalogue
-- **WHEN** the user opens the Style tool
+- **WHEN** the user opens the Looks tool
 - **THEN** the Moods, Undertones and Film groups are offered, each showing its looks as thumbnails rendered from the current photo
 
 #### Scenario: Works on any supported iPhone
@@ -28,18 +28,18 @@ Original SHALL be the default. Style names SHALL NOT use camera-maker or film-ma
 
 ### Requirement: Style controls
 
-Every look except Original SHALL expose an Intensity control from 0% to 100%. The default SHALL be 100%, and 0% SHALL equal Original. Every look except Original SHALL expose a Tone/Color pad: Tone runs from darker to brighter, Color from cooler to warmer, and the centre leaves the look unchanged. Film looks SHALL also expose a Grain control from 0% to 100%, defaulting to that film's own amount. Choosing a different look SHALL reset the pad to centre and Intensity and Grain to that look's defaults.
+Every look except Original SHALL expose an Intensity control from 0% to 100%. The default SHALL be 100%, and 0% SHALL equal Original. Every look except Original SHALL expose a two-axis Tone & Warmth pad: up is brighter and down darker, right is warmer and left cooler, with each value shown from −100 to +100. The centre leaves the look unchanged; dragging near the centre SHALL snap to it, and a double-tap or Reset SHALL return to it. Film looks SHALL also expose a Grain control from 0% to 100%, defaulting to that film's own amount. Choosing a different look SHALL reset Tone and Warmth to 0 and Intensity to that look's default; Grain SHALL keep the user's setting when moving from one film look to another, and otherwise take the new film's default.
 
 #### Scenario: Zero intensity
 - **WHEN** a look is selected with Intensity set to 0%
 - **THEN** the rendered photo equals the Original rendering
 
-#### Scenario: Pad centre
-- **WHEN** the Tone/Color pad is at its centre
+#### Scenario: Neutral adjustments
+- **WHEN** Tone and Warmth are both 0
 - **THEN** the look renders exactly as its recipe defines, with no extra tone or colour shift
 
 #### Scenario: Warmer color
-- **WHEN** the user moves the pad toward warmer
+- **WHEN** the user moves Warmth toward warmer
 - **THEN** neutral grays in the preview shift toward amber and the preview refreshes while dragging
 
 #### Scenario: Grain only on film
@@ -69,6 +69,18 @@ An undertone SHALL shift skin strongly and the rest of the photo lightly. Skin S
 #### Scenario: Landscape with no people
 - **WHEN** an undertone is applied to a photo with no person
 - **THEN** only a light global shift is applied and no error is shown
+
+### Requirement: Sky-aware looks
+
+Looks that treat the sky (among them Vibrant, Dramatic, Stark B&W, Chrome 100, Velvet 50 and Silver 400) SHALL apply their sky adjustment only where the photo shows sky. Sky SHALL be identified from the sky matte embedded in the photo when there is one. Otherwise it SHALL be identified on device, and only when scene recognition reports sky in the photo. People SHALL never be treated as sky. When no sky is found, the look SHALL render without a sky adjustment.
+
+#### Scenario: Landscape with sky
+- **WHEN** Dramatic is applied to a landscape with a blue sky
+- **THEN** the sky renders darker than it does with the same look on a photo with no detected sky, and the land below is unaffected by the sky adjustment
+
+#### Scenario: Indoor blue wall
+- **WHEN** Vibrant is applied to an indoor photo of a blue wall that scene recognition does not classify as sky
+- **THEN** no sky adjustment is applied
 
 ### Requirement: Film character
 
@@ -115,7 +127,7 @@ A styled export SHALL keep everything an unstyled export keeps: all source metad
 The live preview, the style thumbnails and the export SHALL render the same look for the same settings, including skin masking and grain scale. Changing any style setting SHALL refresh the live preview.
 
 #### Scenario: Preview refresh
-- **WHEN** the user changes the look, Intensity, the pad or Grain
+- **WHEN** the user changes the look, Intensity, Tone, Warmth or Grain
 - **THEN** the live preview re-renders with the new setting and no other interaction is needed
 
 #### Scenario: Same skin mask in preview and export
@@ -140,7 +152,7 @@ The chosen look and its settings SHALL persist with the editor configuration and
 
 ### Requirement: Free and Pro access
 
-Free users SHALL be able to export with Original, Vibrant, Natural and the Neutral undertone at default settings. Every other look, and Intensity, the Tone/Color pad and Grain, SHALL require Pro. Free users SHALL be able to select and preview Pro looks, which are marked as Pro. When a free user exports while a Pro look or a Pro control is in effect, the Free vs Pro comparison sheet SHALL show the Pro version with the look and the Free version without it. A free export SHALL then be rendered without the Pro look or Pro control setting. Pro users SHALL never see a style-related prompt.
+Free users SHALL be able to export with Original, Vibrant, Natural and the Neutral undertone at default settings. Every other look, and Intensity, Tone, Warmth and Grain, SHALL require Pro. Free users SHALL be able to select and preview Pro looks, which are marked as Pro. When a free user exports while a Pro look or a Pro control is in effect, the Free vs Pro comparison sheet SHALL show the Pro version with the look and the Free version without it. A free export SHALL then be rendered without the Pro look or Pro control setting. Pro users SHALL never see a style-related prompt.
 
 #### Scenario: Free user previews a Pro look
 - **WHEN** a free user taps Chrome 100
@@ -156,11 +168,11 @@ Free users SHALL be able to export with Original, Vibrant, Natural and the Neutr
 
 ### Requirement: Media scope
 
-Styles SHALL apply to still photos and to the still of a Live Photo. When a look other than Original is active on a Live Photo, the export SHALL be a still photo, and the Style tool SHALL say so before export. Styles SHALL NOT be offered for video items in this version. The Style tool SHALL be disabled for a video and show a short explanation.
+Styles SHALL apply to still photos and to the still of a Live Photo. When a look other than Original is active on a Live Photo, the export SHALL be a still photo, and the Looks tool SHALL say so before export. Styles SHALL NOT be offered for video items in this version. The Looks tool SHALL be disabled for a video and show a short explanation.
 
 #### Scenario: Live Photo with a look
 - **WHEN** a Live Photo is exported with Velvet 50 applied
-- **THEN** a styled still photo is shared without its motion, and the Style tool stated beforehand that the export would be a still
+- **THEN** a styled still photo is shared without its motion, and the Looks tool stated beforehand that the export would be a still
 
 #### Scenario: Live Photo with Original
 - **WHEN** a Live Photo is exported with Original
@@ -168,4 +180,4 @@ Styles SHALL apply to still photos and to the still of a Live Photo. When a look
 
 #### Scenario: Video
 - **WHEN** the current item is a video
-- **THEN** the Style tool is disabled with a short explanation, and the video export is unchanged
+- **THEN** the Looks tool is disabled with a short explanation, and the video export is unchanged

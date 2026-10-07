@@ -108,6 +108,17 @@ final class WatermarkViewModel: WatermarkConfigurable {
     var originalSourceImage: UIImage?
     var isGeneratingPreview: Bool = false
 
+    /// The current preview without its look (frame and watermarks still drawn),
+    /// shown while the canvas is held. Nil when no look is active.
+    var unstyledPreviewImage: UIImage?
+
+    /// Each look rendered on the current photo, for the Looks strip.
+    var lookThumbnails: [PhotoLook: UIImage] = [:]
+    /// Family the Looks panel shows; drives which thumbnails are rendered.
+    var lookFamily: PhotoLook.Family = .mood
+    private static let lookThumbnailMaxPixel: CGFloat = 240
+    private var lookThumbnailsPhotoID: UUID?
+
     /// True while picked media is being loaded/copied (drives the import
     /// loading animation so the UI isn't a frozen blank during the hand-off).
     var isImportingMedia: Bool = false
@@ -226,6 +237,11 @@ final class WatermarkViewModel: WatermarkConfigurable {
             let k = min(1, ExportPolicy.freePhotoLongestSide / max(size.width, size.height, 1))
             result.freeSpecs = [Self.photoLabel(CGSize(width: (size.width * k).rounded(), height: (size.height * k).rounded())),
                                 "SDR", "Markepi mark"]
+            // A Pro look exports as Original on the free tier: say so on both cards.
+            if !ExportPolicy(tier: .free).allowsLook(config.photoLook) {
+                result.proSpecs.append("\(config.photoLook.look.title) look")
+                result.freeSpecs.append("Original look")
+            }
         }
         return result
     }
@@ -585,6 +601,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
         // Spelled out by the config itself, so the share extension's preview
         // keys on exactly the same fields this one does.
         parts.append(config.whiteFrame?.previewKey ?? "wf:none")
+        parts.append(config.photoLook.previewKey)
         if let ds = config.dateStamp {
             parts.append(
                 "ds:\(ds.isEnabled ? 1 : 0)|df:\(ds.format.rawValue)"
@@ -906,6 +923,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
     /// Filled in as each render lands rather than all at once, so the strip
     /// populates left to right instead of appearing whole after four renders.
     var frameStyleThumbnails: [FrameStyle: UIImage] = [:]
+    private var frameStyleThumbnailsPhotoID: UUID?
 
     /// Whether the editor shows frame styles under the photo instead of the
     /// batch strip.
@@ -914,8 +932,13 @@ final class WatermarkViewModel: WatermarkConfigurable {
     /// how the user moves between photos — and with a video there is no cheap
     /// still to render four times.
     var showsFrameStyleStrip: Bool {
-        photos.count == 1 && !isCurrentVideo && (config.whiteFrame?.isEnabled ?? false)
+        photos.count == 1 && !isCurrentVideo && (config.whiteFrame?.isEnabled ?? false) && !isEditingLooks
     }
+
+    /// True while the Looks tool is open. The frame strip steps aside then:
+    /// every slider move would otherwise re-render its sixteen cells one by
+    /// one under the photo. It renders once, with the final look, on the way out.
+    var isEditingLooks = false
 
     /// `.task(id:)` key for the strip.
     ///
@@ -940,32 +963,94 @@ final class WatermarkViewModel: WatermarkConfigurable {
     func generateFrameStyleThumbnails() async {
         // Live Photos point `sourceURL` at their still component, so they render
         // through the image path like any other photo.
+        // Hidden only for Looks: keep the cells, they refresh on the way out.
+        if isEditingLooks { return }
         guard showsFrameStyleStrip, let photo = currentPhoto, photo.mediaType != .video else {
             frameStyleThumbnails = [:]
             return
+        }
+        // Another photo: its old thumbnails would be wrong, so start empty.
+        if frameStyleThumbnailsPhotoID != photo.id {
+            frameStyleThumbnails = [:]
+            frameStyleThumbnailsPhotoID = photo.id
         }
         // The main preview is what the user is looking at; let it go first.
         try? await Task.sleep(for: .milliseconds(150))
         guard !Task.isCancelled else { return }
 
-        var rendered: [FrameStyle: UIImage] = [:]
+        // A fresh strip fills in left to right. A strip that already shows this
+        // photo (new look, new frame setting) is refreshed as ONE swap: every
+        // cell is rendered first, then all crossfade together — never a wave of
+        // cells changing one after another.
+        let refreshing = !frameStyleThumbnails.isEmpty
+        var rendered = frameStyleThumbnails
         for style in FrameStyle.allCases {
             guard !Task.isCancelled else { return }
             var styleConfig = config
             styleConfig.selectFrameStyle(style)
-            do {
-                let result = try await engine.renderPreview(
-                    sourceURL: photo.sourceURL,
-                    config: styleConfig,
-                    maxPixelDimension: Self.frameStyleThumbnailMaxPixel
-                )
+            // One style failing to render is not worth an error banner: its
+            // cell keeps what it had (or stays a placeholder).
+            guard let result = try? await engine.renderPreview(
+                sourceURL: photo.sourceURL,
+                config: styleConfig,
+                maxPixelDimension: Self.frameStyleThumbnailMaxPixel
+            ) else { continue }
+            guard !Task.isCancelled else { return }
+            rendered[style] = UIImage(cgImage: result.image)
+            if !refreshing { frameStyleThumbnails = rendered }
+        }
+        if refreshing {
+            withAnimation(.easeInOut(duration: 0.25)) { frameStyleThumbnails = rendered }
+        }
+    }
+
+    // MARK: - Looks
+
+    /// Whether the user may export every look (Pro, or DEBUG Force Premium).
+    var looksUnlocked: Bool { exportGate.tier == .pro }
+
+    /// Looks apply to photos and Live Photo stills, never to video.
+    var looksAvailable: Bool { currentPhoto.map { $0.mediaType != .video } ?? false }
+
+    /// A Live Photo with an active look is shared as a still.
+    var lookMakesLivePhotoStill: Bool {
+        currentPhoto?.mediaType == .livePhoto && config.photoLook.isActive
+    }
+
+    /// Picks a look with that look's default tuning.
+    func selectLook(_ look: PhotoLook) {
+        config.photoLook = config.photoLook.choosing(look)
+    }
+
+    /// `.task(id:)` key for the Looks strip: the photo, its decoration (the
+    /// thumbnails are unframed, so only the photo matters) and the family.
+    var lookThumbnailIdentifier: String {
+        "\(currentPhoto?.id.uuidString ?? "none")~\(lookFamily.rawValue)~\(looksAvailable)"
+    }
+
+    /// Renders the current photo once per look of the visible family,
+    /// unframed and without watermarks, filling in left to right.
+    func generateLookThumbnails() async {
+        guard looksAvailable, let photo = currentPhoto else {
+            lookThumbnails = [:]
+            return
+        }
+        if lookThumbnailsPhotoID != photo.id {
+            lookThumbnails = [:]
+            lookThumbnailsPhotoID = photo.id
+        }
+        try? await Task.sleep(for: .milliseconds(150))
+        var rendered = lookThumbnails
+        for look in lookFamily.looks {
+            guard !Task.isCancelled else { return }
+            if rendered[look] != nil { continue }
+            var cfg = WatermarkConfiguration(watermarks: [])
+            cfg.photoLook = .choosing(look)
+            if let result = try? await engine.renderPreview(
+                sourceURL: photo.sourceURL, config: cfg, maxPixelDimension: Self.lookThumbnailMaxPixel) {
                 guard !Task.isCancelled else { return }
-                rendered[style] = UIImage(cgImage: result.image)
-                frameStyleThumbnails = rendered
-            } catch {
-                // One style failing to render is not worth an error banner:
-                // its cell simply stays a placeholder.
-                continue
+                rendered[look] = UIImage(cgImage: result.image)
+                lookThumbnails = rendered
             }
         }
     }
@@ -983,9 +1068,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
     /// never provokes a permission prompt.
     private var captionWantsLocation: Bool {
         let frame = config.whiteFrame ?? WhiteFrameConfig(isEnabled: true)
-        if frame.captionFields.contains(.gps) { return true }
-        return [frame.leftPrimary, frame.leftSecondary, frame.rightPrimary, frame.rightSecondary]
-            .contains { $0 == .field(.gps) }
+        return frame.captionFields.contains(where: \.isPlace)
     }
 
     /// Puts the coordinate back into a picked photo that arrived without one.
@@ -1000,6 +1083,7 @@ final class WatermarkViewModel: WatermarkConfigurable {
     /// location field in the caption, a photo that already has a coordinate,
     /// access declined, an asset with no location of its own.
     private func restoringLocation(_ data: Data, from item: PhotosPickerItem) async -> Data {
+        let data = await restoringCameraInfo(data, from: item)
         guard captionWantsLocation,
               let identifier = item.itemIdentifier,
               !LocationMetadataWriter.hasCoordinate(in: data),
@@ -1016,6 +1100,32 @@ final class WatermarkViewModel: WatermarkConfigurable {
             altitude: location.verticalAccuracy >= 0 ? location.altitude : nil,
             timestamp: location.timestamp
         ) ?? data
+    }
+
+    /// Puts back the EXIF an edit lost, from the original in the library.
+    ///
+    /// Photos shows the camera, lens and exposure from its own library, so an
+    /// edit saved by an app that drops EXIF still *looks* complete there — but
+    /// the copy the picker hands over has none of it, and the frame captioned
+    /// nothing. The original resource still has every tag; those the copy lacks
+    /// are copied in, and only the metadata changes.
+    private func restoringCameraInfo(_ data: Data, from item: PhotosPickerItem) async -> Data {
+        guard !LocationMetadataWriter.hasCameraInfo(in: data),
+              let identifier = item.itemIdentifier,
+              await hasPhotoLibraryReadAccess(),
+              let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).firstObject,
+              let resource = PHAssetResource.assetResources(for: asset).first(where: { $0.type == .photo })
+        else { return data }
+
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true  // the original may be in iCloud only
+        let original: Data? = await withCheckedContinuation { continuation in
+            var buffer = Data()
+            PHAssetResourceManager.default().requestData(for: resource, options: options) { buffer.append($0) }
+                completionHandler: { error in continuation.resume(returning: error == nil ? buffer : nil) }
+        }
+        guard let original else { return data }
+        return LocationMetadataWriter.data(data, fillingMetadataFrom: original) ?? data
     }
 
     /// Read access to the library, asked for once.
@@ -1055,7 +1165,9 @@ final class WatermarkViewModel: WatermarkConfigurable {
         let debounce = shouldShowProgress ? Duration.milliseconds(250) : .milliseconds(40)
         try? await Task.sleep(for: debounce)
         guard !Task.isCancelled else { return }
-        let previewConfig = config
+        // Looks are photo-only: a video previews (and exports) unstyled.
+        var previewConfig = config
+        if photo.mediaType == .video { previewConfig.photoLook = PhotoLookSettings() }
 
         // The image pipeline can't decode a movie file. For videos, preview a
         // watermarked still extracted from the video; Live Photos already point
@@ -1092,6 +1204,19 @@ final class WatermarkViewModel: WatermarkConfigurable {
             previewImage = UIImage(cgImage: result.image)
             previewLayout = result.layout
             previewRevision += 1
+            // Hold-to-compare shows the same edit without its look.
+            if previewConfig.photoLook.isActive {
+                var unstyled = previewConfig
+                unstyled.photoLook = PhotoLookSettings()
+                let plain = try await engine.renderPreview(
+                    // Photos only (a video never carries a look), so no override.
+                    sourceURL: imageURL, config: unstyled, metadataOverride: nil,
+                    maxPixelDimension: Self.previewMaxPixelDimension)
+                guard !Task.isCancelled else { return }
+                unstyledPreviewImage = UIImage(cgImage: plain.image)
+            } else {
+                unstyledPreviewImage = nil
+            }
         } catch is CancellationError {
             // Superseded by a newer preview request — not a user-facing error.
             return
@@ -1788,8 +1913,10 @@ final class WatermarkViewModel: WatermarkConfigurable {
     // MARK: - Files Import (IMPS-01)
 
     func handleIncomingFile(url: URL) {
-        guard url.startAccessingSecurityScopedResource() else { return }
-        defer { url.stopAccessingSecurityScopedResource() }
+        // A picker copy already lives in the sandbox and reports no scope
+        // (false); only a URL from outside it needs the access granted.
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
         let mediaType = WatermarkEngine.mediaType(for: url)
         guard mediaType != .unknown else {

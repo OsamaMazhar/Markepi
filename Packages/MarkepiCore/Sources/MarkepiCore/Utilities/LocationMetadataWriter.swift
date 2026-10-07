@@ -93,6 +93,51 @@ public enum LocationMetadataWriter {
     }
 }
 
+public extension LocationMetadataWriter {
+
+    /// Whether this image data says which camera took it.
+    static func hasCameraInfo(in data: Data) -> Bool {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+                as? [CFString: Any] else { return false }
+        let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+        return (tiff?[kCGImagePropertyTIFFModel] as? String)?.isEmpty == false
+    }
+
+    /// `data` with every metadata tag it lacks copied from `original`.
+    ///
+    /// An edit saved by some apps keeps the pixels and drops the EXIF, while
+    /// the library still holds the original with all of it — which is why
+    /// Photos shows a camera and lens that the picked copy no longer has.
+    /// Tags `data` already has win, and the ones describing the pixels
+    /// themselves (orientation, size) are never taken from the original,
+    /// because an edit may have rotated or cropped it. Only metadata changes:
+    /// the image data and any gain map are copied untouched.
+    static func data(_ data: Data, fillingMetadataFrom original: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let type = CGImageSourceGetType(source),
+              let originalSource = CGImageSourceCreateWithData(original as CFData, nil),
+              let donor = CGImageSourceCopyMetadataAtIndex(originalSource, 0, nil) else { return nil }
+        let metadata = CGImageSourceCopyMetadataAtIndex(source, 0, nil)
+            .flatMap { CGImageMetadataCreateMutableCopy($0) } ?? CGImageMetadataCreateMutable()
+        let pixelTags: Set<String> = ["tiff:Orientation", "exif:PixelXDimension", "exif:PixelYDimension",
+                                      "tiff:ImageWidth", "tiff:ImageLength"]
+        var added = 0
+        CGImageMetadataEnumerateTagsUsingBlock(donor, nil, nil) { path, tag in
+            let key = path as String
+            if !pixelTags.contains(key), CGImageMetadataCopyTagWithPath(metadata, nil, path) == nil,
+               CGImageMetadataSetTagWithPath(metadata, nil, path, tag) { added += 1 }
+            return true
+        }
+        guard added > 0 else { return nil }
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(output, type, 1, nil) else { return nil }
+        let options: [CFString: Any] = [kCGImageDestinationMetadata: metadata, kCGImageDestinationMergeMetadata: true]
+        guard CGImageDestinationCopyImageSource(destination, source, options as CFDictionary, nil) else { return nil }
+        return output as Data
+    }
+}
+
 private extension Dictionary where Key == String, Value == Any {
     /// One-entry dictionary, or an empty one when the value is absent — just
     /// enough to hand `EXIFTokenParser` the shape it reads.

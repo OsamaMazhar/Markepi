@@ -66,55 +66,16 @@ struct FrameStylePresetTests {
         #expect(config.frameStylePresets.isEmpty, "nothing was left behind")
     }
 
-    // MARK: - Apply to all
+    // MARK: - Edits are per style
 
-    @Test("With apply-to-all off an edit reaches only the style on screen")
+    @Test("A look edit reaches only the style on screen")
     func editIsStyleLocal() {
         var config = enabled(.classic)
-        config.applyFrameEditsToAllStyles = false
         config.selectFrameStyle(.gallery)      // classic remembered at its defaults
         config.editFrame { $0.borderMillimetres = 20 }
 
         #expect(config.frameConfig(for: .gallery).borderMillimetres == 20)
         #expect(config.frameConfig(for: .classic).borderMillimetres != 20)
-    }
-
-    @Test("With apply-to-all on an edit reaches every style")
-    func editReachesEveryStyle() {
-        var config = enabled(.classic)
-        config.applyFrameEditsToAllStyles = true
-        config.editFrame { $0.borderMillimetres = 20 }
-
-        for style in FrameStyle.allCases {
-            #expect(config.frameConfig(for: style).borderMillimetres == 20,
-                    "\(style.rawValue) missed the edit")
-        }
-    }
-
-    @Test("Applying to all does not apply the edit twice")
-    func noDoubleApplication() {
-        // The trap: a style nobody has visited derives from the style on
-        // screen. Derive it *after* the edit and it takes the edit again —
-        // which for anything that toggles lands back where it started.
-        var config = enabled(.classic)
-        config.applyFrameEditsToAllStyles = true
-        let before = config.frameConfig(for: .gallery).keylineEnabled
-
-        config.editFrame { $0.keylineEnabled.toggle() }
-
-        #expect(config.whiteFrame?.keylineEnabled == !before)
-        #expect(config.frameConfig(for: .gallery).keylineEnabled == !before,
-                "gallery's keyline was toggled twice and came back")
-    }
-
-    @Test("Applying to all keeps each style's identity")
-    func applyingToAllKeepsTheStyle() {
-        var config = enabled(.classic)
-        config.applyFrameEditsToAllStyles = true
-        config.editFrame { $0.borderMillimetres = 12 }
-        for style in FrameStyle.allCases {
-            #expect(config.frameConfig(for: style).style == style)
-        }
     }
 
     @Test("An edit never changes which style is on screen")
@@ -151,7 +112,6 @@ struct FrameStylePresetTests {
         config.editFrame { $0.borderMillimetres = 15 }
         config.selectFrameStyle(.banner)
         config.editFrame { $0.borderMillimetres = 3 }
-        config.applyFrameEditsToAllStyles = true
 
         let data = try JSONEncoder().encode(config)
         let decoded = try JSONDecoder().decode(WatermarkConfiguration.self, from: data)
@@ -159,7 +119,6 @@ struct FrameStylePresetTests {
         #expect(decoded.whiteFrame?.style == .banner)
         #expect(decoded.whiteFrame?.borderMillimetres == 3)
         #expect(decoded.frameConfig(for: .classic).borderMillimetres == 15)
-        #expect(decoded.applyFrameEditsToAllStyles)
     }
 
     @Test("A template saved before per-style settings existed still loads")
@@ -168,19 +127,16 @@ struct FrameStylePresetTests {
         // true "older build wrote this" payload rather than hand-written JSON
         // that might not match the encoder at all.
         var config = enabled(.gallery)
-        config.applyFrameEditsToAllStyles = true
         config.selectFrameStyle(.print)
         var json = try #require(try JSONSerialization.jsonObject(
             with: JSONEncoder().encode(config)) as? [String: Any])
         json.removeValue(forKey: "frameStylePresets")
-        json.removeValue(forKey: "applyFrameEditsToAllStyles")
 
         let decoded = try JSONDecoder().decode(
             WatermarkConfiguration.self,
             from: try JSONSerialization.data(withJSONObject: json))
 
         #expect(decoded.frameStylePresets.isEmpty)
-        #expect(!decoded.applyFrameEditsToAllStyles, "an older template edits one style at a time")
         // And the style it was saved in is still the style it opens in.
         #expect(decoded.whiteFrame?.style == .print)
     }

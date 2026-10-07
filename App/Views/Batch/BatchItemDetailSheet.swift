@@ -189,9 +189,7 @@ public struct BatchItemDetailSheet: View {
     private var frameSection: some View {
         VStack(spacing: 0) {
             sectionHeader("Frame & Caption")
-            EditorCard {
-                WhiteFrameToggleView(viewModel: proxy)
-            }
+            WhiteFrameToggleView(viewModel: proxy)
         }
     }
 

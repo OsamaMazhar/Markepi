@@ -8,7 +8,7 @@ The 886×1920 reel is valid for IPHONE_67 and IPHONE_65; upload to both, or the
 import jwt, time, requests, os, sys, hashlib
 APP, VER = "6782552371", (sys.argv[1] if len(sys.argv) > 1 else "1.5")
 TYPE = sys.argv[2] if len(sys.argv) > 2 else "IPHONE_67"
-PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "Markepi-Reel.mp4")
+PATH = os.environ.get("REEL") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "Markepi-Reel.mp4")
 KEY = open(os.path.expanduser("~/.appstoreconnect/AuthKey_U5B2XBFUSU.p8")).read()
 B = "https://api.appstoreconnect.apple.com/v1"
 

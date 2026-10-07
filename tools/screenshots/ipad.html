@@ -65,6 +65,15 @@ const SLIDES = {
            h: "Watermark<br>videos too", sub: "The same frames and marks<br>on every clip." },
   "07c": { ...P.pink, cap: "07b-share-editor", crop: "07c",
            h: "Share<br>instantly", sub: "Watermarked photos straight to any app.<br>No camera-roll clutter." },
+  // v2.0: captures in cap/v2/ipad, rects from each capture's preview json.
+  "v01": { ...P.blue, cap: "../cap/v2/ipad/01-hero-aura", rect: [346, 172, 1372, 2130], pop: "cap/v2/ipad/01-hero-aura-pop.jpg",
+           h: "Frame &amp; mark<br>your photos", sub: "Frames, watermarks and looks,<br>then share in one tap." },
+  "v05": { ...P.teal, cap: "../cap/v2/ipad/02-frame-panel", crop: "../cap/v2/ipad/02-frame-panel",
+           h: "Your frame,<br>your details", sub: "Camera, exposure, date, landmark,<br>city or country. Tap to add." },
+  "v06": { ...P.sky, cap: "../cap/v2/ipad/04-text", rect: [500, 172, 1062, 1622], pop: "cap/v2/ipad/04-text-pop.jpg",
+           h: "Add text<br>to photos", sub: "Your name or studio in beautiful fonts,<br>on photos and videos." },
+  "v07": { ...P.pink, cap: "../cap/v2/ipad/05-logo", rect: [510, 172, 1044, 1622], pop: "cap/v2/ipad/05-logo-pop.jpg",
+           h: "Add your logo<br>&amp; signature", sub: "Transparent PNG logos and signatures,<br>placed exactly where you want." },
   "08c": { ...P.slate, cap: "08b-c2pa-signed", crop: "08c",
            h: "Protect photos<br>with C2PA", sub: "Creator and copyright sealed in<br>with Content Credentials." },
 };
@@ -94,15 +103,21 @@ async function main() {
     <img src="capi/${S.cap}.png" style="left:0;top:0;width:${CW}px;height:${CH}px;object-fit:cover"></div>`);
 
   // Pop-out at its own rect (card px), lifted around its centre.
-  const pop = new Image(); pop.src = S.crop ? `capi/${S.crop}-crop.png` : `pop/${S.photo}_web.jpg`; await pop.decode();
+  const pop = new Image(); pop.src = S.crop ? `capi/${S.crop}-crop.png` : S.pop || `pop/${S.photo}_web.jpg`; await pop.decode();
   let [rx, ry, rw, rh] = S.crop ? (await fetch(`capi/${S.crop}-crop.json`).then(r => r.json())).crop : S.rect;
   if (!S.crop) { const ar = pop.naturalWidth / pop.naturalHeight;
     if (rw / rh > ar) { const w = rh * ar; rx += (rw - w) / 2; rw = w; } else { const h = rw / ar; ry += (rh - h) / 2; rh = h; } }
-  const cx = cl + (rx + rw / 2) * k, cy = CARD_TOP + (ry + rh / 2) * k;
+  const cx = cl + (rx + rw / 2) * k; let cy = CARD_TOP + (ry + rh / 2) * k;
   let pw, ph;
   if (S.crop) { pw = rw * k * 1.16; ph = rh * k * 1.16; }
   else { // uniform presence: fit inside 1400x1500 regardless of the in-screen rect
-    const ar = rw / rh; pw = Math.min(1400, 1500 * ar); ph = pw / ar; }
+    const ar = rw / rh; pw = Math.min(1400, 1500 * ar); ph = pw / ar;
+    // Never smaller than the photo it lifts from, or the capture's own frame shows around it.
+    if (pw < rw * k * 1.04) { pw = rw * k * 1.04; ph = pw / ar; } }
+  // Keep the pop-out between the caption and the canvas bottom: shrink it to fit, then slide it in.
+  const room = 2752 - CARD_TOP - 60;
+  if (ph > room) { pw *= room / ph; ph = room; }
+  cy = Math.min(Math.max(cy, CARD_TOP + ph / 2), 2752 - 60 - ph / 2);
   st.insertAdjacentHTML("beforeend", `<div class="popwrap" style="left:${cx - pw / 2}px;top:${cy - ph / 2}px;width:${pw}px;height:${ph}px">
     <div class="pop"><img src="${pop.src}"><div class="sheen"></div>${S.play ? '<div class="play"></div>' : ""}</div></div>`);
   if (S.pills) st.insertAdjacentHTML("beforeend", `<div class="pills" style="top:${cy + ph / 2 + 60}px">${S.pills.map(p => `<div class="pill">${p}</div>`).join("")}</div>`);

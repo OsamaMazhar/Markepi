@@ -199,8 +199,8 @@ struct FramedExportGeometryTests {
 
         // A typed handle so the caption has content: an empty caption now
         // collapses the band, which is a different case (covered below).
-        let frame = WhiteFrameConfig(isEnabled: true, style: .gallery,
-                                     rightPrimary: .text("@test"))
+        let frame = WhiteFrameConfig(isEnabled: true, captionPrefix: "@test",
+                                     style: .gallery)
         let config = WatermarkConfiguration(watermarks: [], whiteFrame: frame)
         let result = try await WatermarkEngine().process(sourceURL: inputURL, config: config)
         guard let outputURL = result.url, let cg = loadCGImage(outputURL), let output = Bitmap(cg) else {
@@ -313,8 +313,8 @@ struct FramedExportGeometryTests {
     func videoLayerTreeMatchesPhotoGeometry() throws {
         let videoSize = CGSize(width: 1920, height: 1080)
         for style in FrameStyle.allCases {
-            let frame = WhiteFrameConfig(isEnabled: true, style: style,
-                                         rightPrimary: .text("@test"))
+            let frame = WhiteFrameConfig(isEnabled: true, captionPrefix: "@test",
+                                         style: style)
             let config = WatermarkConfiguration(watermarks: [], whiteFrame: frame)
             let geometry = FrameGeometry(
                 config: frame, sourceSize: videoSize,
@@ -347,12 +347,10 @@ struct FramedExportGeometryTests {
 
         // No metadata in the fixture, no typed handle, and nothing ticked, so
         // every line resolves to nothing. Leaving a tall empty bar would just
-        // look broken. The Include list has to be empty as well as the slots:
+        // look broken. The Include list has to be empty:
         // dimensions and format resolve from the file itself, so a photo with
         // no EXIF at all still has those two to say.
-        var frame = WhiteFrameConfig(isEnabled: true, style: .gallery,
-                                     leftPrimary: .empty, leftSecondary: .empty,
-                                     rightPrimary: .empty, rightSecondary: .empty)
+        var frame = WhiteFrameConfig(isEnabled: true, style: .gallery)
         frame.captionFields = []
         let config = WatermarkConfiguration(watermarks: [], whiteFrame: frame)
         let result = try await WatermarkEngine().process(sourceURL: inputURL, config: config)

@@ -116,6 +116,16 @@ struct ToolPanelView: View {
     @ViewBuilder
     private var content: some View {
         switch tool {
+        case .looks:
+            if viewModel.looksAvailable {
+                LooksPanel(viewModel: viewModel)
+            } else {
+                emptyHint(
+                    icon: "camera.filters",
+                    title: "Looks Are for Photos",
+                    message: "Videos export with their original colour."
+                )
+            }
         case .text:
             TextWatermarkInputView(viewModel: viewModel, showsSectionHeader: false)
             EditorCard {
@@ -144,7 +154,7 @@ struct ToolPanelView: View {
                 }
             }
         case .frame:
-            EditorCard { WhiteFrameToggleView(viewModel: viewModel) }
+            WhiteFrameToggleView(viewModel: viewModel)
         case .layers:
             layersContent
         case .output:
@@ -474,5 +484,413 @@ private struct PanelContentHeightKey: PreferenceKey {
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
+    }
+}
+
+// MARK: - Looks
+
+/// Colour looks for the photo itself — never the frame or the watermarks.
+/// Called "Looks" so it can't be mistaken for Apple's Photographic Styles or
+/// for the frame *styles*.
+///
+/// Built from the editor's own parts: the glass pill bar picks the family, the
+/// strip uses the frame-style strip's photo-shaped cells and accent ring, and
+/// the adjustments are the same title · value slider rows as the frame panel.
+private struct LooksPanel: View {
+    @Bindable var viewModel: WatermarkViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var settings: PhotoLookSettings { viewModel.config.photoLook }
+
+    var body: some View {
+        VStack(spacing: MarkepiSpacing.lg) {
+            MarkepiPillBar(
+                selection: $viewModel.lookFamily,
+                options: PhotoLook.Family.allCases,
+                groupLabel: "Look family",
+                title: \.title,
+                icon: { family in
+                    switch family {
+                    case .mood: return "sparkles"
+                    case .undertone: return "face.smiling"
+                    case .film: return "film"
+                    }
+                }
+            )
+            .padding(.horizontal, MarkepiSpacing.lg)
+
+            LookStrip(
+                looks: viewModel.lookFamily.looks,
+                thumbnails: viewModel.lookThumbnails,
+                selected: settings.look,
+                fallbackAspect: viewModel.sourceAspectRatio,
+                isLocked: { !$0.isFree && !viewModel.looksUnlocked },
+                select: { look in
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { viewModel.selectLook(look) }
+                }
+            )
+            .task(id: viewModel.lookThumbnailIdentifier) { await viewModel.generateLookThumbnails() }
+
+            if settings.look != .original {
+                EditorCard { adjustments }
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
+            notes
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: settings.look == .original)
+        .sensoryFeedback(.selection, trigger: settings.look)
+        .onAppear {
+            // Open on the family of the look already chosen.
+            if let family = settings.look.family { viewModel.lookFamily = family }
+        }
+    }
+
+    // MARK: Adjustments
+
+    @ViewBuilder
+    private var adjustments: some View {
+        sliderRow("Intensity", value: binding(\.intensity), range: 0...1,
+                  display: percent(settings.intensity))
+        Divider().padding(.leading, MarkepiSpacing.lg)
+        ToneWarmthPad(tone: binding(\.tone), warmth: binding(\.color), onEditingChanged: editing)
+            .padding(.horizontal, MarkepiSpacing.lg)
+            .padding(.vertical, MarkepiSpacing.md)
+        if settings.look.isFilm {
+            Divider().padding(.leading, MarkepiSpacing.lg)
+            let grain = settings.grain ?? (PhotoLookRenderer.defaultGrain(for: settings.look) ?? 0)
+            sliderRow("Grain", value: Binding(get: { grain }, set: { viewModel.config.photoLook.grain = $0 }),
+                      range: 0...1, display: percent(grain))
+        }
+        if !settings.isDefaultTuning {
+            Divider().padding(.leading, MarkepiSpacing.lg)
+            Button {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                    viewModel.selectLook(settings.look)
+                }
+            } label: {
+                Label("Reset Adjustments", systemImage: "arrow.counterclockwise")
+                    .markepiTypography(.controlLabel)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, MarkepiSpacing.lg)
+            .padding(.vertical, MarkepiSpacing.md)
+        }
+    }
+
+    private func binding(_ key: WritableKeyPath<PhotoLookSettings, Double>) -> Binding<Double> {
+        Binding(get: { viewModel.config.photoLook[keyPath: key] },
+                set: { viewModel.config.photoLook[keyPath: key] = $0 })
+    }
+
+    private func percent(_ v: Double) -> String { "\(Int((v * 100).rounded()))%" }
+
+    /// The frame panel's slider row: title and value on one line, slider under
+    /// it, optional end-cap symbols saying which way is which.
+    private func sliderRow(_ title: String, value: Binding<Double>, range: ClosedRange<Double>,
+                           display: String, low: String? = nil, high: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: MarkepiSpacing.sm) {
+            HStack {
+                Text(title).markepiTypography(.controlLabel)
+                Spacer()
+                Text(display)
+                    .markepiTypography(.value)
+                    .contentTransition(.numericText())
+            }
+            Slider(value: value, in: range) {
+                Text(title)
+            } minimumValueLabel: {
+                if let low { Image(systemName: low).foregroundStyle(.secondary) }
+            } maximumValueLabel: {
+                if let high { Image(systemName: high).foregroundStyle(.secondary) }
+            } onEditingChanged: { editing($0) }
+            .accessibilityValue(display)
+        }
+        .padding(.horizontal, MarkepiSpacing.lg)
+        .padding(.vertical, MarkepiSpacing.md)
+    }
+
+    private func editing(_ active: Bool) {
+        if active { viewModel.beginInteractiveConfigChange() } else { viewModel.endInteractiveConfigChange() }
+    }
+
+    // MARK: Notes
+
+    @ViewBuilder
+    private var notes: some View {
+        let lockedLook = settings.isActive && !viewModel.looksUnlocked && !ExportPolicy(tier: .free).allowsLook(settings)
+        if lockedLook || viewModel.lookMakesLivePhotoStill {
+            VStack(alignment: .leading, spacing: MarkepiSpacing.sm) {
+                if lockedLook {
+                    HStack(spacing: MarkepiSpacing.sm) {
+                        Image(systemName: "crown.fill").foregroundStyle(.yellow)
+                        Text("Pro look — free exports use Original.")
+                            .markepiTypography(.metadata)
+                        Spacer(minLength: 0)
+                        Button("Unlock") { viewModel.showPaywall = true }
+                            .font(.footnote.weight(.semibold))
+                            .buttonStyle(.borderedProminent)
+                            .buttonBorderShape(.capsule)
+                            .controlSize(.small)
+                    }
+                }
+                if viewModel.lookMakesLivePhotoStill {
+                    Label("With a look, this Live Photo is shared as a still photo.", systemImage: "livephoto.slash")
+                        .markepiTypography(.metadata)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, MarkepiSpacing.lg + MarkepiSpacing.xs)
+        }
+    }
+}
+
+/// Two-axis Tone & Warmth pad: up is brighter, right is warmer.
+///
+/// A soft field that previews the direction (cool blue → warm amber, light
+/// above, deep below) under a dot grid; the knob grows while held, snaps to
+/// the centre with a tick, and a double-tap returns it there. VoiceOver gets
+/// two ordinary sliders instead.
+private struct ToneWarmthPad: View {
+    @Binding var tone: Double
+    @Binding var warmth: Double
+    var onEditingChanged: (Bool) -> Void
+
+    @State private var isDragging = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// Compact and square: a small target, so a swipe anywhere else in the
+    /// panel still scrolls it, and it sits beside its readouts in the narrow
+    /// landscape side panel too.
+    private let side: CGFloat = 112
+    private let snap = 0.06
+    private var isCentred: Bool { tone == 0 && warmth == 0 }
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: MarkepiRadius.lg, style: .continuous) }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: MarkepiSpacing.lg) {
+            pad
+            VStack(alignment: .leading, spacing: MarkepiSpacing.sm) {
+                Text("Tone & Warmth").markepiTypography(.controlLabel)
+                readout("sun.max.fill", "Tone", tone)
+                readout("thermometer.medium", "Warmth", warmth)
+                Button("Reset", systemImage: "arrow.counterclockwise") { reset() }
+                    .font(.caption.weight(.semibold))
+                    .opacity(isCentred ? 0 : 1)
+                    .disabled(isCentred)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isCentred)
+            }
+            Spacer(minLength: 0)
+        }
+        .sensoryFeedback(trigger: isCentred) { _, centred in centred ? .impact(weight: .light) : nil }
+        .accessibilityRepresentation {
+            VStack {
+                Slider(value: $tone, in: -1...1) { Text("Tone, darker to brighter") }
+                Slider(value: $warmth, in: -1...1) { Text("Warmth, cooler to warmer") }
+            }
+        }
+    }
+
+    private var pad: some View {
+        let size = CGSize(width: side, height: side)
+        return ZStack {
+            field
+            dots(size)
+            edgeIcons
+            knob.position(x: (warmth + 1) / 2 * side, y: (1 - tone) / 2 * side)
+        }
+        .frame(width: side, height: side)
+        .clipShape(shape)
+        .overlay { shape.strokeBorder(MarkepiColors.controlStroke, lineWidth: 0.5) }
+        .contentShape(shape)
+        .gesture(drag(in: size))
+        .onTapGesture(count: 2) { reset() }
+    }
+
+    // MARK: Parts
+
+    private var field: some View {
+        ZStack {
+            shape.fill(Color(.secondarySystemBackground))
+            shape.fill(LinearGradient(
+                colors: [Color(red: 0.42, green: 0.6, blue: 0.98), Color(.systemGray3), Color(red: 1, green: 0.64, blue: 0.3)],
+                startPoint: .leading, endPoint: .trailing))
+                .opacity(colorScheme == .dark ? 0.55 : 0.45)
+            shape.fill(LinearGradient(
+                colors: [.white.opacity(0.4), .clear, .black.opacity(0.4)],
+                startPoint: .top, endPoint: .bottom))
+        }
+    }
+
+    /// A 7 × 7 dot grid; the centre dot is larger, marking "as designed".
+    private func dots(_ size: CGSize) -> some View {
+        Canvas { context, canvas in
+            let cols = 7, rows = 7
+            for c in 0..<cols {
+                for r in 0..<rows {
+                    let centre = c == cols / 2 && r == rows / 2
+                    let x = canvas.width * (CGFloat(c) + 0.5) / CGFloat(cols)
+                    let y = canvas.height * (CGFloat(r) + 0.5) / CGFloat(rows)
+                    let d: CGFloat = centre ? 4.5 : 2
+                    context.fill(Path(ellipseIn: CGRect(x: x - d / 2, y: y - d / 2, width: d, height: d)),
+                                 with: .color(.white.opacity(centre ? 0.9 : 0.45)))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var edgeIcons: some View {
+        ZStack {
+            Image(systemName: "sun.max.fill").frame(maxHeight: .infinity, alignment: .top)
+            Image(systemName: "moon.fill").frame(maxHeight: .infinity, alignment: .bottom)
+            Image(systemName: "snowflake").frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "flame.fill").frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .font(.system(size: 9, weight: .bold))
+        .foregroundStyle(.white.opacity(0.85))
+        .shadow(color: .black.opacity(0.25), radius: 1)
+        .padding(5)
+        .allowsHitTesting(false)
+    }
+
+    private var knob: some View {
+        Circle()
+            .fill(.white)
+            .frame(width: isDragging ? 24 : 18, height: isDragging ? 24 : 18)
+            .overlay { Circle().strokeBorder(Color.accentColor, lineWidth: 2) }
+            .shadow(color: .black.opacity(0.3), radius: isDragging ? 6 : 3, y: 1)
+            .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.7), value: isDragging)
+            .allowsHitTesting(false)
+    }
+
+    private func readout(_ symbol: String, _ title: String, _ value: Double) -> some View {
+        let n = Int((value * 100).rounded())
+        return HStack(spacing: MarkepiSpacing.xs) {
+            Image(systemName: symbol).imageScale(.small).foregroundStyle(.secondary)
+                .frame(width: 16)
+            Text(title).markepiTypography(.metadata)
+            Spacer(minLength: MarkepiSpacing.sm)
+            Text(n == 0 ? "0" : (n > 0 ? "+\(n)" : "\(n)"))
+                .font(.subheadline.weight(.medium))
+                .monospacedDigit()
+                .contentTransition(.numericText(value: Double(n)))
+                .foregroundStyle(n == 0 ? .secondary : .primary)
+        }
+        .frame(maxWidth: 150)
+    }
+
+    // MARK: Interaction
+
+    private func drag(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if !isDragging { isDragging = true; onEditingChanged(true) }
+                warmth = snapped(Double(value.location.x / max(size.width, 1)) * 2 - 1)
+                tone = snapped(1 - Double(value.location.y / max(size.height, 1)) * 2)
+            }
+            .onEnded { _ in
+                isDragging = false
+                onEditingChanged(false)
+            }
+    }
+
+    /// Clamped to −1…1, with a small dead zone that settles on 0.
+    private func snapped(_ v: Double) -> Double {
+        let c = min(max(v, -1), 1)
+        return abs(c) < snap ? 0 : c
+    }
+
+    private func reset() {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.75)) {
+            tone = 0
+            warmth = 0
+        }
+    }
+}
+
+/// The look strip: the frame-style strip's cell, so both strips read as one
+/// family — the photo at its own shape on a pale ground, square corners, a
+/// 3-pt accent ring and an accent caption on the chosen one.
+private struct LookStrip: View {
+    let looks: [PhotoLook]
+    let thumbnails: [PhotoLook: UIImage]
+    let selected: PhotoLook
+    let fallbackAspect: CGFloat
+    let isLocked: (PhotoLook) -> Bool
+    let select: (PhotoLook) -> Void
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var cellHeight: CGFloat { MarkepiMetrics.thumbnailCellSize(dynamicTypeSize: dynamicTypeSize) * 1.1 }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(looks) { look in
+                        cell(look).id(look)
+                    }
+                }
+                .padding(.horizontal, MarkepiSpacing.lg)
+                .padding(.vertical, 2)
+            }
+            .onAppear { proxy.scrollTo(selected, anchor: .center) }
+            .onChange(of: looks) { proxy.scrollTo(selected, anchor: .center) }
+        }
+        .accessibilityLabel("Looks")
+        .accessibilityHint("Shows this photo in each look. Double tap one to use it.")
+    }
+
+    private func aspect(_ look: PhotoLook) -> CGFloat {
+        let size = thumbnails[look]?.size
+        let raw = size.map { $0.height > 0 ? $0.width / $0.height : fallbackAspect } ?? fallbackAspect
+        return min(max(raw, 0.6), 1.6)
+    }
+
+    private func cell(_ look: PhotoLook) -> some View {
+        let isSelected = look == selected
+        return Button { select(look) } label: {
+            VStack(spacing: 4) {
+                ZStack(alignment: .topTrailing) {
+                    Rectangle().fill(Color(.systemGray6))
+                    if let image = thumbnails[look] {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .id(ObjectIdentifier(image))
+                            .transition(.opacity)
+                    } else {
+                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    if isLocked(look) {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.yellow)
+                            .padding(4)
+                            .background(.black.opacity(0.45), in: Circle())
+                            .padding(4)
+                    }
+                }
+                .frame(width: cellHeight * aspect(look), height: cellHeight)
+                .clipShape(Rectangle())
+                .overlay {
+                    Rectangle()
+                        .strokeBorder(isSelected ? Color.accentColor : MarkepiColors.controlStroke,
+                                      lineWidth: isSelected ? 3 : 0.5)
+                        .animation(reduceMotion ? nil : .easeInOut, value: selected)
+                }
+                Text(look.title)
+                    .font(.caption2.weight(isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(look.title + (isLocked(look) ? ", Pro" : ""))
+        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
     }
 }

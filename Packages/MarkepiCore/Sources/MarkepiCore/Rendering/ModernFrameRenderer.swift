@@ -20,58 +20,85 @@ extension WhiteFrameRenderer {
 
     // MARK: - Caption
 
-    /// What the shared modern caption says: device and moment on the left,
-    /// readings and place on the right.
+    /// The standard caption every two-column frame says — gallery, banner and
+    /// the modern styles alike:
+    ///
+    ///     [mark]  Device                          Readings
+    ///             Date   Time     Landmark, City, Country   Lens   Format
+    ///
+    /// Two lines a side, never more. The brand is said once: by the mark when
+    /// one is drawn, otherwise in front of the model (unless the model already
+    /// names it), and alone only when there is no model.
     struct ResolvedRowCaption {
         var model: String?
         var moment: String?
         /// The readings one by one, for `readout`, which spaces them out.
         var values: [(field: CaptionField, text: String)] = []
+        var details: String?
+        /// The place on a line of its own, beneath the date (`placeOnOwnLine`);
+        /// nil while it leads `details`.
         var place: String?
         var mark: BrandMarkArtwork?
 
         var valuesLine: String? {
             values.isEmpty ? nil : values.map(\.text).joined(separator: runGap)
         }
-        var hasText: Bool { model != nil || moment != nil || !values.isEmpty || place != nil }
+        /// Everything after the device, for the one-column styles (swatch).
+        var secondaryLine: String? {
+            let parts = [valuesLine, moment, place, details].compactMap { $0 }
+            return parts.isEmpty ? nil : parts.joined(separator: runGap)
+        }
+        var hasText: Bool {
+            model != nil || moment != nil || !values.isEmpty || details != nil || place != nil
+        }
         var isEmpty: Bool { !hasText && mark == nil }
     }
 
     static let rowValueFields: [CaptionField] = [.focalLength, .aperture, .shutterSpeed, .iso]
-    /// Lens and place only. Pixel size and file format are facts about the
-    /// file, not the picture, and on these captions they read as clutter.
-    static let rowPlaceFields: [CaptionField] = [.lens, .gps]
+    static let rowMomentFields: [CaptionField] = [.date, .time]
+    /// After the place fragment (landmark, city, country) on the details line.
+    static let rowDetailFields: [CaptionField] = [.lens, .format, .dimensions]
 
-    static func resolveRowCaption(config: WhiteFrameConfig, metadata: [String: Any],
-                                  withMark: Bool = true) -> ResolvedRowCaption {
+    static func resolveRowCaption(config: WhiteFrameConfig, metadata: [String: Any]) -> ResolvedRowCaption {
         guard config.metadataTextEnabled else { return ResolvedRowCaption() }
         let shown = Set(config.captionFields)
         func value(_ field: CaptionField) -> String? {
-            shown.contains(field) ? resolveSlot(.field(field), metadata: metadata, alongside: shown) : nil
+            shown.contains(field) ? resolveField(field, metadata: metadata, alongside: shown) : nil
         }
-        func joined(_ parts: [String?]) -> String? {
+        func joined(_ parts: [String?], _ separator: String = runGap) -> String? {
             let kept = parts.compactMap { $0 }
-            return kept.isEmpty ? nil : kept.joined(separator: runGap)
+            return kept.isEmpty ? nil : kept.joined(separator: separator)
         }
+        // Modern styles tint a monochrome mark to their ink; the mat styles
+        // draw the rendition the user picked against their mat.
+        let mark: BrandMarkArtwork? = config.logoEnabled
+            ? (config.style.isModern
+                ? BrandMarkRegistry.mark(metadata: metadata, variant: .monochrome, matIsLight: true)
+                : BrandMarkRegistry.mark(metadata: metadata, variant: config.logoVariant,
+                                         matIsLight: isLight(matColor(for: config))))
+            : nil
+        let model = value(.cameraModel)
+        let maker = shown.contains(.maker) ? BrandMarkRegistry.displayName(metadata: metadata) : nil
+        let device: String? = {
+            guard let model else { return mark == nil ? maker : nil }
+            guard mark == nil, let maker,
+                  !model.localizedCaseInsensitiveContains(maker) else { return model }
+            return "\(maker) \(model)"
+        }()
+        let place = EXIFTokenParser.placeText(metadata: metadata, fields: shown)
+        // Spine always sets the place apart: it runs up the top of the rail.
+        let ownLine = config.style == .spine
+            || (config.placeOnOwnLine && config.style.offersPlaceOnOwnLine)
         let typed = EXIFTokenParser.substitute(config.captionPrefix, metadata: metadata)
             .trimmingCharacters(in: .whitespaces)
-        let device = value(.cameraModel) ?? value(.maker)
-        let model = joined([typed.isEmpty ? nil : typed, device])
         return ResolvedRowCaption(
-            model: model.map { $0.replacingOccurrences(of: runGap, with: " ") },
-            moment: joined([value(.date), value(.time)]),
+            model: joined([typed.isEmpty ? nil : typed, device], " "),
+            moment: joined(rowMomentFields.map(value)),
             values: rowValueFields.compactMap { f in value(f).map { (f, $0) } },
-            place: joined(rowPlaceFields.map(value)),
-            mark: withMark && config.logoEnabled
-                ? BrandMarkRegistry.mark(metadata: metadata, variant: .monochrome, matIsLight: true)
-                : nil
+            details: joined([ownLine ? nil : place] + rowDetailFields.map(value)),
+            place: ownLine ? place : nil,
+            mark: mark
         )
-    }
-
-    /// Swatch's colours sit in the caption band, so like every other style it
-    /// keeps the band only while the caption has something to say.
-    static func hasModernCaptionContent(config: WhiteFrameConfig, metadata: [String: Any]) -> Bool {
-        !resolveRowCaption(config: config, metadata: metadata).isEmpty
     }
 
     // MARK: - Look
@@ -102,6 +129,8 @@ extension WhiteFrameRenderer {
         var accent: RGB? = nil
         var shades: [Shade] = []
         var debossed = false
+        /// Draw the mark as a silhouette in `ink` (modern) or as-is (mat styles).
+        var tintsMark = true
     }
 
     static func look(for style: FrameStyle, palette p: PhotoPalette) -> Look {
@@ -308,7 +337,7 @@ extension WhiteFrameRenderer {
         case .spine:
             let rail = CGRect(x: photo.maxX, y: photo.minY,
                               width: geometry.framedSize.width - photo.maxX, height: photo.height)
-            drawSpine(ctx, rail: rail, font: f, caption: caption, look: look)
+            drawMuseumLabel(ctx, rail: rail, font: f, caption: caption, look: look)
         default:
             let band = CGRect(x: photo.minX, y: photo.maxY, width: photo.width,
                               height: geometry.framedSize.height - photo.maxY - geometry.left)
@@ -316,7 +345,7 @@ extension WhiteFrameRenderer {
             if style == .readout {
                 drawReadout(ctx, band: band, font: f, caption: caption, look: look)
             } else if style == .swatch {
-                drawSwatch(ctx, band: band, font: f, caption: caption, look: look, colours: palette.swatches())
+                drawColourCard(ctx, band: band, font: f, caption: caption, look: look, palette: palette)
             } else {
                 if look.debossed {
                     var lift = look
@@ -355,73 +384,77 @@ extension WhiteFrameRenderer {
         return CGSize(width: w, height: w / mark.aspectRatio)
     }
 
-    /// Mark + model / moment on the left; readings / place on the right.
-    private static func drawRow(_ ctx: CGContext, band: CGRect, font f0: CGFloat,
-                                caption: ResolvedRowCaption, look: Look) {
+    /// The standard caption row (see `ResolvedRowCaption`): one line each,
+    /// both sides at one size, shrunk together when the band is too narrow.
+    /// The mark stands exactly as tall as the lines beside it, from the top
+    /// of the first line's capitals to the last line's baseline.
+    static func drawRow(_ ctx: CGContext, band: CGRect, font f0: CGFloat,
+                        caption: ResolvedRowCaption, look: Look) {
+        // A third line (the place on its own) adds one secondary line pitch.
+        let pitch: CGFloat = 0.76 * 1.3
+        func blockHeight(_ f: CGFloat, lines: Int) -> CGFloat {
+            f * ModernFrameLayout.blockToFont + (lines > 2 ? f * pitch : 0)
+        }
+        /// Each line's top, measured from the top of the block.
+        func offsets(_ lines: [NSAttributedString], _ f: CGFloat) -> [CGFloat] {
+            let h = f * ModernFrameLayout.blockToFont
+            return switch lines.count {
+            case 3: [0, h * 0.56, h * 0.56 + f * pitch]
+            case 2: [0, h * 0.56]
+            default: [(h - (lines.first?.size().height ?? 0)) / 2]
+            }
+        }
+        /// Where the ink of `lines` starts and ends, from the top of the block.
+        func inkSpan(_ lines: [NSAttributedString], _ f: CGFloat) -> (top: CGFloat, bottom: CGFloat)? {
+            guard let first = lines.first, let last = lines.last else { return nil }
+            let font = { (line: NSAttributedString) in line.attribute(.font, at: 0, effectiveRange: nil) as! CTFont }
+            let o = offsets(lines, f)
+            return (o[0] + CTFontGetAscent(font(first)) - CTFontGetCapHeight(font(first)),
+                    o[lines.count - 1] + CTFontGetAscent(font(last)))
+        }
         func layout(_ f: CGFloat) -> (left: [NSAttributedString], right: [NSAttributedString], mark: CGSize, width: CGFloat) {
             let h = f * ModernFrameLayout.blockToFont
             let left = [caption.model.map { text($0, f, .semibold, look.ink) },
-                        caption.moment.map { text($0, f * 0.76, .regular, look.sub) }]
+                        caption.moment.map { text($0, f * 0.76, .regular, look.sub) }].compactMap { $0 }
+            // The place on a line of its own goes under the details, on the right.
             let right = [caption.valuesLine.map { text($0, f, .semibold, look.ink) },
-                         caption.place.map { text($0, f * 0.76, .regular, look.sub) }]
-            let mark = markSize(caption.mark, height: h * 0.62)
-            let lw = left.compactMap { $0?.size().width }.max() ?? 0
-            let rw = right.compactMap { $0?.size().width }.max() ?? 0
+                         caption.details.map { text($0, f * 0.76, .regular, look.sub) },
+                         caption.place.map { text($0, f * 0.76, .regular, look.sub) }].compactMap { $0 }
+            let span = inkSpan(left, f).map { $0.bottom - $0.top } ?? h
+            let mark = markSize(caption.mark, height: span)
+            let lw = left.map { $0.size().width }.max() ?? 0
+            let rw = right.map { $0.size().width }.max() ?? 0
             let markSpace = mark.width > 0 ? mark.width + h * 0.32 : 0
-            return (left.compactMap { $0 }, right.compactMap { $0 }, mark, markSpace + lw + rw + h * 0.8)
+            return (left, right, mark, markSpace + lw + rw + h * 0.8)
         }
         var f = f0
         var l = layout(f)
         if l.width > band.width, l.width > 0 { f *= band.width / l.width; l = layout(f) }
+        let lines = max(l.left.count, l.right.count)
+        let tall = blockHeight(f, lines: lines)
+        if tall > band.height * 0.9, tall > 0 { f *= band.height * 0.9 / tall; l = layout(f) }
         let h = f * ModernFrameLayout.blockToFont
-        let top = band.midY - h / 2
+        // Each column is centred on the band, so two lines beside three sit
+        // level with the middle of the three.
+        func top(_ column: [NSAttributedString]) -> CGFloat {
+            band.midY - blockHeight(f, lines: column.count) / 2
+        }
 
         var x = band.minX
         if let mark = caption.mark, l.mark.width > 0 {
-            drawMark(mark, in: CGRect(x: x, y: top + (h - l.mark.height) / 2, width: l.mark.width,
-                                      height: l.mark.height), color: look.ink, ctx)
+            // Centred on the text's ink, so a mark narrower than its box (a
+            // wide wordmark capped in width) still sits level with the lines.
+            let span = inkSpan(l.left, f) ?? (0, h)
+            let rect = CGRect(x: x, y: top(l.left) + (span.top + span.bottom - l.mark.height) / 2,
+                              width: l.mark.width, height: l.mark.height)
+            if look.tintsMark { drawMark(mark, in: rect, color: look.ink, ctx) } else { mark.draw(in: rect, context: ctx) }
             x += l.mark.width + h * 0.32
         }
         func stack(_ lines: [NSAttributedString], at x: (NSAttributedString) -> CGFloat) {
-            let offsets: [CGFloat] = lines.count == 2 ? [0, h * 0.56] : [(h - (lines.first?.size().height ?? 0)) / 2]
-            for (line, dy) in zip(lines, offsets) { drawLine(line, at: CGPoint(x: x(line), y: top + dy), in: ctx) }
+            for (line, dy) in zip(lines, offsets(lines, f)) { drawLine(line, at: CGPoint(x: x(line), y: top(lines) + dy), in: ctx) }
         }
         stack(l.left) { _ in x }
         stack(l.right) { band.maxX - $0.size().width }
-    }
-
-    private static func drawSwatch(_ ctx: CGContext, band: CGRect, font f: CGFloat,
-                                   caption: ResolvedRowCaption, look: Look, colours: [RGB]) {
-        let r = f * 0.95
-        for (i, c) in colours.enumerated() {
-            let cx = band.minX + r + CGFloat(i) * r * 2.35
-            ctx.setFillColor(c.cgColor)
-            ctx.fillEllipse(in: CGRect(x: cx - r, y: band.midY - r, width: r * 2, height: r * 2))
-        }
-        let dotsEnd = band.minX + CGFloat(max(colours.count, 1)) * r * 2.35
-        let h = f * ModernFrameLayout.blockToFont
-        var lines = [caption.model.map { text($0, f, .semibold, look.ink) },
-                     caption.valuesLine.map { text($0, f * 0.76, .regular, look.sub) }].compactMap { $0 }
-        let room = band.maxX - dotsEnd - h
-        let widest = lines.map { $0.size().width }.max() ?? 0
-        var k: CGFloat = 1
-        if widest > room, widest > 0 {
-            k = room / widest
-            lines = [caption.model.map { text($0, f * k, .semibold, look.ink) },
-                     caption.valuesLine.map { text($0, f * 0.76 * k, .regular, look.sub) }].compactMap { $0 }
-        }
-        let top = band.midY - h * k / 2
-        for (i, line) in lines.enumerated() {
-            let dy = lines.count == 2 ? CGFloat(i) * h * k * 0.56 : (h * k - line.size().height) / 2
-            drawLine(line, at: CGPoint(x: band.maxX - line.size().width, y: top + dy), in: ctx)
-        }
-        if let mark = caption.mark {
-            let m = markSize(mark, height: h * k * 0.62)
-            let blockWidth = lines.map { $0.size().width }.max() ?? 0
-            drawMark(mark, in: CGRect(x: band.maxX - blockWidth - h * k * 0.35 - m.width,
-                                      y: band.midY - m.height / 2, width: m.width, height: m.height),
-                     color: look.ink, ctx)
-        }
     }
 
     private static func drawReadout(_ ctx: CGContext, band: CGRect, font f0: CGFloat,
@@ -430,7 +463,7 @@ extension WhiteFrameRenderer {
             let model = caption.model.map { text($0.uppercased(), f, .regular, look.ink, mono: true) }
             let values = caption.values.map { v in
                 text(v.text, f, .regular, v.field == .aperture ? (look.accent ?? look.ink) : look.ink, mono: true)
-            }
+            } + [caption.moment, caption.place, caption.details].compactMap { $0 }.map { text($0, f, .regular, look.ink, mono: true) }
             let mark = markSize(caption.mark, height: f * 0.95)
             let width = (mark.width > 0 ? mark.width + f * 0.6 : 0) + (model?.size().width ?? 0)
                 + values.reduce(0) { $0 + $1.size().width } + f * 1.3 * CGFloat(values.count)
@@ -456,35 +489,90 @@ extension WhiteFrameRenderer {
         }
     }
 
-    /// One line up the rail, read bottom to top, with the mark upright on top.
-    private static func drawSpine(_ ctx: CGContext, rail: CGRect, font f0: CGFloat,
-                                  caption: ResolvedRowCaption, look: Look) {
+    /// Swatch: a colour card — the band under the photo is one solid block
+    /// of the photo's own colour, the caption set on it.
+    private static func drawColourCard(_ ctx: CGContext, band: CGRect, font f: CGFloat,
+                                       caption: ResolvedRowCaption, look: Look, palette: PhotoPalette) {
+        // The photo's most vivid mid-tone, so the block reads as a colour,
+        // not as grey card stock.
+        let candidates = palette.dominant.filter { (0.18...0.82).contains($0.luminance) }
+        let colour = (candidates.isEmpty ? palette.dominant : candidates)
+            .max { $0.saturation < $1.saturation } ?? RGB(160, 150, 135)
+        ctx.setFillColor(colour.cgColor)
+        ctx.fill(band)
+        let light = colour.luminance > 0.55
+        var ink = look
+        ink.ink = light ? RGB(24, 24, 26) : .white
+        ink.sub = light ? RGB(24, 24, 26).mixed(with: colour, 0.35) : RGB(255, 255, 255).mixed(with: colour, 0.3)
+        ink.tintsMark = true
+        let inset = band.insetBy(dx: f * 1.1, dy: 0)
+        drawRow(ctx, band: inset, font: f, caption: caption, look: ink)
+    }
+
+    /// Spine: a museum label — a small upright block at the foot of the
+    /// rail, bottom-aligned with the photo, read like the card beside a print.
+    private static func drawMuseumLabel(_ ctx: CGContext, rail: CGRect, font f0: CGFloat,
+                                        caption: ResolvedRowCaption, look: Look) {
         guard rail.width > 0 else { return }
-        var markHeight: CGFloat = 0
-        if let mark = caption.mark {
-            let m = markSize(mark, height: min(rail.width * 0.3, f0 * 1.48))
-            drawMark(mark, in: CGRect(x: rail.midX - m.width / 2, y: rail.minY, width: m.width, height: m.height),
-                     color: look.ink, ctx)
-            markHeight = m.height
-        }
-        func line(_ f: CGFloat) -> NSAttributedString {
-            let out = NSMutableAttributedString()
-            if let model = caption.model { out.append(text(model, f, .semibold, look.ink)) }
-            for part in [caption.valuesLine, caption.moment].compactMap({ $0 }) {
-                out.append(text((out.length > 0 ? "     " : "") + part, f, .regular, look.sub))
+        let inset = rail.width * 0.14
+        let room = rail.width - inset * 2
+        let f = f0 * 0.82
+        /// `items` set in lines no wider than the rail, breaking only between items.
+        func wrap(_ items: [String], _ size: CGFloat, _ weight: CaptionWeight, _ sep: String) -> [String] {
+            var lines: [String] = []
+            for item in items {
+                if let last = lines.last, text(last + sep + item, size, weight, look.ink).size().width <= room {
+                    lines[lines.count - 1] = last + sep + item
+                } else { lines.append(item) }
             }
-            return out
+            return lines
         }
-        var f = min(f0, rail.width * 0.28)
-        var run = line(f)
-        let room = rail.height - markHeight - f * 1.5
-        if run.size().width > room, run.size().width > 0 { f *= room / run.size().width; run = line(f) }
-        guard run.length > 0 else { return }
-        ctx.saveGState()
-        ctx.translateBy(x: rail.midX - run.size().height / 2, y: rail.maxY)
-        ctx.rotate(by: -.pi / 2)
-        drawLine(run, at: .zero, in: ctx)
-        ctx.restoreGState()
+        var lines: [NSAttributedString] = []
+        if let model = caption.model {
+            lines += wrap(model.split(separator: " ").map(String.init), f * 1.15, .semibold, " ")
+                .map { text($0, f * 1.15, .semibold, look.ink) }
+        }
+        var gaps: [Int] = [lines.count]
+        if let moment = caption.moment {
+            lines += wrap(moment.components(separatedBy: runGap), f, .regular, "  ").map { text($0, f, .regular, look.sub) }
+        }
+        if !caption.values.isEmpty {
+            gaps.append(lines.count)
+            lines += wrap(caption.values.map(\.text), f, .regular, "  ").map { text($0, f, .regular, look.ink) }
+        }
+        let rest = [caption.details].compactMap { $0 }.flatMap { $0.components(separatedBy: runGap) }
+        if !rest.isEmpty {
+            gaps.append(lines.count)
+            lines += wrap(rest, f, .regular, "  ").map { text($0, f, .regular, look.sub) }
+        }
+        let paragraph = f * 0.7
+        let total = lines.reduce(0) { $0 + $1.size().height * 1.05 } + paragraph * CGFloat(gaps.filter { $0 > 0 }.count)
+        var y = rail.maxY - total
+        if let mark = caption.mark {
+            let m = markSize(mark, height: f * 1.6)
+            drawMark(mark, in: CGRect(x: rail.minX + inset, y: y - m.height - paragraph, width: m.width, height: m.height),
+                     color: look.ink, ctx)
+        }
+        let labelTop = y - (caption.mark.map { markSize($0, height: f * 1.6).height + paragraph } ?? 0)
+        for (index, line) in lines.enumerated() {
+            if index > 0, gaps.contains(index) { y += paragraph }
+            drawLine(line, at: CGPoint(x: rail.minX + inset, y: y), in: ctx)
+            y += line.size().height * 1.05
+        }
+
+        // The place runs up the top right of the rail, read bottom to top,
+        // against the frame's right edge, in the space the label leaves above it.
+        if let place = caption.place {
+            let room = labelTop - rail.minY - f * 2
+            var line = text(place, f, .regular, look.sub)
+            if line.size().width > room, room > 0 { line = text(place, f * room / line.size().width, .regular, look.sub) }
+            guard room > 0 else { return }
+            ctx.saveGState()
+            ctx.translateBy(x: rail.maxX - inset - line.size().height, y: rail.minY + line.size().width)
+            ctx.rotate(by: -.pi / 2)
+            drawLine(line, at: .zero, in: ctx)
+            ctx.restoreGState()
+        }
     }
 
     // MARK: - Platform

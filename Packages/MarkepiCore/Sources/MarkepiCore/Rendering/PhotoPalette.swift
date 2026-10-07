@@ -12,6 +12,14 @@ struct PhotoPalette: Sendable {
 
         var luminance: CGFloat { 0.2126 * r + 0.7152 * g + 0.0722 * b }
         var saturation: CGFloat { max(r, g, b) - min(r, g, b) }
+
+        /// Any colour, converted to sRGB first (a grey `CGColor` has two components).
+        init(_ color: CGColor) {
+            let c = color.converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent,
+                                    options: nil)?.components ?? [0, 0, 0]
+            self.init(r: c[0], g: c.count >= 3 ? c[1] : c[0], b: c.count >= 3 ? c[2] : c[0])
+        }
+
         var cgColor: CGColor {
             CGColor(colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!, components: [r, g, b, 1])!
         }
@@ -114,11 +122,6 @@ struct PhotoPalette: Sendable {
     /// The warmest colour — skin, sand, a hat's pink.
     var warm: RGB {
         dominant.max { ($0.r - $0.b + $0.luminance / 6) < ($1.r - $1.b + $1.luminance / 6) } ?? Self.neutral.dominant[1]
-    }
-
-    /// Up to `count` dominant colours, dark to light.
-    func swatches(_ count: Int = 5) -> [RGB] {
-        Array(dominant.prefix(count)).sorted { $0.luminance < $1.luminance }
     }
 
     // MARK: HLS

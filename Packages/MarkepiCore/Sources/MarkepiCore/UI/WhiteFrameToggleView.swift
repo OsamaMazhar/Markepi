@@ -3,313 +3,287 @@
 #if canImport(UIKit)
 import CoreImage
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
-/// White-frame controls: an enable toggle plus, when enabled, the parameters
-/// that shape the border and its attribution text — thickness, whether the
-/// device/metadata caption is shown, the caption size, and its color.
+/// Frame controls, as grouped cards: the frame switch, its style and border,
+/// what the caption says (toggle chips, grouped like the caption reads), and
+/// the brand logo. Each style shows only the controls it reads.
 ///
-/// Previously this was an on/off toggle only, which meant the border caption
-/// size was uncontrollable; combined with a stale-preview bug it appeared to
-/// "become too big or small". The preview now refreshes on every parameter
-/// change, so these controls take effect live.
+/// Draws its own cards, so hosts place it directly rather than inside an
+/// `EditorCard` (no glass on glass).
 ///
 /// Generic over any `WatermarkConfigurable & Observable` ViewModel.
 public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable>: View {
     @Bindable var viewModel: ViewModel
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     public init(viewModel: ViewModel) {
         self.viewModel = viewModel
     }
 
-    public var body: some View {
-        // Read the observable value here in `body` so SwiftUI tracks it and
-        // re-renders when the frame is enabled/disabled elsewhere.
-        let isEnabled = viewModel.whiteFrameEnabled
+    /// The Include list, grouped the way the caption reads.
+    private static var fieldGroups: [(title: String, fields: [CaptionField])] { [
+        ("Camera", [.maker, .cameraModel, .lens]),
+        ("Exposure", [.focalLength, .aperture, .shutterSpeed, .iso]),
+        ("When", [.date, .time]),
+        ("Where", [.landmark, .city, .gps]),
+        ("File", [.format, .dimensions]),
+    ] }
 
-        VStack(spacing: 0) {
-            Toggle(isOn: Binding(
-                get: { isEnabled },
-                set: { viewModel.setWhiteFrameEnabled($0) }
-            )) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Frame")
-                        .markepiTypography(.controlLabel)
-                    Text("A mat around the photo with the camera, date and shooting details")
-                        .markepiTypography(.metadata)
-                }
+    private static func icon(for field: CaptionField) -> String {
+        switch field {
+        case .maker: return "tag"
+        case .cameraModel: return "camera"
+        case .lens: return "circle.circle"
+        case .focalLength: return "arrow.left.and.right"
+        case .aperture: return "camera.aperture"
+        case .shutterSpeed: return "timer"
+        case .iso: return "sun.max"
+        case .date: return "calendar"
+        case .time: return "clock"
+        case .landmark: return "building.columns"
+        case .city: return "building.2"
+        case .gps: return "flag"
+        case .format: return "doc"
+        case .dimensions: return "aspectratio"
+        }
+    }
+
+    public var body: some View {
+        // Read the observable values here in `body` so SwiftUI tracks them.
+        let isEnabled = viewModel.whiteFrameEnabled
+        let style = styleBinding.wrappedValue
+        let captionOn = viewModel.config.whiteFrame?.metadataTextEnabled == true
+
+        VStack(spacing: MarkepiSpacing.lg) {
+            card {
+                switchRow("Frame", icon: "rectangle.inset.filled",
+                          subtitle: "A mat with the camera, date and place",
+                          isOn: Binding(get: { isEnabled }, set: { viewModel.setWhiteFrameEnabled($0) }))
+                    .accessibilityIdentifier("frame.enable")
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .accessibilityIdentifier("frame.enable")
-            .accessibilityLabel("Frame")
-            .accessibilityHint("Add a mat around your photo with its camera and shooting details")
 
             if isEnabled {
-                Divider().padding(.leading, 16)
-                applyToAllRow
-                Divider().padding(.leading, 16)
-                styleRow
-
-                // Each style shows only the controls it actually reads.
-                if styleBinding.wrappedValue.offersKeyline {
-                    Divider().padding(.leading, 16)
-                    keylineRow
-                }
-                if styleBinding.wrappedValue.castsShadow {
-                    Divider().padding(.leading, 16)
-                    shadowRow
-                }
-                if styleBinding.wrappedValue.offersGradient {
-                    Divider().padding(.leading, 16)
-                    gradientRow
-                }
-                Divider().padding(.leading, 16)
-
-                // Every style measures its border the same way: millimetres on
-                // paper, at the export's resolution.
-                borderMillimetresRow
-
-                Divider().padding(.leading, 16)
-                captionToggleRow
-
-                if viewModel.config.whiteFrame?.metadataTextEnabled == true {
-                    // Which rows a style shows follows its caption layout, not
-                    // its name: this was a binary classic-versus-everything-else
-                    // branch, which handed every non-gallery style gallery's
-                    // slot rows.
-                    if !styleBinding.wrappedValue.usesGalleryCaption {
-                        // Print's first line is the fixed "Shot on" credit, so
-                        // offering the prefix too would print the same lead-in
-                        // twice — the field's own placeholder is "e.g. Shot on".
-                        // The stored value is left alone, so switching back to
-                        // classic finds whatever was typed there.
-                        // The modern styles set the typed text before the
-                        // device on their first line, the way classic leads its
-                        // caption with it.
-                        if styleBinding.wrappedValue == .classic || styleBinding.wrappedValue.isModern {
-                            Divider().padding(.leading, 16)
-                            captionPrefixRow
-                        }
-                        if styleBinding.wrappedValue.offersCreditText {
-                            Divider().padding(.leading, 16)
-                            creditTextRow
-                        }
-                        Divider().padding(.leading, 16)
-                        captionFieldsRow
-                        Divider().padding(.leading, 16)
-                        captionMillimetresRow
-                        // `banner` takes classic's field rows and gallery's
-                        // mark rows, which is what made the old binary branch
-                        // untenable: it is neither style's row set.
-                        if styleBinding.wrappedValue.drawsBrandMark {
-                            logoSection
-                        }
-                    } else {
-                        // The same master list the other styles use, and above
-                        // the slots because it is the larger question: this is
-                        // what the caption says, the slots below only place the
-                        // four entries they name.
-                        Divider().padding(.leading, 16)
-                        captionFieldsRow
-                        Divider().padding(.leading, 16)
-                        slotGroupHeader("Caption, left side")
-                        slotRow("Top line", identifier: "leftPrimary", binding: slotBinding(\.leftPrimary))
-                        Divider().padding(.leading, 16)
-                        slotRow("Bottom line", identifier: "leftSecondary", binding: slotBinding(\.leftSecondary))
-                        Divider().padding(.leading, 16)
-                        slotGroupHeader("Caption, right side")
-                        slotRow("Top line", identifier: "rightPrimary", binding: slotBinding(\.rightPrimary))
-                        Divider().padding(.leading, 16)
-                        slotRow("Bottom line", identifier: "rightSecondary", binding: slotBinding(\.rightSecondary))
-                        Divider().padding(.leading, 16)
-                        captionMillimetresRow
-                        logoSection
-                    }
-                    // The modern styles choose their own ink to suit their
-                    // surround; a colour picked for a white mat would vanish
-                    // on a dark one.
-                    if styleBinding.wrappedValue.offersCaptionColor {
-                        Divider().padding(.leading, 16)
-                        captionColorRow
+                section("Style") {
+                    styleRow
+                    divider
+                    sliderRow("Border", identifier: "border", binding: borderMMBinding,
+                              range: 1...25)
+                    if style.offersKeyline || style.offersGradient || style.castsShadow {
+                        divider
+                        optionChips(style)
                     }
                 }
-            }
-        }
-    }
 
-    // MARK: - Rows
+                section("Caption", isOn: metadataTextBinding) {
+                    if captionOn {
+                        fieldGroups
+                        divider
+                        if style.offersCreditText { creditTextRow } else { captionPrefixRow }
+                        divider
+                        sliderRow("Text size", identifier: "caption", binding: captionMMBinding,
+                                  range: matRange(upTo: 10, value: captionMMBinding.wrappedValue))
+                        if style.offersCaptionColor {
+                            divider
+                            captionColorRow
+                        }
+                    }
+                }
 
-    /// The brand-mark rows, shown by every style that draws one.
-    @ViewBuilder
-    private var logoSection: some View {
-        Divider().padding(.leading, 16)
-        logoRow
-        // The modern styles size the mark from the caption and tint it to
-        // the ink, so its size and rendition are theirs, not the user's.
-        if viewModel.config.whiteFrame?.logoEnabled != false, styleBinding.wrappedValue.offersCaptionColor {
-            Divider().padding(.leading, 16)
-            logoMillimetresRow
-            Divider().padding(.leading, 16)
-            logoVariantRow
-        }
-    }
-
-    /// Whether an edit below reaches every style or only the one on screen.
-    ///
-    /// At the top because it changes what every row under it means. Off, each
-    /// style keeps its own border, caption and mark, which is what makes a strip
-    /// of style previews worth looking at; on, one setting is carried across all
-    /// of them at once.
-    private var applyToAllRow: some View {
-        Toggle(isOn: applyToAllBinding) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Apply to all styles")
-                    .markepiTypography(.controlLabel)
-                Text("Settings below change every frame style, not just this one")
-                    .markepiTypography(.metadata)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .accessibilityIdentifier("frame.applyToAllStyles")
-        .accessibilityHint("Changes below are written to every frame style")
-    }
-
-    /// The style picker: a dropdown, not a segmented control.
-    ///
-    /// Segments divide the row's width between them, so each new style made
-    /// every label narrower — at four they already truncate, and more are
-    /// coming. A menu costs one tap and stays legible at any number of styles,
-    /// and it can show each style's summary beside its name, which a segment
-    /// has no room for.
-    private var styleRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Style").markepiTypography(.controlLabel)
-                Spacer()
-                Menu {
-                    Picker("Style", selection: styleBinding) {
-                        ForEach(FrameStyle.allCases) { style in
-                            // Name over summary, so the menu explains the
-                            // styles rather than just listing them.
-                            VStack(alignment: .leading) {
-                                Text(style.displayName)
-                                Text(style.summary)
+                if captionOn, style.drawsBrandMark {
+                    section("Brand logo", isOn: logoEnabledBinding) {
+                        // The modern styles size the mark from the caption and
+                        // tint it to their ink, so these are theirs. Gallery and
+                        // banner size it to the caption lines too.
+                        if viewModel.config.whiteFrame?.logoEnabled != false, style.offersCaptionColor {
+                            if style != .gallery, style != .banner {
+                                sliderRow("Logo size", identifier: "logo", binding: logoMMBinding,
+                                          range: matRange(upTo: 15, value: logoMMBinding.wrappedValue))
+                                divider
                             }
-                            .tag(style)
+                            logoVariantRow
                         }
                     }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(styleBinding.wrappedValue.displayName)
-                            .markepiTypography(.value)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption2)
-                    }
                 }
-                .accessibilityIdentifier("frame.style")
-                .accessibilityLabel("Frame style")
-                .accessibilityValue(styleBinding.wrappedValue.displayName)
             }
-            Text(styleBinding.wrappedValue.summary)
-                .markepiTypography(.metadata)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .animation(.snappy(duration: 0.25), value: isEnabled)
+        .animation(.snappy(duration: 0.25), value: captionOn)
     }
 
-    /// Where `print` casts its shadow. Bottom rests the photo on the mat; all
-    /// sides lifts it off.
-    private var shadowRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    // MARK: - Building blocks
+
+    private var divider: some View {
+        Divider().padding(.leading, MarkepiSpacing.lg)
+    }
+
+    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .markepiGlass(
+                shape: RoundedRectangle(cornerRadius: MarkepiRadius.lg, style: .continuous),
+                isEnabled: !reduceTransparency
+            )
+            .clipShape(RoundedRectangle(cornerRadius: MarkepiRadius.lg, style: .continuous))
+            .padding(.horizontal, MarkepiSpacing.lg)
+    }
+
+    /// A titled card; with `isOn`, the title carries the section's switch and
+    /// the card shows only while it is on.
+    @ViewBuilder
+    private func section<Content: View>(_ title: String, isOn: Binding<Bool>? = nil,
+                                        @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: MarkepiSpacing.sm) {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Shadow").markepiTypography(.controlLabel)
-                    Text("Lifts the photo off the mat")
-                        .markepiTypography(.metadata)
-                }
+                Text(title).markepiTypography(.sectionHeader)
                 Spacer()
-            }
-            Picker("Shadow", selection: shadowBinding) {
-                ForEach(FrameShadow.allCases) { shadow in
-                    Text(shadow.displayName).tag(shadow)
+                if let isOn {
+                    Toggle(title, isOn: isOn).labelsHidden()
                 }
             }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("frame.shadow")
-            .accessibilityLabel("Shadow position")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    /// Whether the gallery mat grades or is flat. Was a style of its own until
-    /// it turned out to differ in nothing else.
-    private var gradientRow: some View {
-        Toggle(isOn: gradientBinding) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Gradient")
-                    .markepiTypography(.controlLabel)
-                Text("Shades the mat from white at the top to darker at the bottom")
-                    .markepiTypography(.metadata)
+            .padding(.horizontal, MarkepiSpacing.lg + MarkepiSpacing.xs)
+            if isOn?.wrappedValue ?? true {
+                card(content)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .accessibilityIdentifier("frame.gradient")
-        .accessibilityHint("Shades the border instead of leaving it plain white")
     }
 
-    private var keylineRow: some View {
-        Toggle(isOn: keylineBinding) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Keyline")
-                    .markepiTypography(.controlLabel)
-                Text("A thin black line between the photo and the border")
-                    .markepiTypography(.metadata)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .accessibilityIdentifier("frame.keyline")
-        .accessibilityHint("Adds a thin black outline around the photo")
-    }
-
-    /// A millimetre control. Physical sizes, so the same setting prints the
-    /// same whatever the photo's pixel dimensions.
-    private func millimetreRow(
-        _ title: String,
-        identifier: String,
-        subtitle: String? = nil,
-        binding: Binding<CGFloat>,
-        range: ClosedRange<CGFloat>,
-        step: CGFloat
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+    private func switchRow(_ title: String, icon: String, subtitle: String?,
+                           isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            HStack(spacing: MarkepiSpacing.md) {
+                Image(systemName: icon)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).markepiTypography(.controlLabel)
-                    if let subtitle {
-                        Text(subtitle).markepiTypography(.metadata)
+                    if let subtitle { Text(subtitle).markepiTypography(.metadata) }
+                }
+            }
+        }
+        .padding(.horizontal, MarkepiSpacing.lg)
+        .padding(.vertical, MarkepiSpacing.md)
+    }
+
+    /// A capsule that is on or off — the one control for every yes/no choice
+    /// in the panel, so they all read and behave alike.
+    private func chip(_ title: String, icon: String, isOn: Bool,
+                      action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .markepiTypography(.pillLabel)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, MarkepiSpacing.sm + 1)
+                .padding(.horizontal, MarkepiSpacing.sm)
+                .foregroundStyle(isOn ? Color.accentColor : Color.primary)
+                .background(Capsule().fill(isOn ? Color.accentColor.opacity(0.18)
+                                                : Color.primary.opacity(0.06)))
+                .overlay(Capsule().strokeBorder(isOn ? Color.accentColor.opacity(0.55) : .clear,
+                                                lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: isOn)
+        .accessibilityLabel(title)
+        .accessibilityValue(isOn ? "On" : "Off")
+        .accessibilityAddTraits(isOn ? [.isSelected, .isButton] : .isButton)
+    }
+
+    private var chipColumns: [GridItem] {
+        // Wide enough for the longest label ("Dimensions") at one size, so no
+        // chip ever shrinks its text to fit.
+        [GridItem(.adaptive(minimum: 150), spacing: MarkepiSpacing.sm)]
+    }
+
+    // MARK: - Style card
+
+    /// A menu, not segments: it stays legible at any number of styles and can
+    /// show each style's summary beside its name.
+    private var styleRow: some View {
+        Menu {
+            Picker("Style", selection: styleBinding) {
+                ForEach(FrameStyle.allCases) { style in
+                    VStack(alignment: .leading) {
+                        Text(style.displayName)
+                        Text(style.summary)
+                    }
+                    .tag(style)
+                }
+            }
+        } label: {
+            HStack(spacing: MarkepiSpacing.md) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(styleBinding.wrappedValue.displayName)
+                        .markepiTypography(.controlLabel)
+                        .foregroundStyle(Color.primary)
+                    Text(styleBinding.wrappedValue.summary)
+                        .markepiTypography(.metadata)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, MarkepiSpacing.lg)
+            .padding(.vertical, MarkepiSpacing.md)
+            .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("frame.style")
+        .accessibilityLabel("Frame style")
+        .accessibilityValue(styleBinding.wrappedValue.displayName)
+    }
+
+    /// Keyline, gradient and shadow — whichever this style reads — as chips.
+    private func optionChips(_ style: FrameStyle) -> some View {
+        LazyVGrid(columns: chipColumns, spacing: MarkepiSpacing.sm) {
+            if style.offersKeyline {
+                chip("Keyline", icon: "square.dashed", isOn: keylineBinding.wrappedValue) {
+                    keylineBinding.wrappedValue.toggle()
+                }
+                .accessibilityIdentifier("frame.keyline")
+            }
+            if style.offersGradient {
+                chip("Gradient", icon: "circle.lefthalf.filled", isOn: gradientBinding.wrappedValue) {
+                    gradientBinding.wrappedValue.toggle()
+                }
+                .accessibilityIdentifier("frame.gradient")
+            }
+            if style.castsShadow {
+                ForEach(FrameShadow.allCases) { shadow in
+                    chip(shadow == .bottom ? "Shadow below" : "Shadow all round",
+                         icon: shadow == .bottom ? "square.bottomhalf.filled" : "square.dashed.inset.filled",
+                         isOn: shadowBinding.wrappedValue == shadow) {
+                        shadowBinding.wrappedValue = shadow
                     }
                 }
+            }
+        }
+        .padding(.horizontal, MarkepiSpacing.lg)
+        .padding(.vertical, MarkepiSpacing.md)
+    }
+
+    /// A millimetre slider: name and value on one line, the slider beneath.
+    /// Physical sizes, so the same setting prints the same at any resolution.
+    private func sliderRow(_ title: String, identifier: String, binding: Binding<CGFloat>,
+                           range: ClosedRange<CGFloat>) -> some View {
+        VStack(alignment: .leading, spacing: MarkepiSpacing.xs) {
+            HStack {
+                Text(title).markepiTypography(.controlLabel)
                 Spacer()
                 Text(Self.millimetreLabel(binding.wrappedValue))
                     .markepiTypography(.value)
                     .monospacedDigit()
+                    .contentTransition(.numericText())
             }
-            Slider(value: binding, in: range, step: step)
-                .accessibilityIdentifier("frame.mm.\(identifier)")
-                .accessibilityLabel(title)
-                .accessibilityValue(String(format: "%.1f millimetres", binding.wrappedValue))
+            Slider(value: binding, in: range, step: WatermarkScaling.millimetreStep) { editing in
+                if editing { viewModel.beginInteractiveConfigChange() } else { viewModel.endInteractiveConfigChange() }
+            }
+            .accessibilityIdentifier("frame.mm.\(identifier)")
+            .accessibilityLabel(title)
+            .accessibilityValue(String(format: "%.1f millimetres", binding.wrappedValue))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MarkepiSpacing.lg)
+        .padding(.vertical, MarkepiSpacing.md)
     }
 
     /// "8 mm", not "8.0 mm" — the grid is halves, so a trailing zero is noise.
@@ -320,156 +294,58 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
             : String(format: "%.1f mm", snapped)
     }
 
-    private var borderMillimetresRow: some View {
-        millimetreRow("Border", identifier: "border", subtitle: "The bottom widens with it",
-                      binding: borderMMBinding, range: 1...25, step: WatermarkScaling.millimetreStep)
-    }
-
-    private var captionMillimetresRow: some View {
-        millimetreRow(
-            "Text size", identifier: "caption",
-            subtitle: styleBinding.wrappedValue.usesGalleryCaption
-                ? "Follows the mat's width until you set it"
-                : "The bottom of the border widens to hold it",
-            binding: captionMMBinding,
-            range: matRange(upTo: 10, value: captionMMBinding.wrappedValue),
-            step: WatermarkScaling.millimetreStep)
-    }
-
-    private var logoMillimetresRow: some View {
-        millimetreRow("Logo size", identifier: "logo",
-                      subtitle: "Set by the camera in the photo's metadata",
-                      binding: logoMMBinding,
-                      range: matRange(upTo: 15, value: logoMMBinding.wrappedValue),
-                      step: WatermarkScaling.millimetreStep)
-    }
-
-    /// A slider span that moves with the mat.
-    ///
-    /// These sizes follow the mat's width until the user sets one, so a fixed
-    /// span would leave a size that outgrew it pinned to the end of its own
-    /// control, reading as stuck. The current value is always inside, which
-    /// also covers a size set by hand before the mat was made thinner.
+    /// A slider span that moves with the mat: these sizes follow its width
+    /// until set, so a fixed span would pin a grown size to its end.
     private func matRange(upTo top: CGFloat, value: CGFloat) -> ClosedRange<CGFloat> {
         let mat = viewModel.config.whiteFrame?.borderMillimetres ?? FrameMetrics.defaultBorderMillimetres
         return 1...max(value, top * mat / FrameMetrics.defaultBorderMillimetres)
     }
 
-    /// Names which half of the caption bar the rows beneath it drive, so the
-    /// slots read as the thing on screen rather than as compass directions.
-    private func slotGroupHeader(_ title: String) -> some View {
-        Text(title)
-            .markepiTypography(.sectionHeader)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 2)
-    }
+    // MARK: - Caption card
 
-    private var logoRow: some View {
-        Toggle(isOn: logoEnabledBinding) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Brand logo")
-                    .markepiTypography(.controlLabel)
-                Text("The maker's mark, read from the photo's metadata")
-                    .markepiTypography(.metadata)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .accessibilityIdentifier("frame.logoEnabled")
-        .accessibilityHint("Shows the camera maker's logo in the caption")
-    }
-
-    private var logoVariantRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Logo")
-                .markepiTypography(.controlLabel)
-            Picker("Logo", selection: logoVariantBinding) {
-                ForEach(LogoVariant.allCases) { variant in
-                    Text(variant.displayName).tag(variant)
-                }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("frame.logoVariant")
-            .accessibilityLabel("Logo colour")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    /// One caption line: a metadata field, free text, or nothing.
-    private func slotRow(_ title: String, identifier: String, binding: Binding<CaptionSlot>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title).markepiTypography(.controlLabel)
-                Spacer()
-                Menu {
-                    Button("None") { binding.wrappedValue = .empty }
-                    Button("Custom text…") {
-                        if case .text = binding.wrappedValue {} else {
-                            binding.wrappedValue = .text("")
+    /// Every caption field as a chip, in the groups the caption reads in.
+    private var fieldGroups: some View {
+        VStack(alignment: .leading, spacing: MarkepiSpacing.md) {
+            ForEach(Self.fieldGroups, id: \.title) { group in
+                VStack(alignment: .leading, spacing: MarkepiSpacing.xs + 2) {
+                    Text(group.title)
+                        .markepiTypography(.controlLabel)
+                        .foregroundStyle(.secondary)
+                    LazyVGrid(columns: chipColumns, spacing: MarkepiSpacing.sm) {
+                        ForEach(group.fields) { field in
+                            chip(field.displayName, icon: Self.icon(for: field),
+                                 isOn: isFieldEnabled(field)) { toggleField(field) }
                         }
                     }
-                    Divider()
-                    ForEach(CaptionField.allCases) { field in
-                        Button(field.displayName) { binding.wrappedValue = .field(field) }
+                    if group.title == "Where", CaptionField.placeFields.contains(where: isFieldEnabled),
+                       styleBinding.wrappedValue.offersPlaceOnOwnLine {
+                        // A layout choice, not another field, so a switch
+                        // rather than a chip that would read as one.
+                        Toggle(isOn: placeOnOwnLineBinding) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Place on a third line").markepiTypography(.controlLabel)
+                                Text("Under the details, on the right").markepiTypography(.metadata)
+                            }
+                        }
+                        .padding(.top, MarkepiSpacing.xs)
+                        .accessibilityIdentifier("frame.placeOnOwnLine")
                     }
-                } label: {
-                    Text(slotLabel(binding.wrappedValue))
-                        .markepiTypography(.value)
+                    if group.title == "Where", isFieldEnabled(.landmark) || isFieldEnabled(.city) {
+                        Label("Landmark and city are looked up with Apple Maps. Offline, the country shows.",
+                              systemImage: "network")
+                            .markepiTypography(.metadata)
+                    }
                 }
-                .accessibilityIdentifier("frame.slot.\(identifier)")
-                .accessibilityLabel("\(title) content")
-                .accessibilityValue(slotLabel(binding.wrappedValue))
-            }
-            if case .text(let text) = binding.wrappedValue {
-                TextField("Your name or handle", text: Binding(
-                    get: { text },
-                    set: { binding.wrappedValue = .text($0) }
-                ))
-                .textFieldStyle(.roundedBorder)
-                .autocorrectionDisabled()
-                .accessibilityIdentifier("frame.slotText.\(identifier)")
-                .accessibilityLabel("\(title) text")
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MarkepiSpacing.lg)
+        .padding(.vertical, MarkepiSpacing.md)
     }
 
-    private func slotLabel(_ slot: CaptionSlot) -> String {
-        switch slot {
-        case .empty: return "None"
-        case .field(let field): return field.displayName
-        case .text(let text): return text.isEmpty ? "Custom text" : text
-        }
-    }
-
-    private var captionToggleRow: some View {
-        Toggle(isOn: metadataTextBinding) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Caption Text")
-                    .markepiTypography(.controlLabel)
-                Text("Show a caption on the bottom border")
-                    .markepiTypography(.metadata)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-
-    /// Free-text prefix shown before the metadata fields (e.g. "Shot on").
-    /// The user's own text around `print`'s device credit — a photographer's
-    /// name, usually. Either side, both, or neither.
+    /// The user's own text around `print`'s "Shot on" credit.
     private var creditTextRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Your credit")
-                    .markepiTypography(.controlLabel)
-                Text("Sits on the \"Shot on\" line, before it, after it, or both")
-                    .markepiTypography(.metadata)
-            }
+        VStack(alignment: .leading, spacing: MarkepiSpacing.sm) {
+            Text("Your credit").markepiTypography(.controlLabel)
             TextField("Before, e.g. © Your Name", text: creditPrefixBinding)
                 .textFieldStyle(.roundedBorder)
                 .submitLabel(.done)
@@ -481,89 +357,44 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
                 .accessibilityIdentifier("frame.creditSuffix")
                 .accessibilityLabel("Credit after the device")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MarkepiSpacing.lg)
+        .padding(.vertical, MarkepiSpacing.md)
     }
 
+    /// Text before the device name (classic leads its whole line with it).
     private var captionPrefixRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Prefix")
-                .markepiTypography(.controlLabel)
+        HStack(spacing: MarkepiSpacing.md) {
+            Text("Prefix").markepiTypography(.controlLabel)
             TextField("e.g. Shot on", text: captionPrefixBinding)
                 .textFieldStyle(.roundedBorder)
                 .submitLabel(.done)
                 .accessibilityLabel("Caption prefix text")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    /// A two-column grid of checkboxes, one per metadata field, letting the user
-    /// pick exactly which details appear in the caption.
-    private var captionFieldsRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Include")
-                    .markepiTypography(.controlLabel)
-                if styleBinding.wrappedValue.usesGalleryCaption {
-                    Text("Everything ticked appears. The four lines below place what they name; the rest run on beneath them.")
-                        .markepiTypography(.metadata)
-                }
-            }
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), alignment: .leading),
-                    GridItem(.flexible(), alignment: .leading),
-                ],
-                alignment: .leading,
-                spacing: 10
-            ) {
-                ForEach(CaptionField.allCases) { field in
-                    captionFieldCheckbox(field)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    private func captionFieldCheckbox(_ field: CaptionField) -> some View {
-        let isOn = isFieldEnabled(field)
-        return Button {
-            toggleField(field)
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: isOn ? "checkmark.square.fill" : "square")
-                    .font(.body)
-                    .foregroundStyle(isOn ? Color.accentColor : Color.secondary)
-                Text(field.displayName)
-                    .markepiTypography(.value)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(field.displayName)
-        .accessibilityValue(isOn ? "Included" : "Not included")
-        .accessibilityAddTraits(isOn ? [.isSelected, .isButton] : .isButton)
-        .accessibilityHint("Double tap to \(isOn ? "remove from" : "add to") the caption")
+        .padding(.horizontal, MarkepiSpacing.lg)
+        .padding(.vertical, MarkepiSpacing.md)
     }
 
     private var captionColorRow: some View {
-        HStack {
-            Text("Caption Color")
-                .markepiTypography(.controlLabel)
-            Spacer()
-            ColorPicker("", selection: captionColorBinding, supportsOpacity: false)
-                .labelsHidden()
+        ColorPicker(selection: captionColorBinding, supportsOpacity: false) {
+            Text("Text colour").markepiTypography(.controlLabel)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Caption text color")
+        .padding(.horizontal, MarkepiSpacing.lg)
+        .padding(.vertical, MarkepiSpacing.md)
+        .accessibilityLabel("Caption text colour")
+    }
+
+    // MARK: - Logo card
+
+    private var logoVariantRow: some View {
+        Picker("Logo colour", selection: logoVariantBinding) {
+            ForEach(LogoVariant.allCases) { variant in
+                Text(variant.displayName).tag(variant)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, MarkepiSpacing.lg)
+        .padding(.vertical, MarkepiSpacing.md)
+        .accessibilityIdentifier("frame.logoVariant")
     }
 
     // MARK: - Bindings
@@ -584,13 +415,6 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
             // style being left somewhere before loading the next one, which is
             // what `selectFrameStyle` is for.
             set: { viewModel.config.selectFrameStyle($0) }
-        )
-    }
-
-    private var applyToAllBinding: Binding<Bool> {
-        Binding(
-            get: { viewModel.config.applyFrameEditsToAllStyles },
-            set: { viewModel.config.applyFrameEditsToAllStyles = $0 }
         )
     }
 
@@ -659,10 +483,10 @@ public struct WhiteFrameToggleView<ViewModel: WatermarkConfigurable & Observable
         )
     }
 
-    private func slotBinding(_ keyPath: WritableKeyPath<WhiteFrameConfig, CaptionSlot>) -> Binding<CaptionSlot> {
+    private var placeOnOwnLineBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.config.whiteFrame?[keyPath: keyPath] ?? .empty },
-            set: { newValue in mutateFrame { $0[keyPath: keyPath] = newValue } }
+            get: { viewModel.config.whiteFrame?.placeOnOwnLine ?? false },
+            set: { newValue in mutateFrame { $0.placeOnOwnLine = newValue } }
         )
     }
 

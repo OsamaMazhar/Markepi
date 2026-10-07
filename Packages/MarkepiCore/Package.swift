@@ -52,7 +52,10 @@ let package = Package(
         .testTarget(
             name: "MarkepiCoreTests",
             dependencies: ["MarkepiCore"],
-            path: "Tests/MarkepiCoreTests"
+            path: "Tests/MarkepiCoreTests",
+            // Read straight from disk via #filePath (e.g. the CC0 portrait the
+            // Looks tests run Vision on), so not bundled.
+            exclude: ["Fixtures"]
         ),
     ]
 )

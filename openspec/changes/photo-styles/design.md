@@ -70,7 +70,7 @@ public enum PhotoStyle: String, Codable, CaseIterable, Sendable {  // lenient in
     case original
     case vibrant, natural, luminous, dramatic, quiet, cozy, ethereal, mutedBW, starkBW
     case neutral, coolRose, roseGold, gold, amber
-    case portrait400, golden200, chrome100, velvet50, classicNeg, tungsten800, silver400, faded
+    case pastel400, golden200, chrome100, velvet50, classicNeg, tungsten800, silver400, faded
     var family: Family { … }         // .original / .mood / .undertone / .film
     var isFree: Bool { … }           // original, vibrant, natural, neutral
 }
@@ -107,7 +107,7 @@ Starting recipe intents, which tuning refines:
 | Muted B&W | luminance mix, low contrast, faded blacks |
 | Stark B&W | red-weighted mix, hard S-curve |
 | Undertones | skin hue rotation and saturation (Cool Rose −hue/+magenta, Rose Gold pink-warm, Gold yellow-warm, Amber orange-warm, Neutral reduces warm cast) at about 3× the global strength |
-| Portrait 400 | soft contrast, warm skin, slightly cool shadows, low sat, fine grain |
+| Pastel 400 | soft contrast, warm skin, slightly cool shadows, low sat, fine grain |
 | Golden 200 | warm/yellow bias, punchy mids, medium grain |
 | Chrome 100 | slide film: deep blacks, cool-cyan shadows, high contrast, fine grain |
 | Velvet 50 | high saturation, rich greens/reds, deep contrast, very fine grain |
@@ -147,3 +147,14 @@ Starting recipe intents, which tuning refines:
 ## Migration Plan
 
 Additive. Old configs and templates decode to Original (D7), so existing users see no change until they choose a look. Rollback means removing the Style tool from the dock: stored `photoStyle` values are inert if the renderer is skipped.
+
+## Implementation notes (apply, 2026-10-06)
+
+Where the build differs from the decisions above:
+- **Name:** the feature is **Looks** (`PhotoLook`, `PhotoLookSettings`, `PhotoLookRenderer`, `EditorTool.looks`). That keeps it apart from Apple's Photographic Styles and from the frame *styles*.
+- **Sky (added):** `SceneMaskProvider` returns skin *and* sky masks. iOS has no public sky segmentation, so the sky comes from the embedded sky matte when a photo has one. Otherwise Vision's `VNClassifyImageRequest` must report "sky", and then a sky-colour key weighted to the top of the frame, minus people, is used. Moods and film looks carry a sky saturation/exposure treatment (Vibrant deepens the sky; Dramatic, Stark B&W and Silver 400 darken it the way a red filter does).
+- **HDR (D5 amended):** the gain map is always kept. There is no luminance collapse and no drop for B&W looks. The rare non-Apple multi-channel ISO map may tint a B&W look's HDR highlights faintly; that is accepted rather than losing HDR.
+- **Masks are awaited, not progressive (D4):** the first render of a mask-reading look waits for Vision (≈100 ms per photo, once, then cached). The global-first-then-refresh flag was not needed.
+- **Compositing in the RGBAh context:** `CIAdditionCompositing` with an alpha-0 top adds nothing, and with an opaque top it sums alpha. `CIRandomGenerator` also randomises alpha. Grain and halation therefore use opaque `linearDodge`/`subtract` blends, and the noise goes through `settingAlphaOne` first.
+- **UI location (D10):** the panel lives in `App/Views/Editor/ToolPanelView.swift` (a classic pbxproj, so no new App files). Families use a native segmented picker, because `MarkepiPillBar` is bound to `ControlsSection`.
+- **Live Photo (D11):** `WatermarkEngine.processLivePhoto` handles it, so every caller agrees.

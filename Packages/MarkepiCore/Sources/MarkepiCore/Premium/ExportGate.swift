@@ -47,6 +47,15 @@ public struct ExportPolicy: Sendable, Equatable {
             forcesSDRVideo = true
             brandMark = true
         }
+        allowsProLooks = tier == .pro
+    }
+
+    /// Whether every look and its tuning may be exported. Free exports may use
+    /// the free looks at default tuning only; anything else exports as Original.
+    public let allowsProLooks: Bool
+
+    public func allowsLook(_ settings: PhotoLookSettings) -> Bool {
+        allowsProLooks || !settings.isActive || (settings.look.isFree && settings.isDefaultTuning)
     }
 }
 

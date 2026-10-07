@@ -15,9 +15,10 @@ public enum PremiumProduct: String, CaseIterable, Sendable {
     /// One-time non-consumable unlock — lifts the daily limit forever.
     case lifetime = "markepi.pro.lifetime"
 
-    // `markepi.pro.lifetime.sale` (sold in 2.0.1) is no longer offered, but its
-    // buyers keep Pro: any verified transaction grants it (see
-    // `StoreManager.refreshEntitlements`), not just the products listed here.
+    /// The same lifetime unlock at a sale price. Idle at the normal price; a
+    /// sale is on exactly when App Store Connect prices it lower (see
+    /// ``LifetimeOffer``). Grants the same entitlement as `lifetime`.
+    case lifetimeSale = "markepi.pro.lifetime.sale"
 
     /// Auto-renewable monthly subscription.
     case monthly = "markepi.pro.monthly"

@@ -33,24 +33,6 @@ private let frameLog = Logger.markepi("WhiteFrame")
 /// that produces equivalent pixel output for structural testing.
 public struct WhiteFrameRenderer {
 
-    /// The four gallery caption lines, already resolved against metadata, plus
-    /// the brand mark the photo's manufacturer earned.
-    ///
-    /// Resolution happens once, before the platform branch, so both render
-    /// paths draw from identical values — which is what keeps them in step.
-    struct ResolvedGalleryCaption {
-        var leftPrimary: String?
-        var leftSecondary: String?
-        var rightPrimary: String?
-        var rightSecondary: String?
-        var mark: BrandMarkArtwork?
-
-        var hasText: Bool {
-            leftPrimary != nil || leftSecondary != nil || rightPrimary != nil || rightSecondary != nil
-        }
-        var isEmpty: Bool { !hasText && mark == nil }
-    }
-
     /// How heavy one run of caption text is drawn.
     ///
     /// A style-level idea rather than a `UIFont.Weight`/`NSFont.Weight`, so the
@@ -118,7 +100,9 @@ public struct WhiteFrameRenderer {
         // Through the Include list like every other entry: unticking the
         // camera drops "Shot on" too, rather than leaving the one place in the
         // app where that checkbox does not mean what it says.
-        let model = resolveSlot(included(.field(.cameraModel), config: config), metadata: metadata)
+        let model = config.captionFields.contains(.cameraModel)
+            ? resolveField(.cameraModel, metadata: metadata)
+            : nil
         let credit = creditRuns(config: config, model: model, metadata: metadata)
 
         // The credit line already names the device, so drop the camera field
@@ -175,186 +159,28 @@ public struct WhiteFrameRenderer {
         return runs
     }
 
-    /// The caption `banner` draws: a brand mark and a credit at the far left,
-    /// the shooting values and the device at the far right.
-    ///
-    /// Every part is optional and each is dropped on its own, the same way
-    /// `gallery` drops its mark: an unrecognised maker costs the left block,
-    /// a photo with no shooting data costs the values line, and nothing at all
-    /// costs the bar itself.
-    struct ResolvedBannerCaption {
-        /// The maker's name, set under the fixed lead-in.
-        var maker: String?
-        /// The shooting values, space-joined: focal length, aperture, speed, ISO.
-        var values: String?
-        /// The device and its lens.
-        var device: String?
-        var mark: BrandMarkArtwork?
-
-        var isEmpty: Bool { maker == nil && values == nil && device == nil && mark == nil }
-    }
-
-    /// What separates one reading from the next on a detail line — and so
-    /// where such a line may be broken when it outgrows its column.
+    /// What separates one reading from the next on a caption line.
     static let runGap = "   "
 
-    /// The fixed lead-in above the maker's name.
-    ///
-    /// Not user-configurable, for the same reason `print`'s "Shot on" is not:
-    /// it is the style's own wording, and the caption-prefix field would let
-    /// the user set it twice.
-    static let bannerLead = "Captured with"
-
-    /// The fields that name the equipment rather than the exposure.
-    ///
-    /// They go on the second line, so the first can be the shooting values
-    /// alone — which is what gives the bar its two distinct registers.
-    static let bannerDeviceFields: [CaptionField] = [.cameraModel, .lens]
-
-    /// Builds the bar's caption.
-    static func resolveBannerCaption(
-        config: WhiteFrameConfig,
-        metadata: [String: Any]
-    ) -> ResolvedBannerCaption {
-        guard config.metadataTextEnabled else { return ResolvedBannerCaption() }
-
-        // Resolved through the same path that picks the mark, so the name and
-        // the logo beside it can never disagree — and gated by the list, so
-        // unticking the brand takes the credit with it.
-        let maker = config.captionFields.contains(.maker)
-            ? BrandMarkRegistry.displayName(metadata: metadata)
-            : nil
-
-        func line(_ fields: [CaptionField], separator: String) -> String? {
-            let text = DeviceMetadataProvider.caption(
-                prefix: "", fields: fields, metadata: metadata, separator: separator)
-            return text.isEmpty ? nil : text
-        }
-
-        // Both lines are driven by the user's ticked fields, so unticking the
-        // camera empties the device line rather than leaving it stuck on.
-        let ticked = config.captionFields
-        let shown = Set(ticked)
-        let valueFields = ticked.filter { !bannerDeviceFields.contains($0) }
-        let deviceParts = bannerDeviceFields
-            .filter { shown.contains($0) }
-            .compactMap { resolveSlot(.field($0), metadata: metadata, alongside: shown) }
-
-        return ResolvedBannerCaption(
-            maker: maker,
-            values: line(valueFields, separator: runGap),
-            device: deviceParts.isEmpty ? nil : deviceParts.joined(separator: " • "),
-            mark: config.logoEnabled
-                ? BrandMarkRegistry.mark(metadata: metadata,
-                                         variant: config.logoVariant,
-                                         matIsLight: isLight(matColor(for: config)))
-                : nil
-        )
-    }
-
-    /// A slot the user has unticked in the Include list, emptied.
-    ///
-    /// The Include list is the master switch for what a frame may say, in every
-    /// style. `gallery` then decides *where* each entry sits, which is a
-    /// different question from whether it appears at all — untick Location and
-    /// the line it was assigned to simply goes quiet. Free text is nobody's
-    /// field and is never filtered.
-    static func included(_ slot: CaptionSlot, config: WhiteFrameConfig) -> CaptionSlot {
-        guard case .field(let field) = slot else { return slot }
-        return config.captionFields.contains(field) ? slot : .empty
-    }
-
-    /// Resolves one slot, or nil when it has nothing to say.
+    /// One field's value, or nil when it has nothing to say.
     ///
     /// - Parameter shown: every entry this caption is printing. Only the lens
     ///   reads it, to drop the readings its neighbours already carry.
-    static func resolveSlot(_ slot: CaptionSlot, metadata: [String: Any],
-                            alongside shown: Set<CaptionField> = []) -> String? {
-        let raw: String
-        switch slot {
-        case .empty:
-            return nil
-        case .field(.lens):
-            raw = EXIFTokenParser.lensText(metadata: metadata,
-                                           omitFocal: shown.contains(.focalLength),
-                                           omitAperture: shown.contains(.aperture))
-        case .field(let field):
-            raw = EXIFTokenParser.substitute(field.token, metadata: metadata, gpsFormat: .place)
-        case .text(let text):
-            guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
-            raw = EXIFTokenParser.substitute(text, metadata: metadata, gpsFormat: .place)
+    static func resolveField(_ field: CaptionField, metadata: [String: Any],
+                             alongside shown: Set<CaptionField> = []) -> String? {
+        if field.isPlace {
+            return EXIFTokenParser.placeText(metadata: metadata, fields: shown.union([field]))
         }
-        // A missing EXIF field substitutes as "--" (D-08). A line made only of
-        // placeholders says nothing, and a line with some present values reads
-        // better without the gaps — so drop the placeholders and keep the rest.
+        let raw = field == .lens
+            ? EXIFTokenParser.lensText(metadata: metadata,
+                                       omitFocal: shown.contains(.focalLength),
+                                       omitAperture: shown.contains(.aperture))
+            : EXIFTokenParser.substitute(field.token, metadata: metadata, gpsFormat: .place)
+        // A missing EXIF field substitutes as "--" (D-08). Drop the
+        // placeholders and keep whatever is left.
         let words = raw.split(separator: " ").filter { $0 != "--" }
         let cleaned = words.joined(separator: " ").trimmingCharacters(in: .whitespaces)
         return cleaned.isEmpty ? nil : cleaned
-    }
-
-    /// Which column an unplaced entry falls to: what the photograph *is* on
-    /// the left — the device, when, and where — and what the camera was doing
-    /// on the right, down to the file it wrote.
-    ///
-    /// The seam is the subject, not the source: under a device name the reader
-    /// expects the place it was carried to, not its shutter speed, and the
-    /// readings belong together in one column where they can be read as a row.
-    static let galleryLeftFields: [CaptionField] = [.maker, .cameraModel, .date, .time, .gps]
-
-    static func resolveGalleryCaption(
-        config: WhiteFrameConfig,
-        metadata: [String: Any]
-    ) -> ResolvedGalleryCaption {
-        guard config.metadataTextEnabled else { return ResolvedGalleryCaption() }
-        let matIsLight = isLight(matColor(for: config))
-
-        let shown = Set(config.captionFields)
-        func slot(_ slot: CaptionSlot) -> String? {
-            resolveSlot(included(slot, config: config), metadata: metadata, alongside: shown)
-        }
-
-
-        // Everything ticked that no slot already names. Without this a tick
-        // was only visible when a slot happened to be assigned to that field,
-        // so seven ticked entries could show as none — the four slots are
-        // where an entry sits, not whether it appears.
-        let named = Set([config.leftPrimary, config.leftSecondary,
-                         config.rightPrimary, config.rightSecondary]
-            .compactMap { slot -> CaptionField? in
-                guard case .field(let field) = slot else { return nil }
-                return field
-            })
-        let runOn = config.captionFields
-        let spare = CaptionField.allCases.filter {
-            runOn.contains($0) && !named.contains($0)
-        }
-
-        /// The ticked-but-unplaced fields for one column, run together.
-        func spareLine(_ wanted: (CaptionField) -> Bool) -> String? {
-            let parts = spare.filter(wanted).compactMap {
-                resolveSlot(.field($0), metadata: metadata, alongside: shown)
-            }
-            return parts.isEmpty ? nil : parts.joined(separator: runGap)
-        }
-        /// A slot's own value with the spare fields run on after it.
-        func line(_ assigned: String?, _ spare: String?) -> String? {
-            let parts = [assigned, spare].compactMap { $0 }
-            return parts.isEmpty ? nil : parts.joined(separator: runGap)
-        }
-
-        return ResolvedGalleryCaption(
-            leftPrimary: slot(config.leftPrimary),
-            leftSecondary: line(slot(config.leftSecondary),
-                                spareLine(galleryLeftFields.contains)),
-            rightPrimary: slot(config.rightPrimary),
-            rightSecondary: line(slot(config.rightSecondary),
-                                 spareLine { !galleryLeftFields.contains($0) }),
-            mark: config.logoEnabled
-                ? BrandMarkRegistry.mark(metadata: metadata,
-                                         variant: config.logoVariant,
-                                         matIsLight: matIsLight)
-                : nil
-        )
     }
 
     /// Whether this frame's caption will draw anything at all.
@@ -365,14 +191,10 @@ public struct WhiteFrameRenderer {
         switch config.style {
         case .classic:
             return resolveCaption(config: config, metadata: metadata) != nil
-        case .gallery:
-            return !resolveGalleryCaption(config: config, metadata: metadata).isEmpty
         case .print:
             return !resolveCreditCaption(config: config, metadata: metadata).isEmpty
-        case .banner:
-            return !resolveBannerCaption(config: config, metadata: metadata).isEmpty
         default:
-            return hasModernCaptionContent(config: config, metadata: metadata)
+            return !resolveRowCaption(config: config, metadata: metadata).isEmpty
         }
     }
 
@@ -416,23 +238,19 @@ public struct WhiteFrameRenderer {
                                     metadata: metadata, sourceImage: sourceImage)
         }
         let attributionText = resolveCaption(config: config, metadata: metadata)
-        let gallery = config.style.usesGalleryCaption
-            ? resolveGalleryCaption(config: config, metadata: metadata)
-            : ResolvedGalleryCaption()
+        let row = config.style == .gallery || config.style == .banner
+            ? resolveRowCaption(config: config, metadata: metadata)
+            : ResolvedRowCaption()
         let credit = config.style == .print
             ? resolveCreditCaption(config: config, metadata: metadata)
             : ResolvedCreditCaption()
-        let banner = config.style == .banner
-            ? resolveBannerCaption(config: config, metadata: metadata)
-            : ResolvedBannerCaption()
 
         #if canImport(UIKit)
         return try renderWithUIGraphics(
             geometry: geometry,
             attributionText: attributionText,
-            gallery: gallery,
+            row: row,
             credit: credit,
-            banner: banner,
             config: config,
             scale: scale
         )
@@ -440,9 +258,8 @@ public struct WhiteFrameRenderer {
         return try renderWithCoreGraphics(
             geometry: geometry,
             attributionText: attributionText,
-            gallery: gallery,
+            row: row,
             credit: credit,
-            banner: banner,
             config: config,
             scale: scale
         )
@@ -473,8 +290,7 @@ public struct WhiteFrameRenderer {
 
     /// The single caption line used by `classic`.
     ///
-    /// `gallery` builds its four slots separately; this stays the classic path
-    /// so that style is untouched by the new layout.
+    /// The two-column styles use `resolveRowCaption`; `print` its credit.
     static func resolveCaption(config: WhiteFrameConfig, metadata: [String: Any]) -> String? {
         guard config.metadataTextEnabled else { return nil }
         if let customText = config.customAttributionText, !customText.isEmpty {
@@ -497,9 +313,8 @@ public struct WhiteFrameRenderer {
     private static func renderWithUIGraphics(
         geometry: FrameGeometry,
         attributionText: String?,
-        gallery: ResolvedGalleryCaption,
+        row: ResolvedRowCaption,
         credit: ResolvedCreditCaption,
-        banner: ResolvedBannerCaption,
         config: WhiteFrameConfig,
         scale: CGFloat
     ) throws -> CIImage {
@@ -510,8 +325,8 @@ public struct WhiteFrameRenderer {
         let renderer = UIGraphicsImageRenderer(size: geometry.framedSize, format: format)
         let uiImage = renderer.image { ctx in
             drawFrame(cgContext: ctx.cgContext, geometry: geometry,
-                      attributionText: attributionText, gallery: gallery,
-                      credit: credit, banner: banner, config: config)
+                      attributionText: attributionText, row: row,
+                      credit: credit, config: config)
         }
 
         guard let cgImage = uiImage.cgImage else {
@@ -527,9 +342,8 @@ public struct WhiteFrameRenderer {
     private static func renderWithCoreGraphics(
         geometry: FrameGeometry,
         attributionText: String?,
-        gallery: ResolvedGalleryCaption,
+        row: ResolvedRowCaption,
         credit: ResolvedCreditCaption,
-        banner: ResolvedBannerCaption,
         config: WhiteFrameConfig,
         scale: CGFloat
     ) throws -> CIImage {
@@ -555,8 +369,8 @@ public struct WhiteFrameRenderer {
         cgContext.scaleBy(x: scale, y: -scale)
 
         drawFrame(cgContext: cgContext, geometry: geometry,
-                  attributionText: attributionText, gallery: gallery,
-                  credit: credit, banner: banner, config: config)
+                  attributionText: attributionText, row: row,
+                  credit: credit, config: config)
 
         guard let cgImage = cgContext.makeImage() else {
             throw PipelineError.frameRenderFailed
@@ -659,9 +473,8 @@ public struct WhiteFrameRenderer {
         cgContext: CGContext,
         geometry: FrameGeometry,
         attributionText: String?,
-        gallery: ResolvedGalleryCaption,
+        row: ResolvedRowCaption,
         credit: ResolvedCreditCaption,
-        banner: ResolvedBannerCaption,
         config: WhiteFrameConfig
     ) {
         let canvas = CGRect(origin: .zero, size: geometry.framedSize)
@@ -695,15 +508,11 @@ public struct WhiteFrameRenderer {
             drawCentredCaption(cgContext: cgContext, geometry: geometry,
                                lines: attributionText.map { [[CaptionRun($0, weight: .medium)]] } ?? [],
                                config: config)
-        case .gallery:
-            drawGalleryCaption(cgContext: cgContext, geometry: geometry,
-                               content: gallery, config: config)
         case .print:
             drawCentredCaption(cgContext: cgContext, geometry: geometry,
                                lines: credit.lines, config: config)
-        case .banner:
-            drawBannerCaption(cgContext: cgContext, geometry: geometry,
-                              content: banner, config: config)
+        case .gallery, .banner:
+            drawMatRow(cgContext: cgContext, geometry: geometry, caption: row, config: config)
         case .float, .tone, .swatch, .spine, .noir, .readout, .ambient, .aura,
              .blend, .emboss, .sunlight, .glow:
             break  // Routed to `renderModern` before this point.
@@ -761,206 +570,38 @@ public struct WhiteFrameRenderer {
         return onMatOnly.composited(over: mat).cropped(to: canvas)
     }
 
-    /// `text` broken across at most `limit` lines at its own separators.
+    /// `gallery`'s and `banner`'s caption: the standard row (`drawRow`), in the
+    /// user's caption colour, with the brand mark at the user's size.
     ///
-    /// A detail line is a run of readings joined by `runGap`, so the gaps are
-    /// where it may be broken — a reading is never split down the middle.
-    /// Anything still over after the last line is left on it to be shrunk,
-    /// which is what stops a band with room for two lines growing a third it
-    /// cannot hold.
-    ///
-    /// Breaking rather than shrinking is the point: text scaled down to fit a
-    /// fixed column never grows when the frame does, so the caption size could
-    /// follow the mat and the readings would still look identical.
-    static func wrappedRuns(
-        _ text: String, width: CGFloat, limit: Int,
-        measure: (String) -> CGFloat
-    ) -> [String] {
-        let parts = text.components(separatedBy: runGap)
-        guard parts.count > 1, width > 0, limit > 1 else { return [text] }
-
-        var lines: [String] = []
-        var current = ""
-        for part in parts {
-            let candidate = current.isEmpty ? part : current + runGap + part
-            // The last line takes whatever is left, however wide.
-            if current.isEmpty || lines.count == limit - 1 || measure(candidate) <= width {
-                current = candidate
-            } else {
-                lines.append(current)
-                current = part
-            }
-        }
-        lines.append(current)
-        return lines
-    }
-
-    /// The gallery caption: two stacked lines on the left, a brand mark, a
-    /// divider rule, and two stacked lines on the right.
-    ///
-    /// Everything is measured from `geometry`, which is metric for this style,
-    /// so the parts keep their relationship at any resolution.
-    private static func drawGalleryCaption(
+    /// Gallery centres it where `contentCentreOfBand` puts it, so the space
+    /// beneath matches the mat on the other three sides; banner centres it on
+    /// its bar, inset by one column gap since the bar runs edge to edge.
+    private static func drawMatRow(
         cgContext: CGContext,
         geometry: FrameGeometry,
-        content: ResolvedGalleryCaption,
+        caption: ResolvedRowCaption,
         config: WhiteFrameConfig
     ) {
-        guard !content.isEmpty else { return }
-
-        let band = geometry.captionBand
-        let fontSize = geometry.captionFontSize
+        guard !caption.isEmpty else { return }
         let m = geometry.metrics
-        let pitch = fontSize * m.linePitchToFont
-        let interlineGap = pitch * m.interlineShareOfPitch
-        let lineHeight = pitch - interlineGap
-        let gap = fontSize * m.columnGapToFont
+        let ink = config.textColor
+        let sub = lighten(ink, towards: matColor(for: config, metrics: m), by: m.secondaryToneMix)
+        let look = Look(surround: .flat(.white), ink: RGB(ink), sub: RGB(sub), tintsMark: false)
 
-        // The reference pairs a heavy dark line with a lighter grey one. The
-        // secondary tone is derived from the user's caption colour rather than
-        // hardcoded, so a recoloured caption keeps the contrast.
-        let primaryColor = config.textColor
-        let secondaryColor = lighten(config.textColor,
-                                     towards: matColor(for: config, metrics: m),
-                                     by: m.secondaryToneMix)
-
-        // Tone marks the primary line; weight is applied only where the
-        // metrics ask for it, so the card keeps a single focal point.
-        func attributed(_ text: String, size: CGFloat, primary: Bool, bold: Bool) -> NSAttributedString {
-            NSAttributedString(string: text, attributes: [
-                .font: platformFont(ofSize: size, weight: bold ? .semibold : .regular),
-                .foregroundColor: platformColor(from: primary ? primaryColor : secondaryColor),
-            ])
+        let captionBand = geometry.captionBand
+        let band: CGRect
+        if config.style == .banner {
+            let gap = geometry.captionFontSize * m.columnGapToFont
+            band = CGRect(x: gap, y: captionBand.minY,
+                          width: geometry.framedSize.width - gap * 2,
+                          height: geometry.framedSize.height - captionBand.minY)
+        } else {
+            let centre = captionBand.minY + captionBand.height * m.contentCentreOfBand
+            band = CGRect(x: captionBand.minX, y: centre - captionBand.height / 2,
+                          width: captionBand.width, height: captionBand.height)
         }
-
-        /// One column of stacked lines, the first of them the heading.
-        struct Column {
-            var lines: [NSAttributedString] = []
-            var width: CGFloat { lines.map { $0.size().width }.max() ?? 0 }
-            var isEmpty: Bool { lines.isEmpty }
-        }
-
-        /// One line, set at the caption size, or shrunk on its own to fit the
-        /// width its column is allowed.
-        ///
-        /// The last resort, not the first: a detail line too long for its
-        /// column is broken onto another line before it is made smaller. Text
-        /// shrunk to fit a fixed width never grows when the frame does, which
-        /// is the whole reason the caption size follows the mat.
-        func fitted(_ text: String, primary: Bool, bold: Bool, width: CGFloat) -> NSAttributedString {
-            let drawn = attributed(text, size: fontSize, primary: primary, bold: bold)
-            let natural = drawn.size().width
-            guard natural > width, width > 0 else { return drawn }
-            return attributed(text, size: fontSize * (width / natural), primary: primary, bold: bold)
-        }
-
-        func wrapped(_ text: String, width: CGFloat, limit: Int) -> [String] {
-            wrappedRuns(text, width: width, limit: limit) {
-                attributed($0, size: fontSize, primary: false, bold: false).size().width
-            }
-        }
-
-        func column(_ primaryText: String?, _ secondaryText: String?,
-                    boldPrimary: Bool, width: CGFloat, limit: Int) -> Column {
-            var lines: [NSAttributedString] = []
-            if let primaryText {
-                lines.append(fitted(primaryText, primary: true, bold: boldPrimary, width: width))
-            }
-            if let secondaryText {
-                let room = max(1, limit - lines.count)
-                lines += wrapped(secondaryText, width: width, limit: room)
-                    .map { fitted($0, primary: false, bold: false, width: width) }
-            }
-            return Column(lines: lines)
-        }
-
-        // Mark first: it takes its width from a metric height, and the columns
-        // divide what is left.
-        var markWidth: CGFloat = 0
-        var markSize = CGSize.zero
-        if let mark = content.mark {
-            let height = min(geometry.logoHeight, band.height - fontSize * 0.6)
-            let width = height * mark.aspectRatio
-            // A 10:1 wordmark would otherwise crowd out the caption entirely.
-            let maxWidth = band.width * m.markMaxWidthOfBand
-            markSize = width > maxWidth
-                ? CGSize(width: maxWidth, height: maxWidth / mark.aspectRatio)
-                : CGSize(width: width, height: height)
-            markWidth = markSize.width + gap
-        }
-
-        let dividerWidth = max(1, (fontSize * m.dividerWidthToFont).rounded())
-        let hasDivider = content.mark != nil && (content.rightPrimary != nil || content.rightSecondary != nil)
-        let dividerSpace = hasDivider ? dividerWidth + gap : 0
-
-        // Each column gets half of what the mark and divider leave. Shrinking
-        // is per column, so one long lens string does not shrink the device
-        // name across the band from it.
-        let available = max(0, band.width - markWidth - dividerSpace - gap)
-        let leftHasText = content.leftPrimary != nil || content.leftSecondary != nil
-        let rightHasText = content.rightPrimary != nil || content.rightSecondary != nil
-        let leftAllowance = rightHasText ? available * 0.5 : available
-        let rightAllowance = leftHasText ? available * 0.5 : available
-
-        // How many lines the band can actually hold at this size. The band is
-        // a multiple of the mat, so a wider frame is what buys a caption the
-        // room to break onto another line rather than shrink.
-        let limit = max(2, Int(band.height / pitch))
-
-        let left = column(content.leftPrimary, content.leftSecondary,
-                          boldPrimary: true, width: leftAllowance, limit: limit)
-        let right = column(content.rightPrimary, content.rightSecondary,
-                           boldPrimary: m.emphasiseRightPrimary, width: rightAllowance, limit: limit)
-
-        func draw(_ col: Column, x: (NSAttributedString) -> CGFloat, top: CGFloat) {
-            var y = top
-            for line in col.lines {
-                drawLine(line, at: CGPoint(x: x(line), y: y), in: cgContext)
-                y += lineHeight + interlineGap
-            }
-        }
-
-        func blockHeight(_ col: Column) -> CGFloat {
-            guard !col.lines.isEmpty else { return 0 }
-            return CGFloat(col.lines.count) * lineHeight
-                + CGFloat(col.lines.count - 1) * interlineGap
-        }
-
-        let tallest = max(blockHeight(left), blockHeight(right), markSize.height)
-        // Sits above the band's centre, per `contentCentreOfBand`: the gap left
-        // beneath the caption then matches the mat on the other three sides.
-        let contentCentre = band.minY + band.height * m.contentCentreOfBand
-        let blockTop = contentCentre - tallest / 2
-
-        // Left column hugs the left edge of the band.
-        draw(left, x: { _ in band.minX }, top: blockTop + (tallest - blockHeight(left)) / 2)
-
-        // Right column hugs the right edge; the mark and divider sit before it.
-        let rightEdge = band.maxX
-        draw(right, x: { rightEdge - $0.size().width },
-             top: blockTop + (tallest - blockHeight(right)) / 2)
-
-        let rightBlockWidth = right.width
-        var cursor = rightEdge - rightBlockWidth
-        if hasDivider {
-            cursor -= gap
-            let dividerHeight = max(blockHeight(right) * m.dividerHeightToBlock, markSize.height * 0.8)
-            let dividerRect = CGRect(x: cursor - dividerWidth,
-                                     y: contentCentre - dividerHeight / 2,
-                                     width: dividerWidth, height: dividerHeight)
-            cgContext.setFillColor(platformColor(from: secondaryColor).cgColor)
-            cgContext.fill(dividerRect)
-            cursor -= dividerWidth + gap
-        } else if content.mark != nil {
-            cursor -= gap
-        }
-
-        if let mark = content.mark {
-            let markRect = CGRect(x: cursor - markSize.width,
-                                  y: contentCentre - markSize.height / 2,
-                                  width: markSize.width, height: markSize.height)
-            mark.draw(in: markRect, context: cgContext)
-        }
+        guard band.width > 0, band.height > 0 else { return }
+        drawRow(cgContext, band: band, font: geometry.captionFontSize, caption: caption, look: look)
     }
 
     /// Moves a colour part-way towards another — used to derive the secondary
@@ -977,127 +618,6 @@ public struct WhiteFrameRenderer {
         func mix(_ i: Int) -> CGFloat { a[i] + (b[i] - a[i]) * amount }
         return CGColor(colorSpace: sRGB,
                        components: [mix(0), mix(1), mix(2), a.count > 3 ? a[3] : 1]) ?? color
-    }
-
-    /// The caption bar `banner` draws beneath a full-bleed photo.
-    ///
-    /// Two blocks hugging opposite ends: the mark and the maker's credit at the
-    /// left, the shooting values and the device at the right. Nothing is
-    /// centred and there is no divider — with no mat around the photo, the
-    /// bar's own edges are what the content aligns to.
-    ///
-    /// Set in caps with a little tracking. Caps at a body font's default
-    /// spacing read as a cramped row of labels, and the whole bar is caps.
-    private static func drawBannerCaption(
-        cgContext: CGContext,
-        geometry: FrameGeometry,
-        content: ResolvedBannerCaption,
-        config: WhiteFrameConfig
-    ) {
-        guard !content.isEmpty else { return }
-
-        // The full canvas width, not `captionBand`'s: the band is the photo's
-        // width, and rounding the canvas up to even can leave the bar a pixel
-        // wider than that.
-        let band = CGRect(x: 0, y: geometry.captionBand.minY,
-                          width: geometry.framedSize.width,
-                          height: geometry.framedSize.height - geometry.captionBand.minY)
-        guard band.height > 0, band.width > 0 else { return }
-
-        let fontSize = geometry.captionFontSize
-        let m = geometry.metrics
-        let pitch = fontSize * m.linePitchToFont
-        let interlineGap = pitch * m.interlineShareOfPitch
-        let lineHeight = pitch - interlineGap
-        // One measure for the side inset and the internal gaps, so the bar's
-        // rhythm is even across it.
-        let gap = fontSize * m.columnGapToFont
-
-        let primaryColor = config.textColor
-        let secondaryColor = lighten(config.textColor,
-                                     towards: matColor(for: config, metrics: m),
-                                     by: m.secondaryToneMix)
-
-        func attributed(_ text: String, size: CGFloat, primary: Bool) -> NSAttributedString {
-            NSAttributedString(string: text.uppercased(), attributes: [
-                .font: platformFont(ofSize: size, weight: primary ? .semibold : .regular),
-                .foregroundColor: platformColor(from: primary ? primaryColor : secondaryColor),
-                .kern: size * m.bannerTrackingToFont,
-            ])
-        }
-
-        // The lead-in is the quiet line and the maker the loud one, which is
-        // the reverse of the right block — the eye lands on the name, then on
-        // the values it is paired with.
-        var leftText: [(String, Bool)] = []
-        if let maker = content.maker {
-            leftText.append((bannerLead, false))
-            leftText.append((maker, true))
-        }
-        var rightText: [(String, Bool)] = []
-        if let values = content.values { rightText.append((values, true)) }
-        if let device = content.device { rightText.append((device, false)) }
-
-        func block(_ text: [(String, Bool)], size: CGFloat) -> [NSAttributedString] {
-            text.map { attributed($0.0, size: size, primary: $0.1) }
-        }
-        func width(_ lines: [NSAttributedString]) -> CGFloat {
-            lines.map { $0.size().width }.max() ?? 0
-        }
-        func height(_ lines: [NSAttributedString]) -> CGFloat {
-            guard !lines.isEmpty else { return 0 }
-            return CGFloat(lines.count) * lineHeight + CGFloat(lines.count - 1) * interlineGap
-        }
-
-        // Mark first: its width comes from a metric height, and the two blocks
-        // divide what is left.
-        var markSize = CGSize.zero
-        if let mark = content.mark {
-            let tall = min(geometry.logoHeight, band.height - fontSize * 0.6)
-            let wide = tall * mark.aspectRatio
-            let maxWidth = band.width * m.markMaxWidthOfBand
-            markSize = wide > maxWidth
-                ? CGSize(width: maxWidth, height: maxWidth / mark.aspectRatio)
-                : CGSize(width: wide, height: tall)
-        }
-        let markSpace = markSize.width > 0 ? markSize.width + gap : 0
-
-        var left = block(leftText, size: fontSize)
-        var right = block(rightText, size: fontSize)
-        let available = max(0, band.width - gap * 2 - markSpace - gap)
-        // Shrink per block, so one long lens string does not shrink the maker's
-        // name across the bar from it.
-        let leftAllowance = right.isEmpty ? available : available * 0.5
-        let rightAllowance = left.isEmpty ? available : available * 0.5
-        if width(left) > leftAllowance, width(left) > 0 {
-            left = block(leftText, size: fontSize * (leftAllowance / width(left)))
-        }
-        if width(right) > rightAllowance, width(right) > 0 {
-            right = block(rightText, size: fontSize * (rightAllowance / width(right)))
-        }
-
-        // Centred on the bar itself. `contentCentreOfBand` sits the gallery's
-        // caption high so the space beneath it matches the mat on the other
-        // three sides; here there are no other sides to match.
-        let centre = band.midY
-
-        func draw(_ lines: [NSAttributedString], x: (NSAttributedString) -> CGFloat) {
-            var y = centre - height(lines) / 2
-            for line in lines {
-                drawLine(line, at: CGPoint(x: x(line), y: y), in: cgContext)
-                y += lineHeight + interlineGap
-            }
-        }
-
-        var cursor = band.minX + gap
-        if let mark = content.mark {
-            mark.draw(in: CGRect(x: cursor, y: centre - markSize.height / 2,
-                                 width: markSize.width, height: markSize.height),
-                      context: cgContext)
-            cursor += markSpace
-        }
-        draw(left, x: { _ in cursor })
-        draw(right, x: { band.maxX - gap - $0.size().width })
     }
 
     /// A centred block of caption lines, sitting in the bottom mat.

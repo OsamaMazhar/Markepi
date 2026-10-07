@@ -165,8 +165,45 @@ public enum CountryResolver {
 
         var countryCodes: [String] { entries.map(\.code) }
 
-        /// The country containing a point, or nil.
+        /// How far off a simplified outline a point may be and still count as
+        /// that country, in degrees (about 20km).
+        ///
+        /// The outlines are simplified by up to ~9km, which cuts the corners off
+        /// coastlines: a photo taken in Manarola, on the shore, fell "in the sea"
+        /// and lost its place. A point in no country takes the nearest one within
+        /// this distance — coasts resolve, open ocean still does not.
+        static let coastSnap = 0.2
+
+        /// The country containing a point, or the nearest one within
+        /// `coastSnap`, or nil.
         func country(latitude: Double, longitude: Double) -> String? {
+            countryContaining(latitude: latitude, longitude: longitude)
+                ?? nearestCountry(latitude: latitude, longitude: longitude, within: Self.coastSnap)
+        }
+
+        /// The country whose outline is closest to a point outside every
+        /// outline, if any lies within `limit` degrees.
+        func nearestCountry(latitude: Double, longitude: Double, within limit: Double) -> String? {
+            // Longitude degrees shrink with latitude; scale them so the
+            // distance is roughly ground distance.
+            let k = cos(latitude * .pi / 180)
+            var best: (code: String, distance: Double)?
+            for entry in entries where entry.minLat - limit <= latitude && latitude <= entry.maxLat + limit
+                && entry.minLon - limit / max(k, 0.1) <= longitude && longitude <= entry.maxLon + limit / max(k, 0.1) {
+                forEachEdge(entry) { a, b in
+                    let ax = (a.lon - longitude) * k, ay = a.lat - latitude
+                    let bx = (b.lon - longitude) * k, by = b.lat - latitude
+                    let dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy
+                    let t = len > 0 ? min(1, max(0, -(ax * dx + ay * dy) / len)) : 0
+                    let d = hypot(ax + t * dx, ay + t * dy)
+                    if d <= limit, d < (best?.distance ?? .greatestFiniteMagnitude) { best = (entry.code, d) }
+                }
+            }
+            return best?.code
+        }
+
+        /// The country containing a point, or nil.
+        func countryContaining(latitude: Double, longitude: Double) -> String? {
             // The bounding-box compare rejects almost every country for the
             // cost of four comparisons, so the ray cast only ever runs on the
             // few whose box the point is actually inside.
@@ -191,6 +228,30 @@ public enum CountryResolver {
 
         private func areaOfCode(_ code: String) -> Double {
             entries.first { $0.code == code }.map(area(of:)) ?? .greatestFiniteMagnitude
+        }
+
+        /// Calls `body` with every edge of every ring of one country.
+        private func forEachEdge(_ entry: Entry, _ body: ((lat: Double, lon: Double), (lat: Double, lon: Double)) -> Void) {
+            let latSpan = max(entry.maxLat - entry.minLat, 1e-9)
+            let lonSpan = max(entry.maxLon - entry.minLon, 1e-9)
+            var cursor = entry.offset
+            for _ in 0..<entry.ringCount {
+                guard cursor + 4 <= data.count else { break }
+                let pointCount = Int(Self.readUInt32(data, cursor))
+                cursor += 4
+                guard pointCount >= 2, cursor + pointCount * 4 <= data.count else {
+                    cursor += pointCount * 4
+                    continue
+                }
+                func point(_ index: Int) -> (lat: Double, lon: Double) {
+                    let at = cursor + index * 4
+                    return (entry.minLat + Double(Self.readUInt16(data, at)) / Self.pointMax * latSpan,
+                            entry.minLon + Double(Self.readUInt16(data, at + 2)) / Self.pointMax * lonSpan)
+                }
+                var j = pointCount - 1
+                for i in 0..<pointCount { body(point(j), point(i)); j = i }
+                cursor += pointCount * 4
+            }
         }
 
         /// Even-odd ray casting across every ring of one country.

@@ -21,6 +21,14 @@ public extension WatermarkConfiguration {
         // never a per-style memory: without this, turning the frame off and
         // then changing style would turn it back on.
         resolved.isEnabled = active.isEnabled
+        // What the caption says is one choice for every style — tick the lens
+        // or a place once and every frame shows it. Only how a style looks
+        // (border, sizes, colour, keyline…) is remembered per style.
+        resolved.metadataTextEnabled = active.metadataTextEnabled
+        resolved.captionFields = active.captionFields
+        resolved.placeOnOwnLine = active.placeOnOwnLine
+        resolved.captionPrefix = active.captionPrefix
+        resolved.logoEnabled = active.logoEnabled
         resolved.style = style
         return resolved
     }
@@ -33,39 +41,24 @@ public extension WatermarkConfiguration {
         whiteFrame = frameConfig(for: style)
     }
 
-    /// Applies a frame edit, to the style on screen or to every style.
+    /// Applies a frame edit to the style on screen.
     ///
     /// The style itself is not editable this way — it is chosen with
-    /// `selectFrameStyle`, which has to remember what it is leaving.
+    /// `selectFrameStyle`, which has to remember what it is leaving. What the
+    /// caption says reaches every style through `frameConfig(for:)`; how a
+    /// style looks stays its own.
     mutating func editFrame(_ transform: (inout WhiteFrameConfig) -> Void) {
         var frame = whiteFrame ?? WhiteFrameConfig(isEnabled: true)
         let active = frame.style
-
-        // The other styles are transformed from their own state *before* the
-        // active one changes. Derived afterwards, a style nobody has visited
-        // would inherit the already-edited config and take the edit twice —
-        // which for anything that toggles means it lands back where it started.
-        var others: [String: WhiteFrameConfig] = [:]
-        if applyFrameEditsToAllStyles {
-            for style in FrameStyle.allCases where style != active {
-                var other = frameConfig(for: style)
-                transform(&other)
-                other.style = style
-                others[style.rawValue] = other
-            }
-        }
-
         transform(&frame)
         frame.style = active
         whiteFrame = frame
 
         // `isEnabled` is the feature's own switch, so it follows the active
-        // frame into every remembered style whether or not the edit was meant
-        // for all of them.
+        // frame into every remembered style.
         for key in frameStylePresets.keys {
             frameStylePresets[key]?.isEnabled = frame.isEnabled
         }
-        for (key, value) in others { frameStylePresets[key] = value }
     }
 
     /// `config` wearing another style, with the caption size following along

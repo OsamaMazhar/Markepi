@@ -34,7 +34,7 @@ public struct EXIFTokenParser {
     private enum Token: String, CaseIterable {
         case make, camera_model, lens, aperture, focal_length
         case shutter_speed, iso, date, time, gps
-        case dimensions, format
+        case dimensions, format, landmark, city
     }
 
     /// How `{gps}` renders.
@@ -156,6 +156,12 @@ public struct EXIFTokenParser {
             // A file that recorded only the day has no clock reading to show.
             guard let moment = captureMoment(metadata: metadata), moment.hasTime else { return "--" }
             return format(moment.date, dateStyle: .none, timeStyle: .short)
+
+        case .landmark:
+            return (metadata[PlaceNameResolver.landmarkKey] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "--"
+
+        case .city:
+            return (metadata[PlaceNameResolver.cityKey] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "--"
 
         case .gps:
             switch gpsFormat {
@@ -453,14 +459,37 @@ public struct EXIFTokenParser {
     ///
     /// "--" both when there is no GPS at all and when the coordinate resolves
     /// to no country (open ocean), so the caption's existing missing-field
-    /// handling elides the line either way rather than falling back to raw
-    /// coordinates or inventing a country.
+    /// handling elides the line either way.
     private static func formatGPSAsPlace(from metadata: [String: Any]) -> String {
-        guard let coordinate = signedCoordinate(from: metadata),
-              let place = CountryResolver.placeDescription(latitude: coordinate.latitude,
-                                                           longitude: coordinate.longitude) else {
-            return "--"
+        guard let coordinate = signedCoordinate(from: metadata) else { return "--" }
+        return CountryResolver.placeDescription(latitude: coordinate.latitude,
+                                                longitude: coordinate.longitude) ?? "--"
+    }
+
+    /// The frame caption's one place fragment for whichever of Landmark, City
+    /// and Country are in `fields`: "📍 Rijksmuseum, Amsterdam, Netherlands 🇳🇱".
+    ///
+    /// Landmark and city come from the geocoder (`PlaceNameResolver`); when it
+    /// gave nothing (offline, or nothing nearby) the country stands in, so a
+    /// ticked place never silently vanishes. The flag goes with the country.
+    /// Nil without a coordinate or with no place field ticked.
+    public static func placeText(metadata: [String: Any], fields: Set<CaptionField>) -> String? {
+        guard fields.contains(where: \.isPlace),
+              let coordinate = signedCoordinate(from: metadata) else { return nil }
+        var parts: [String] = []
+        if fields.contains(.landmark), let landmark = metadata[PlaceNameResolver.landmarkKey] as? String,
+           !landmark.isEmpty {
+            parts.append(landmark)
         }
-        return place
+        if fields.contains(.city), let city = metadata[PlaceNameResolver.cityKey] as? String,
+           !city.isEmpty, city != parts.last {
+            parts.append(city)
+        }
+        let code = CountryResolver.countryCode(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let showsCountry = fields.contains(.gps) || parts.isEmpty
+        if showsCountry, let code { parts.append(CountryResolver.localizedName(for: code)) }
+        guard !parts.isEmpty else { return nil }
+        let flag = showsCountry ? code.flatMap(CountryResolver.flag(for:)) : nil
+        return "📍 " + parts.joined(separator: ", ") + (flag.map { " \($0)" } ?? "")
     }
 }

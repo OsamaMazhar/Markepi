@@ -162,12 +162,12 @@ struct FrameStyleCatalogTests {
         var flat = config(.gallery); flat.gradientEnabled = false
         let graduated = config(.gallery)
 
-        let a = WhiteFrameRenderer.resolveGalleryCaption(config: graduated, metadata: meta)
-        let b = WhiteFrameRenderer.resolveGalleryCaption(config: flat, metadata: meta)
-        #expect(b.leftPrimary == a.leftPrimary)
-        #expect(b.leftSecondary == a.leftSecondary)
-        #expect(b.rightPrimary == a.rightPrimary)
-        #expect(b.rightSecondary == a.rightSecondary)
+        let a = WhiteFrameRenderer.resolveRowCaption(config: graduated, metadata: meta)
+        let b = WhiteFrameRenderer.resolveRowCaption(config: flat, metadata: meta)
+        #expect(b.model == a.model)
+        #expect(b.moment == a.moment)
+        #expect(b.valuesLine == a.valuesLine)
+        #expect(b.details == a.details)
         #expect((b.mark == nil) == (a.mark == nil))
     }
 
@@ -303,97 +303,43 @@ struct FrameStyleCatalogTests {
 
     // MARK: - The Include list is the master switch
 
-    @Test("Unticking an entry drops it from gallery, wherever it sits")
-    func galleryHonoursTheIncludeList() {
-        // Gallery's four lines say where an entry sits; the Include list says
-        // whether it appears at all. Before this, gallery ignored the list
-        // entirely and the only way to drop a line was to set it to None.
-        var config = config(.gallery)
-        config.leftPrimary = .field(.cameraModel)
-        config.rightPrimary = .field(.gps)
+    @Test("Unticking an entry drops it from the standard caption",
+          arguments: [FrameStyle.gallery, .banner, .float])
+    func rowHonoursTheIncludeList(style: FrameStyle) {
+        var config = config(style)
         config.captionFields = [.cameraModel]      // location unticked
-
         let meta: [String: Any] = [
             "{TIFF}": ["Make": "Apple", "Model": "iPhone 16 Pro"],
             "{GPS}": ["Latitude": 48.8566, "LatitudeRef": "N",
                       "Longitude": 2.3522, "LongitudeRef": "E"] as [String: Any],
         ]
-        let resolved = WhiteFrameRenderer.resolveGalleryCaption(config: config, metadata: meta)
-
-        #expect(resolved.leftPrimary == "iPhone 16 Pro", "a ticked entry still draws")
-        #expect(resolved.rightPrimary == nil, "an unticked entry goes quiet where it sat")
+        let resolved = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: meta)
+        #expect(resolved.model == "iPhone 16 Pro", "a ticked entry still draws")
+        #expect(resolved.details == nil, "an unticked entry goes quiet")
+        config.captionFields = [.cameraModel, .gps]
+        #expect(WhiteFrameRenderer.resolveRowCaption(config: config, metadata: meta)
+            .details?.contains("🇫🇷") == true, "ticking it back brings it back")
     }
 
-    @Test("Ticking it back brings the line back")
-    func galleryLineReturns() {
+    @Test("Every ticked entry lands on its standard line")
+    func rowPlacesEveryField() {
         var config = config(.gallery)
-        config.rightPrimary = .field(.gps)
-        config.captionFields = [.gps]
-        let meta: [String: Any] = ["{GPS}": [
-            "Latitude": 48.8566, "LatitudeRef": "N",
-            "Longitude": 2.3522, "LongitudeRef": "E"] as [String: Any]]
-
-        #expect(WhiteFrameRenderer.resolveGalleryCaption(
-            config: config, metadata: meta).rightPrimary?.contains("🇫🇷") == true)
-    }
-
-    @Test("A ticked entry no line names still shows")
-    func gallerySpareFieldsLand() {
-        // Gallery has four lines and the list has ten entries, so most ticks
-        // name nothing. They used to draw nothing at all: the whole grid could
-        // be ticked and the caption still read "iPhone 16 Pro" alone.
-        var config = config(.gallery)
-        config.leftPrimary = .field(.cameraModel)
-        config.leftSecondary = .empty
-        config.rightPrimary = .text("@osama")
-        config.rightSecondary = .empty
-        config.captionFields = [.cameraModel, .aperture, .iso, .format, .gps]
-
+        config.captionFields = [.cameraModel, .aperture, .iso, .date, .format, .gps]
         let meta: [String: Any] = [
             "{TIFF}": ["Make": "Apple", "Model": "iPhone 16 Pro"],
-            "{Exif}": ["FNumber": 1.8, "ISOSpeedRatings": [64]] as [String: Any],
-            "PixelWidth": 4032, "PixelHeight": 3024,
+            "{Exif}": ["FNumber": 1.8, "ISOSpeedRatings": [64],
+                       "DateTimeOriginal": "2026:09:04 10:00:00"] as [String: Any],
+            "_SourceUTI": "public.jpeg",
             "{GPS}": ["Latitude": 48.8566, "LatitudeRef": "N",
                       "Longitude": 2.3522, "LongitudeRef": "E"] as [String: Any],
         ]
-        let resolved = WhiteFrameRenderer.resolveGalleryCaption(config: config, metadata: meta)
-
-        // Where it was taken sits under the device that was carried there;
-        // what the camera was doing goes to the other column.
-        #expect(resolved.leftSecondary?.contains("🇫🇷") == true)
-        #expect(resolved.rightSecondary?.contains("f/1.8") == true)
-        #expect(resolved.rightSecondary?.contains("64") == true)
-        #expect(resolved.leftSecondary?.contains("f/1.8") == false)
-        // The camera already has a line of its own and is not repeated.
-        #expect(resolved.leftSecondary?.contains("iPhone") == false)
-        #expect(resolved.rightPrimary == "@osama", "the user's own line is untouched")
-    }
-
-    @Test("Unticking a spare entry takes it back off the line")
-    func gallerySpareFieldsLeave() {
-        var config = config(.gallery)
-        config.rightSecondary = .empty
-        config.captionFields = [.cameraModel]
-        let meta: [String: Any] = [
-            "{TIFF}": ["Make": "Apple", "Model": "iPhone 16 Pro"],
-            "{Exif}": ["FNumber": 1.8] as [String: Any],
-        ]
-        #expect(WhiteFrameRenderer.resolveGalleryCaption(
-            config: config, metadata: meta).rightSecondary == nil)
-    }
-
-    @Test("A slot's own value keeps its place ahead of the spares")
-    func gallerySlotLeadsItsLine() {
-        var config = config(.gallery)
-        config.rightSecondary = .field(.shutterSpeed)
-        config.captionFields = [.shutterSpeed, .aperture]
-        let meta: [String: Any] = [
-            "{Exif}": ["ShutterSpeedValue": 6.0, "FNumber": 1.8] as [String: Any],
-        ]
-        let line = WhiteFrameRenderer.resolveGalleryCaption(
-            config: config, metadata: meta).rightSecondary
-        #expect(line?.hasPrefix("f/1.8") == false, "the assigned entry leads")
-        #expect(line?.contains("f/1.8") == true, "and the spare follows it")
+        let c = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: meta)
+        #expect(c.model == "iPhone 16 Pro")
+        #expect(c.moment?.contains("Sep 2026") == true)
+        #expect(c.valuesLine?.contains("f/1.8") == true)
+        #expect(c.valuesLine?.contains("64") == true)
+        #expect(c.details?.hasPrefix("📍") == true, "the place leads the details line")
+        #expect(c.details?.contains("JPEG") == true)
     }
 
     /// A phone's lens string, which is a spec rather than a name.
@@ -419,21 +365,14 @@ struct FrameStyleCatalogTests {
 
         let drawn: String
         switch style {
-        case .gallery:
-            let c = WhiteFrameRenderer.resolveGalleryCaption(config: config, metadata: meta)
-            drawn = [c.leftPrimary, c.leftSecondary, c.rightPrimary, c.rightSecondary]
-                .compactMap { $0 }.joined(separator: " ")
         case .print:
             let c = WhiteFrameRenderer.resolveCreditCaption(config: config, metadata: meta)
             drawn = c.lines.flatMap { $0 }.map(\.text).joined(separator: " ")
-        case .banner:
-            let c = WhiteFrameRenderer.resolveBannerCaption(config: config, metadata: meta)
-            drawn = [c.maker, c.values, c.device].compactMap { $0 }.joined(separator: " ")
         case .classic:
             drawn = WhiteFrameRenderer.resolveCaption(config: config, metadata: meta) ?? ""
         default:
             let c = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: meta)
-            drawn = [c.model, c.moment, c.valuesLine, c.place].compactMap { $0 }.joined(separator: " ")
+            drawn = [c.model, c.moment, c.valuesLine, c.details].compactMap { $0 }.joined(separator: " ")
         }
 
         #expect(drawn.contains("back triple camera"), "\(style): the lens is still named")
@@ -493,6 +432,9 @@ struct FrameStyleCatalogTests {
     func makerReturnsWhenTicked(style: FrameStyle) {
         var config = config(style)
         config.captionFields = [.maker]
+        // With the logo off: where a mark is drawn, it is the brand, and the
+        // name is not printed beside it a second time.
+        config.logoEnabled = false
         let meta = EXIFMetadataFactory.realisticMetadata(model: "iPhone 16 Pro")
             .merging(metadata()) { _, new in new }
 
@@ -519,7 +461,7 @@ struct FrameStyleCatalogTests {
         #expect(BrandMarkRegistry.brandKey(metadata: meta) == "apple",
                 "the make was dropped, so the bar drew no logo and no maker")
         #expect(BrandMarkRegistry.displayName(metadata: meta) == "Apple")
-        #expect(WhiteFrameRenderer.resolveSlot(.field(.cameraModel), metadata: meta)
+        #expect(WhiteFrameRenderer.resolveField(.cameraModel, metadata: meta)
                 == "iPhone 15 Pro Max")
     }
 
@@ -594,82 +536,19 @@ struct FrameStyleCatalogTests {
         #expect(EXIFTokenParser.substitute("{time}", metadata: meta) == "--")
     }
 
-    @Test("A line pointed at the date always shows it")
-    func anAssignedDateAlwaysShows() {
-        var config = config(.gallery)
-        config.leftSecondary = .field(.date)
-        config.captionFields = WhiteFrameConfig.defaultCaptionFields
-        var meta = videoMetadata()
-        meta["{Exif}"] = ["DateTimeOriginal": "2026:09:04 10:00:00", "FNumber": 1.8] as [String: Any]
-
-        #expect(WhiteFrameRenderer.resolveGalleryCaption(config: config, metadata: meta)
-            .leftSecondary?.contains("Sep 2026") == true)
-    }
-
     /// Every line a style draws, run together — for asking whether a value
     /// appears at all, whatever the layout does with it.
     private func captionText(_ config: WhiteFrameConfig, _ meta: [String: Any]) -> String {
         switch config.style {
-        case .gallery:
-            let c = WhiteFrameRenderer.resolveGalleryCaption(config: config, metadata: meta)
-            return [c.leftPrimary, c.leftSecondary, c.rightPrimary, c.rightSecondary]
-                .compactMap { $0 }.joined(separator: " ")
         case .print:
             let c = WhiteFrameRenderer.resolveCreditCaption(config: config, metadata: meta)
             return c.lines.flatMap { $0 }.map(\.text).joined(separator: " ")
-        case .banner:
-            let c = WhiteFrameRenderer.resolveBannerCaption(config: config, metadata: meta)
-            return [c.maker, c.values, c.device].compactMap { $0 }.joined(separator: " ")
         case .classic:
             return WhiteFrameRenderer.resolveCaption(config: config, metadata: meta) ?? ""
         default:
             let c = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: meta)
-            return [c.model, c.moment, c.valuesLine, c.place].compactMap { $0 }.joined(separator: " ")
+            return [c.model, c.moment, c.valuesLine, c.details].compactMap { $0 }.joined(separator: " ")
         }
-    }
-
-    // MARK: - A detail line breaks before it shrinks
-
-    /// One unit of width per character, so the expected breaks are countable.
-    private func measure(_ text: String) -> CGFloat { CGFloat(text.count) }
-
-    @Test("A long detail line breaks at its gaps rather than shrinking")
-    func detailLineWraps() {
-        let gap = WhiteFrameRenderer.runGap
-        let text = ["back dual camera", "26mm", "f/1.8", "1/25", "ISO 640"].joined(separator: gap)
-        let lines = WhiteFrameRenderer.wrappedRuns(text, width: 25, limit: 3, measure: measure)
-
-        #expect(lines.count > 1, "it did not fit on one line at this width")
-        #expect(lines.allSatisfy { !$0.hasPrefix(" ") && !$0.hasSuffix(" ") })
-        // Every reading survives, in order, and none is split.
-        #expect(lines.joined(separator: gap) == text)
-        for line in lines.dropLast() {
-            #expect(measure(line) <= 25, "a line was left over its width with room to break: \(line)")
-        }
-    }
-
-    @Test("The last line takes the remainder rather than growing the band")
-    func wrapStopsAtTheLimit() {
-        let gap = WhiteFrameRenderer.runGap
-        let text = ["one", "two", "three", "four", "five"].joined(separator: gap)
-        let lines = WhiteFrameRenderer.wrappedRuns(text, width: 3, limit: 2, measure: measure)
-
-        #expect(lines.count == 2, "a band with room for two lines never gets a third")
-        #expect(lines.joined(separator: gap) == text)
-    }
-
-    @Test("A line that fits is left alone")
-    func shortLineIsNotWrapped() {
-        #expect(WhiteFrameRenderer.wrappedRuns("f/1.8", width: 100, limit: 3, measure: measure) == ["f/1.8"])
-    }
-
-    @Test("Free text is nobody's field and is never filtered")
-    func customTextSurvivesTheFilter() {
-        var config = config(.gallery)
-        config.rightPrimary = .text("@osama")
-        config.captionFields = []
-        #expect(WhiteFrameRenderer.resolveGalleryCaption(
-            config: config, metadata: [:]).rightPrimary == "@osama")
     }
 
     @Test("Unticking the camera drops print's \"Shot on\" line too")

@@ -35,18 +35,6 @@ struct FrameStyleConfigTests {
         #expect(config.logoVariant == .color)
     }
 
-    @Test("Only the device heads a line by default; the list fills the rest")
-    func defaultSlotsLeaveRoomForTheList() {
-        // Pinning entries to lines fought the Include list: a pinned date drew
-        // even when the exposure it stands in for was there, and a pinned place
-        // sat across the band from the device it belongs beside.
-        let config = WhiteFrameConfig()
-        #expect(config.leftPrimary == .field(.cameraModel))
-        #expect(config.leftSecondary == .empty)
-        #expect(config.rightPrimary == .empty)
-        #expect(config.rightSecondary == .empty)
-    }
-
     @Test("A new frame captions where the photo was taken")
     func locationIsOnByDefault() {
         // Reported as "I can't see the location pin and flag anywhere": it
@@ -55,16 +43,15 @@ struct FrameStyleConfigTests {
         #expect(WhiteFrameConfig.defaultCaptionFields.contains(.gps))
         #expect(WhiteFrameConfig().captionFields.contains(.gps))
 
-        // It reaches the caption through the list rather than a pinned slot,
-        // which is what puts it under the device rather than across from it.
+        // It reaches the standard caption's details line.
         let meta: [String: Any] = [
             "{TIFF}": ["Make": "Apple", "Model": "iPhone 16 Pro"],
             "{GPS}": ["Latitude": 48.8566, "LatitudeRef": "N",
                       "Longitude": 2.3522, "LongitudeRef": "E"] as [String: Any],
         ]
-        #expect(WhiteFrameRenderer.resolveGalleryCaption(
+        #expect(WhiteFrameRenderer.resolveRowCaption(
             config: WhiteFrameConfig(isEnabled: true), metadata: meta)
-            .leftSecondary?.contains("🇫🇷") == true)
+            .details?.contains("🇫🇷") == true)
     }
 
     @Test("The pixel dimensions are not a default; the date is")
@@ -74,48 +61,6 @@ struct FrameStyleConfigTests {
         // is a fact about the file.
         #expect(WhiteFrameConfig.defaultCaptionFields.contains(.date))
         #expect(!WhiteFrameConfig.defaultCaptionFields.contains(.dimensions))
-    }
-
-    // MARK: - CaptionSlot
-
-    @Test("Every CaptionSlot case survives a Codable round trip")
-    func captionSlotRoundTrips() throws {
-        let cases: [CaptionSlot] = [
-            .field(.cameraModel),
-            .field(.gps),
-            .text("@a_handle"),
-            .text("{lens} {focal_length} {aperture}"),
-            .text(""),
-            .empty,
-        ]
-        for slot in cases {
-            let data = try JSONEncoder().encode(slot)
-            let decoded = try JSONDecoder().decode(CaptionSlot.self, from: data)
-            #expect(decoded == slot, "\(slot) did not round trip")
-        }
-    }
-
-    @Test("A slot naming a field this build does not know is dropped, not fatal")
-    func unknownFieldDecodesToEmpty() throws {
-        let data = Data("\"field:teleporter\"".utf8)
-        #expect(try JSONDecoder().decode(CaptionSlot.self, from: data) == .empty)
-    }
-
-    @Test("An untagged legacy value is read as typed text")
-    func untaggedValueDecodesAsText() throws {
-        let data = Data("\"Shot on my phone\"".utf8)
-        #expect(try JSONDecoder().decode(CaptionSlot.self, from: data) == .text("Shot on my phone"))
-    }
-
-    @Test("isEmpty distinguishes a slot that can never render from one that can")
-    func isEmptyIsAboutRenderability() {
-        #expect(CaptionSlot.empty.isEmpty)
-        #expect(CaptionSlot.text("").isEmpty)
-        #expect(CaptionSlot.text("   ").isEmpty)
-        #expect(!CaptionSlot.text("@handle").isEmpty)
-        // A field is never empty by configuration — whether it renders depends
-        // on the photo's metadata, which is resolved later.
-        #expect(!CaptionSlot.field(.iso).isEmpty)
     }
 
     // MARK: - Enums
@@ -157,23 +102,16 @@ struct FrameStyleConfigTests {
         // up today's default — the template was authored without one.
         #expect(config.keylineEnabled == false)
         #expect(config.logoVariant == .color)
-        // The gallery slots come back at their defaults, ready if the user ever
-        // switches this template to gallery.
-        #expect(config.leftPrimary == WhiteFrameConfig.defaultLeftPrimary)
-        #expect(config.rightSecondary == WhiteFrameConfig.defaultRightSecondary)
     }
 
     @Test("A full config round trips with every new field intact")
     func fullConfigRoundTrips() throws {
         let original = WhiteFrameConfig(
             isEnabled: true,
+            captionFields: [.landmark, .city, .gps],
             style: .gallery,
             keylineEnabled: true,
-            logoVariant: .monochrome,
-            leftPrimary: .field(.lens),
-            leftSecondary: .empty,
-            rightPrimary: .text("@someone"),
-            rightSecondary: .text("{iso}")
+            logoVariant: .monochrome
         )
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(WhiteFrameConfig.self, from: data)
@@ -181,10 +119,30 @@ struct FrameStyleConfigTests {
         #expect(decoded.style == .gallery)
         #expect(decoded.keylineEnabled)
         #expect(decoded.logoVariant == .monochrome)
-        #expect(decoded.leftPrimary == .field(.lens))
-        #expect(decoded.leftSecondary == .empty)
-        #expect(decoded.rightPrimary == .text("@someone"))
-        #expect(decoded.rightSecondary == .text("{iso}"))
+        #expect(decoded.captionFields == [.landmark, .city, .gps])
+    }
+}
+
+@Suite("Caption content is shared by every style")
+struct SharedCaptionContentTests {
+    @Test("Fields ticked in one style show in every other, visited or not")
+    func fieldsFollowAcrossStyles() {
+        var config = WatermarkConfiguration(watermarks: [], whiteFrame: WhiteFrameConfig(isEnabled: true))
+        config.selectFrameStyle(.banner)          // banner now remembered
+        config.selectFrameStyle(.gallery)
+        config.editFrame {
+            $0.captionFields = [.cameraModel, .lens, .landmark, .city]
+            $0.placeOnOwnLine = true
+            $0.borderMillimetres = 12             // a look setting stays per style
+        }
+        for style in [FrameStyle.banner, .noir, .classic] {
+            let other = config.frameConfig(for: style)
+            #expect(other.captionFields == [.cameraModel, .lens, .landmark, .city], "\(style)")
+            #expect(other.placeOnOwnLine, "\(style)")
+        }
+        #expect(config.frameConfig(for: .banner).borderMillimetres != 12)
+        config.selectFrameStyle(.banner)
+        #expect(config.whiteFrame?.captionFields.contains(.lens) == true)
     }
 }
 
@@ -215,10 +173,7 @@ struct FramePreviewKeyTests {
         ("gradientEnabled", { $0.gradientEnabled.toggle() }),
         ("creditPrefixText", { $0.creditPrefixText = "© Someone" }),
         ("creditSuffixText", { $0.creditSuffixText = "2026" }),
-        ("leftPrimary", { $0.leftPrimary = .field(.iso) }),
-        ("leftSecondary", { $0.leftSecondary = .field(.date) }),
-        ("rightPrimary", { $0.rightPrimary = .text("@handle") }),
-        ("rightSecondary", { $0.rightSecondary = .field(.format) }),
+        ("placeOnOwnLine", { $0.placeOnOwnLine.toggle() }),
     ]
 
     @Test("Changing any frame field changes the preview key",
