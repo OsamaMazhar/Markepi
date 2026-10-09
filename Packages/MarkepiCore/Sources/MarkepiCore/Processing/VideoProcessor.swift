@@ -132,12 +132,16 @@ public struct VideoProcessor {
         // Extract the video's metadata (device/model, creation date, dimensions,
         // format) so the white-frame caption can show real details — not just
         // resolution — matching the photo path.
-        let videoMetadata = await extractCaptionMetadata(
+        var videoMetadata = await extractCaptionMetadata(
             asset: asset,
             videoTrack: videoTrack,
             sourceURL: sourceURL,
             videoSize: videoSize
         )
+        // A city or landmark the user asked for (caption only, never the file).
+        await PlaceNameResolver.names(
+            for: config.whiteFrame, at: EXIFTokenParser.signedCoordinate(from: videoMetadata))?
+            .write(into: &videoMetadata)
 
         // Detect HDR by inspecting format descriptions for HDR transfer functions.
         // Done BEFORE building layers so watermark overlays are rasterized at the

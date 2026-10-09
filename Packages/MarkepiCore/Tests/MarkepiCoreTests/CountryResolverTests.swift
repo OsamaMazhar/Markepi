@@ -93,6 +93,18 @@ struct CountryResolverTests {
         #expect(CountryResolver.countryCode(latitude: lat, longitude: lon) == nil)
     }
 
+    @Test("A photo taken right on the coast resolves to its country",
+          arguments: [
+            (44.1067, 9.7286, "IT"),   // Manarola, Cinque Terre
+            (44.1025, 9.8241, "IT"),   // La Spezia
+            (46.4312, 6.9107, "CH"),   // Montreux, Lake Geneva
+          ])
+    func coastalPointsResolve(lat: Double, lon: Double, code: String) {
+        // The simplified outlines cut corners off coastlines; these all fell
+        // "in the sea" and the caption lost its place.
+        #expect(CountryResolver.countryCode(latitude: lat, longitude: lon) == code)
+    }
+
     @Test("An out-of-range or non-finite coordinate resolves to nothing, not a crash",
           arguments: [(91.0, 0.0), (-91.0, 0.0), (0.0, 181.0), (0.0, -181.0),
                       (Double.nan, 0.0), (0.0, Double.infinity)])

@@ -4,12 +4,12 @@ iPhone 16 and later have next-generation Photographic Styles: skin-aware underto
 
 ## What Changes
 
-- **New Style tool** in the editor dock with three families of looks, applied to the photo before frames and watermarks:
+- **New Looks tool** in the editor dock with three families of looks, applied to the photo before frames and watermarks:
   - **Moods (9):** Vibrant, Natural, Luminous, Dramatic, Quiet, Cozy, Ethereal, Muted B&W, Stark B&W.
   - **Undertones (5):** Neutral, Cool Rose, Rose Gold, Gold, Amber. These shift skin strongly and the rest of the photo lightly, using the person/skin mask.
-  - **Film (8):** Portrait 400, Golden 200, Chrome 100, Velvet 50, Classic Neg, Tungsten 800, Silver 400, Faded. Each has its own tone and colour response plus film grain; Tungsten 800 adds red highlight halation. The names are our own and deliberately avoid film-maker trademarks.
+  - **Film (8):** Pastel 400, Golden 200, Chrome 100, Velvet 50, Classic Neg, Tungsten 800, Silver 400, Faded. Each has its own tone and colour response plus film grain; Tungsten 800 adds red highlight halation. The names are our own and deliberately avoid film-maker trademarks.
   - **Original** (no style) is always the default.
-- **Controls:** Intensity (0–100%), a Tone/Color pad (darker↔brighter, cooler↔warmer), and for film looks a Grain amount. A press-and-hold on the canvas shows the unstyled photo.
+- **Controls:** Intensity (0–100%), a Tone & Warmth pad (darker↔brighter, cooler↔warmer), and for film looks a Grain amount. A press-and-hold on the canvas shows the unstyled photo.
 - **Skin awareness on every iPhone:** uses the skin matte that Portrait-mode photos already embed (iPhone XS and later). Otherwise it falls back to on-device person segmentation plus a skin-colour key. With no person found, an undertone applies only its light global shift.
 - **Quality and metadata are kept:** HDR gain map, colour profile and all EXIF/GPS metadata survive styled exports exactly as they do today. B&W looks never turn the file into a grayscale image.
 - **Previews match exports:** the live preview, the style thumbnails and the export render the same look, including grain scale.

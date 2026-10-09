@@ -27,7 +27,7 @@ private let aliases: [String: String] = [
 
 private let boolFlags: Set<String> = [
     "--help", "--force", "--list-fonts",
-    "--border", "--border-no-text", "--border-keyline", "--border-no-keyline", "--border-no-logo",
+    "--border", "--border-no-text", "--border-keyline", "--border-no-keyline", "--border-gradient", "--border-place-line", "--border-no-logo",
     "--date-stamp",
 ]
 
@@ -37,20 +37,9 @@ private let valueFlags: Set<String> = [
     "--logo", "--logo-position", "--logo-size", "--logo-opacity", "--logo-rotation",
     "--border-caption", "--border-fields", "--border-text-color",
     "--border-style", "--border-mm", "--border-caption-mm", "--border-logo-mm", "--border-dpi", "--border-logo-variant",
-    "--border-left-primary", "--border-left-secondary",
-    "--border-right-primary", "--border-right-secondary",
     "--date-format", "--date-size", "--date-position",
+    "--look",
 ]
-
-/// Parses a caption slot argument. A bare `CaptionField` name selects that
-/// field; anything else is free text, which may carry `{tokens}`. An empty
-/// string clears the slot.
-func captionSlot(_ raw: String?) -> CaptionSlot? {
-    guard let raw else { return nil }
-    if raw.isEmpty { return .empty }
-    if let field = CaptionField(rawValue: raw) { return .field(field) }
-    return .text(raw)
-}
 
 struct Flags {
     var values: [String: String] = [:]
@@ -322,15 +311,13 @@ struct Markepi {
                 logoVariant: try flags.value("--border-logo-variant").map {
                     try enumValue($0, flag: "--border-logo-variant")
                 } ?? .color,
-                leftPrimary: captionSlot(flags.value("--border-left-primary"))
-                    ?? WhiteFrameConfig.defaultLeftPrimary,
-                leftSecondary: captionSlot(flags.value("--border-left-secondary"))
-                    ?? WhiteFrameConfig.defaultLeftSecondary,
-                rightPrimary: captionSlot(flags.value("--border-right-primary"))
-                    ?? WhiteFrameConfig.defaultRightPrimary,
-                rightSecondary: captionSlot(flags.value("--border-right-secondary"))
-                    ?? WhiteFrameConfig.defaultRightSecondary
+                gradientEnabled: flags.has("--border-gradient")
             )
+            config.whiteFrame?.placeOnOwnLine = flags.has("--border-place-line")
+        }
+
+        if let look = flags.value("--look") {
+            config.photoLook = PhotoLookSettings(look: try enumValue(look, flag: "--look"))
         }
 
         if flags.has("--date-stamp") || flags.touched(prefix: "--date-") {
@@ -347,8 +334,9 @@ struct Markepi {
             )
         }
 
-        guard !config.watermarks.isEmpty || config.whiteFrame != nil || config.dateStamp != nil else {
-            throw CLIError("nothing to apply — pass --text, --logo, --border or --date-stamp")
+        guard !config.watermarks.isEmpty || config.whiteFrame != nil || config.dateStamp != nil
+                || config.photoLook.isActive else {
+            throw CLIError("nothing to apply — pass --text, --logo, --border, --date-stamp or --look")
         }
 
         // Metadata stripping runs through the engine's provenance path, so it is

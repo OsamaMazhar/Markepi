@@ -104,13 +104,11 @@ struct ContentView: View {
                     // a small centered sheet; force it to the large detent so it
                     // fills the available height. (On iPhone this is a no-op.)
                     .presentationDetents([.large])
-                    .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.image, .movie, .audiovisualContent]) { result in
-                        switch result {
-                        case .success(let url):
+                    .sheet(isPresented: $showFileImporter) {
+                        DocumentPicker(types: [.image, .movie, .audiovisualContent]) { url in
                             viewModel.handleIncomingFile(url: url)
-                        case .failure:
-                            break
                         }
+                        .ignoresSafeArea()
                     }
                     .onAppear {
                         // Don't pop the launch picker when a Share Extension
@@ -185,6 +183,10 @@ struct ContentView: View {
         .background(
             WindowBackgroundColor(color: viewModel.currentPhoto != nil ? .black : .systemBackground)
         )
+        // The frame strip steps aside while Looks is open (see isEditingLooks).
+        .onChange(of: activeTool, initial: true) { _, tool in
+            viewModel.isEditingLooks = tool == .looks
+        }
     }
 
     // MARK: - Main Layout (editor canvas + tool dock)
@@ -330,9 +332,13 @@ struct ContentView: View {
                     Button {
                         viewModel.showPaywall = true
                     } label: {
-                        PremiumCrownIcon(isPremium: store.isPremium, reduceMotion: reduceMotion)
+                        PremiumCrownIcon(isPremium: store.isPremium,
+                                         onSale: !store.isPremium && store.lifetimeOffer?.isOnSale == true,
+                                         reduceMotion: reduceMotion)
                     }
-                    .accessibilityLabel(store.isPremium ? "Markepi Pro" : "Upgrade to Premium")
+                    .accessibilityLabel(store.isPremium ? "Markepi Pro"
+                                        : store.lifetimeOffer?.isOnSale == true ? "Upgrade to Premium, on sale"
+                                        : "Upgrade to Premium")
                 }
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -1149,10 +1155,11 @@ struct SettingsView: View {
                 Section {
                     Toggle("Force Premium", isOn: $store.debugForcePremium)
                     Toggle("Always Show Onboarding", isOn: $debugAlwaysShowOnboarding)
+                    Toggle("Simulate Sale", isOn: $store.debugSimulateSale)
                 } header: {
                     Text("Developer")
                 } footer: {
-                    Text("Debug builds only. Force Premium unlocks every premium feature without a purchase. Always Show Onboarding replays the welcome flow on every launch for testing. This section does not exist in App Store builds.")
+                    Text("Debug builds only. Force Premium unlocks every premium feature without a purchase. Always Show Onboarding replays the welcome flow on every launch for testing. Simulate Sale shows the lifetime plan at a sale price. This section does not exist in App Store builds.")
                 }
                 #endif
 
@@ -1201,6 +1208,24 @@ struct SettingsView: View {
                     Text("Learn what C2PA Content Credentials prove, and when they're kept or removed as you share your image.")
                 }
 
+                Section("Contact") {
+                    linkRow("Email", "contact@orbitaar.com", "envelope", "mailto:contact@orbitaar.com")
+                    linkRow("X (Twitter)", "@Orbitaar", "at", "https://x.com/Orbitaar")
+                    linkRow("Reddit", "r/Markepi", "bubble.left.and.bubble.right", "https://www.reddit.com/r/Markepi/")
+                    linkRow("Website", "orbitaar.com", "globe", "https://www.orbitaar.com")
+                }
+
+                Section {
+                    followRow("TikTok", "@orbitaar", "music.note", "Follow", "https://www.tiktok.com/@orbitaar")
+                    followRow("Instagram", "@orbitaar__", "camera", "Follow", "https://www.instagram.com/orbitaar__/")
+                    // sub_confirmation=1 opens YouTube's subscribe prompt directly.
+                    followRow("YouTube", "@orbitaar", "play.rectangle", "Subscribe", "https://www.youtube.com/@orbitaar?sub_confirmation=1")
+                } header: {
+                    Text("Follow Us")
+                } footer: {
+                    Text("Enjoying Markepi? Follow us on TikTok and Instagram and subscribe on YouTube for tips, new frame styles and updates.")
+                }
+
                 Section("About") {
                     LabeledContent("Developer", value: "Orbitaar")
                     LabeledContent("Version", value: Self.appVersionString)
@@ -1218,6 +1243,40 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+        }
+    }
+
+    /// A tappable row: title + icon on the left, the address/handle on the right.
+    private func linkRow(_ title: String, _ value: String, _ icon: String, _ url: String) -> some View {
+        Link(destination: URL(string: url)!) {
+            LabeledContent {
+                Text(value)
+            } label: {
+                Label(title, systemImage: icon)
+            }
+        }
+    }
+
+    /// A social row whose trailing pill names the action (Follow / Subscribe).
+    private func followRow(_ title: String, _ handle: String, _ icon: String, _ action: String, _ url: String) -> some View {
+        Link(destination: URL(string: url)!) {
+            HStack {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                        Text(handle).markepiTypography(.metadata)
+                    }
+                } icon: {
+                    Image(systemName: icon)
+                }
+                Spacer()
+                Text(action)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.accentColor))
             }
         }
     }
@@ -1337,6 +1396,8 @@ private extension View {
 /// sweep and leaves the grey resting state.
 private struct PremiumCrownIcon: View {
     let isPremium: Bool
+    /// A lifetime sale is on: the crown and "SALE" share one gold capsule.
+    var onSale = false
     let reduceMotion: Bool
 
     /// Only free users get the attention-drawing sweep; Pro users have nothing
@@ -1368,7 +1429,38 @@ private struct PremiumCrownIcon: View {
 
     @State private var sweep = false
 
-    var body: some View { crown }
+    var body: some View {
+        if onSale { saleLabel } else { crown }
+    }
+
+    /// Crown + "SALE" in gold, inside the toolbar's own glass capsule (no
+    /// second capsule — glass on glass) — the sale is said on the button
+    /// itself, not in a word hanging under it. The gold sweep runs across the
+    /// whole label (none under Reduce Motion).
+    private var saleLabel: some View {
+        let label = HStack(spacing: 5) {
+            Image(systemName: "crown.fill")
+            Text("SALE").font(.footnote.weight(.heavy)).tracking(0.6)
+        }
+        return label
+            .foregroundStyle(Self.gold)
+            .overlay {
+                if !reduceMotion {
+                    GeometryReader { geo in
+                        Self.goldGlow
+                            .frame(width: geo.size.width * 0.6)
+                            .offset(x: sweep ? -geo.size.width * 0.7 : geo.size.width * 1.1)
+                            .animation(.easeInOut(duration: 1.3).delay(1.4)
+                                .repeatForever(autoreverses: false), value: sweep)
+                    }
+                    .mask { label }
+                    .allowsHitTesting(false)
+                }
+            }
+            .padding(.horizontal, 4)
+            .fixedSize()
+            .onAppear { sweep = !reduceMotion }
+    }
 
     private var crown: some View {
         Image(systemName: "crown.fill")

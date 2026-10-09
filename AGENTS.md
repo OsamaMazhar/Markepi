@@ -174,6 +174,8 @@ It builds both targets (Markepi and ShareExtension) via the Markepi scheme; non-
 
 Pipeline, scripts, and pitfalls for producing App Store screenshots (any app): **`notebook.md`** + **`tools/screenshots/`**. Simulator drives via `axe` (fresh-coordinate taps only), photos load through the App Group share inbox, phone frame is the Remotion GLB keyed green, compositing is HTML/CSS in headless Chromium, captions use Apple Ads popularity data, upload via AutoAlign's `tools/aso/screenshots.py` (`--replace`, pixel size decides the bucket, filename order = display order). Rules: flat phone, no tilted pop-outs, never the developer's real name in demo content, two-line caption + two-line subline on every slide, phone fills the canvas below the caption.
 
+Product page header + search results art (new ASC fields, Oct 2026): **`tools/screenshots/ASC-CREATIVE-ASSETS.md`**.
+
 App preview video: **`tools/reel/GUIDE.md`** — simulator recordings → CFR frame cuts → HTML reel rendered by Edge/Playwright → Stable Audio music (M5) → `upload_asc.py`. ≤30 s, 886×1920, app-icon palette.
 
 Wide 16:9 promo (Reddit): **`tools/promo-wide/GUIDE.md`** — deterministic GSAP page rendered frame by frame (Playwright → ffmpeg), v1.5 slides + reel footage, beat-synced to music-stolen-128bpm, narrator from `lines.json`, music ducked under VO.

@@ -6,6 +6,7 @@ import SwiftUI
 /// views), letting the photo canvas stay full-bleed while only one group of
 /// controls is revealed at a time — an Adobe/Photos-style editing model.
 enum EditorTool: String, CaseIterable, Identifiable {
+    case looks
     case text
     case logo
     case signature
@@ -18,6 +19,7 @@ enum EditorTool: String, CaseIterable, Identifiable {
     /// Short label shown under the dock icon.
     var title: String {
         switch self {
+        case .looks: return "Looks"
         case .text: return "Text"
         case .logo: return "Logo"
         case .signature: return "Sign"
@@ -30,6 +32,7 @@ enum EditorTool: String, CaseIterable, Identifiable {
     /// Title shown in the tool panel header (can be longer than the dock label).
     var panelTitle: String {
         switch self {
+        case .looks: return "Looks"
         case .text: return "Text Watermark"
         case .logo: return "Logo"
         case .signature: return "Signature"
@@ -42,6 +45,7 @@ enum EditorTool: String, CaseIterable, Identifiable {
     /// SF Symbol for the dock button.
     var icon: String {
         switch self {
+        case .looks: return "camera.filters"
         case .text: return "textformat"
         case .logo: return "photo"
         case .signature: return "signature"

@@ -39,7 +39,11 @@ let package = Package(
                 .copy("Resources/Brand")
             ],
             swiftSettings: [
-                .swiftLanguageMode(.v6)
+                .swiftLanguageMode(.v6),
+                // iOS 27 SwiftUI evaluates view bodies on its async render
+                // thread; Swift 6's runtime MainActor check traps there
+                // (App Store crashes in 1.3 and 2.0.1). Same flag on the app target.
+                .unsafeFlags(["-disable-dynamic-actor-isolation"])
             ]
         ),
         // Command-line front end (macOS only). Not part of any product, so the
@@ -52,7 +56,10 @@ let package = Package(
         .testTarget(
             name: "MarkepiCoreTests",
             dependencies: ["MarkepiCore"],
-            path: "Tests/MarkepiCoreTests"
+            path: "Tests/MarkepiCoreTests",
+            // Read straight from disk via #filePath (e.g. the CC0 portrait the
+            // Looks tests run Vision on), so not bundled.
+            exclude: ["Fixtures"]
         ),
     ]
 )

@@ -145,7 +145,8 @@ public struct FrameMetrics: Sendable, Equatable {
     /// The mat's tone at the top of the card. Measured: 255/255.
     public var matTopWhite: CGFloat
 
-    /// The mat's tone at the bottom. Measured: 166/255.
+    /// The mat's tone at the bottom: 92/255. The reference measured 166/255,
+    /// deepened so the shading reads as depth rather than as a faint tint.
     ///
     /// The mat is a vertical gradient, not a flat fill — that shading is what
     /// stops a large pale border reading as dead space, and it is why the
@@ -173,7 +174,7 @@ public struct FrameMetrics: Sendable, Equatable {
         printCaptionBlockPaddingLines: CGFloat = 1.9,
         emphasiseRightPrimary: Bool = false,
         matTopWhite: CGFloat = 1.0,
-        matBottomWhite: CGFloat = 0.651
+        matBottomWhite: CGFloat = 0.36
     ) {
         self.bandToBorder = bandToBorder
         self.captionToBorder = captionToBorder

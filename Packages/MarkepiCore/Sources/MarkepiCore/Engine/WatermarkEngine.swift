@@ -99,6 +99,9 @@ public actor WatermarkEngine {
         tier: ExportTier = .pro
     ) async throws -> ProcessingResult {
         let policy = ExportPolicy(tier: tier)
+        // A Pro look (or Pro tuning) exports as Original on the free tier.
+        var config = config
+        if !policy.allowsLook(config.photoLook) { config.photoLook = PhotoLookSettings() }
         // A free export caps the size like a preview does (and a preview of a
         // free export keeps the smaller of the two caps).
         let maxPixelDimension = [maxPixelDimension, policy.maxPixelDimension].compactMap { $0 }.min()
@@ -126,6 +129,10 @@ public actor WatermarkEngine {
             graphMetadata["PixelWidth"] = Int(normalized.extent.width.rounded())
             graphMetadata["PixelHeight"] = Int(normalized.extent.height.rounded())
         }
+        // A city or landmark the user asked for (caption only, never the file).
+        await PlaceNameResolver.names(
+            for: config.whiteFrame, at: EXIFTokenParser.signedCoordinate(from: graphMetadata))?
+            .write(into: &graphMetadata)
         var previewLayout = RenderLayout(photoRect: .zero, layerFrames: [:])
         // Live-preview fast path: render a screen-sized image instead of a
         // 12-megapixel one. A full-resolution render takes long enough that the
@@ -147,6 +154,7 @@ public actor WatermarkEngine {
             metadata: graphMetadata,
             renderScale: renderScale,
             brandMark: policy.brandMark,
+            masks: await Self.lookMasks(for: config.photoLook, sourceURL: sourceURL),
             layout: &previewLayout
         )
 
@@ -280,6 +288,8 @@ public actor WatermarkEngine {
                               height: photo.height * canvas.height)
             )
         }()
+        // A look never costs HDR: it recolours the SDR base, and the source's
+        // own gain map — kept as-is — lifts the styled base to HDR.
         let alignedGainMap = !policy.keepsGainMap ? nil : GainMapProcessor.aligned(
             auxData: loaded.gainMapAuxData,
             type: loaded.gainMapType ?? .appleHDR,
@@ -466,6 +476,10 @@ public actor WatermarkEngine {
             graphMetadata["PixelHeight"] = sideways ? sourceWidth : sourceHeight
         }
 
+        await PlaceNameResolver.names(
+            for: config.whiteFrame, at: EXIFTokenParser.signedCoordinate(from: graphMetadata))?
+            .write(into: &graphMetadata)
+
         // Millimetre-specified frame parts have to shrink with the photo.
         let fullLongestSide = CGFloat(max(sourceWidth, sourceHeight))
         let renderScale = fullLongestSide > 0
@@ -478,6 +492,7 @@ public actor WatermarkEngine {
             config: config,
             metadata: graphMetadata,
             renderScale: renderScale,
+            masks: await Self.lookMasks(for: config.photoLook, sourceURL: sourceURL),
             layout: &layout
         )
 
@@ -555,6 +570,13 @@ public actor WatermarkEngine {
         provenance: ProvenanceExportOptions? = nil,
         tier: ExportTier = .pro
     ) async throws -> ProcessingResult {
+        // A look styles the still only — the motion would not match it — so a
+        // styled Live Photo is shared as a still photo (the Looks panel says so).
+        if Self.livePhotoExportsAsStill(config: config, tier: tier) {
+            return try await process(
+                sourceURL: stillImageURL, config: config, provenance: provenance,
+                preserveSourceCredentials: true, tier: tier)
+        }
         let pair = try await LivePhotoProcessor.process(
             stillImageURL: stillImageURL,
             videoURL: videoURL,
@@ -654,12 +676,16 @@ public actor WatermarkEngine {
         metadata: [String: Any],
         renderScale: CGFloat = 1,
         brandMark: Bool = false,
+        masks: SceneMasks = .none,
         layout: inout RenderLayout
     ) throws -> CIImage {
         // Safety net: normalize orientation before positioning (Pitfall 3)
         let normalized = OrientationNormalizer.normalize(base)
 
-        let composited = normalized
+        // The look recolours the photo's own pixels — first, so the frame, the
+        // watermarks, the date stamp and the free mark drawn on top are never
+        // recoloured, while photo-derived frames read the styled photo.
+        let composited = PhotoLookRenderer.apply(config.photoLook, to: normalized, masks: masks)
 
         var layers: [(CIImage, CGPoint)] = []
         let extent = composited.extent
@@ -857,6 +883,18 @@ public actor WatermarkEngine {
         layout = Self.previewLayout(
             photoRect: extent, layerRects: layerRects, canvas: watermarkedResult.extent)
         return watermarkedResult
+    }
+
+    /// True when the export will carry a look, which makes a Live Photo a still.
+    public static func livePhotoExportsAsStill(config: WatermarkConfiguration, tier: ExportTier) -> Bool {
+        config.photoLook.isActive && ExportPolicy(tier: tier).allowsLook(config.photoLook)
+    }
+
+    /// Skin/sky masks for looks that read them; `.none` for every other look,
+    /// so Original and plain looks never pay for Vision.
+    static func lookMasks(for settings: PhotoLookSettings, sourceURL: URL) async -> SceneMasks {
+        guard PhotoLookRenderer.needsMasks(settings) else { return .none }
+        return await SceneMaskProvider.shared.masks(for: sourceURL)
     }
 
     /// A copy of `image` at most 512px on its long edge, in sRGB, for the frame

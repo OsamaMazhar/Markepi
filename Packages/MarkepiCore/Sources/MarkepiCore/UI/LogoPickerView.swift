@@ -81,17 +81,14 @@ public struct LogoPickerView<ViewModel: WatermarkConfigurable & Observable>: Vie
             maxSelectionCount: 1,
             matching: .images
         )
-        .fileImporter(
-            isPresented: $showFileImporter,
-            allowedContentTypes: [.png]
-        ) { result in
-            switch result {
-            case .success(let url):
+        .sheet(isPresented: $showFileImporter) {
+            // Any image a logo can be, not just PNG: JPEG, HEIC and the rest
+            // decode the same way a logo picked from Photos does.
+            DocumentPicker(types: [.image]) { url in
                 guard let data = try? Data(contentsOf: url) else { return }
                 viewModel.addLogoLayer(pngData: data)
-            case .failure:
-                break
             }
+            .ignoresSafeArea()
         }
         .onChange(of: logoPickerItems) { _, items in
             guard let item = items.first else { return }

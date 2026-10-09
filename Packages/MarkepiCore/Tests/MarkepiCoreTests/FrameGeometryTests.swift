@@ -585,7 +585,7 @@ struct LogoOptOutTests {
     func markIsOnByDefault() {
         let config = WhiteFrameConfig(isEnabled: true, style: .gallery)
         #expect(config.logoEnabled)
-        let caption = WhiteFrameRenderer.resolveGalleryCaption(config: config, metadata: metadata)
+        let caption = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: metadata)
         #expect(caption.mark != nil)
     }
 
@@ -593,9 +593,9 @@ struct LogoOptOutTests {
     func offDropsOnlyTheMark() {
         var config = WhiteFrameConfig(isEnabled: true, style: .gallery)
         config.logoEnabled = false
-        let caption = WhiteFrameRenderer.resolveGalleryCaption(config: config, metadata: metadata)
+        let caption = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: metadata)
         #expect(caption.mark == nil)
-        #expect(caption.leftPrimary == "iPhone 15 Pro Max")
+        #expect(caption.model?.hasSuffix("iPhone 15 Pro Max") == true)
         #expect(!caption.isEmpty)
     }
 

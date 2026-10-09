@@ -46,36 +46,58 @@ public enum ControlsSection: String, CaseIterable, Identifiable {
 /// MarkepiPillBar(selection: $section)
 ///     .padding(.horizontal, 16)
 /// ```
-public struct MarkepiPillBar: View {
-    @Binding var selection: ControlsSection
+public struct MarkepiPillBar<Option: Hashable & Identifiable>: View {
+    @Binding var selection: Option
+    private let options: [Option]
+    private let title: (Option) -> String
+    private let icon: (Option) -> String?
+    private let groupLabel: String
     @Namespace private var pillNamespace
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(selection: Binding<ControlsSection>) {
+    /// Any set of options, each with a title and an optional SF Symbol.
+    public init(
+        selection: Binding<Option>,
+        options: [Option],
+        groupLabel: String,
+        title: @escaping (Option) -> String,
+        icon: @escaping (Option) -> String? = { _ in nil }
+    ) {
         self._selection = selection
+        self.options = options
+        self.groupLabel = groupLabel
+        self.title = title
+        self.icon = icon
     }
 
     public var body: some View {
         HStack(spacing: 0) {
-            ForEach(ControlsSection.allCases) { section in
+            ForEach(options) { option in
                 Button {
                     withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
-                        selection = section
+                        selection = option
                     }
                 } label: {
-                    Text(section.rawValue)
-                        .markepiTypography(.pillLabel)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 16)
-                        .frame(maxWidth: .infinity)
+                    HStack(spacing: 6) {
+                        if let symbol = icon(option) {
+                            Image(systemName: symbol).imageScale(.small)
+                        }
+                        Text(title(option))
+                    }
+                    .markepiTypography(.pillLabel)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Capsule())
                 }
-                .accessibilityLabel("\(section.rawValue) controls")
-                .accessibilityHint("Shows \(section.rawValue.lowercased()) settings")
-                .accessibilityAddTraits(selection == section ? [.isButton, .isSelected] : .isButton)
-                .foregroundStyle(selection == section ? .primary : .secondary)
+                .accessibilityLabel(title(option))
+                .accessibilityAddTraits(selection == option ? [.isButton, .isSelected] : .isButton)
+                .foregroundStyle(selection == option ? .primary : .secondary)
                 .background {
-                    if selection == section {
+                    if selection == option {
                         Capsule()
                             .fill(.selection) // system-adaptive selection fill
                             .matchedGeometryEffect(id: "activePill", in: pillNamespace)
@@ -84,7 +106,7 @@ public struct MarkepiPillBar: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Controls section selector")
+        .accessibilityLabel(groupLabel)
         .padding(4) // inner breathing room for the pill indicator
         .markepiGlass(
             shape: Capsule(),
@@ -92,6 +114,14 @@ public struct MarkepiPillBar: View {
             isEnabled: !reduceTransparency
         )
         // D-16: Glass backing provides the blur when content scrolls beneath
+    }
+}
+
+extension MarkepiPillBar where Option == ControlsSection {
+    /// The controls-section bar (D-04).
+    public init(selection: Binding<ControlsSection>) {
+        self.init(selection: selection, options: ControlsSection.allCases,
+                  groupLabel: "Controls section selector", title: { $0.rawValue })
     }
 }
 #endif

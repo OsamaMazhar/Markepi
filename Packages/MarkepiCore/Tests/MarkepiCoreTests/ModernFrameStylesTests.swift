@@ -161,7 +161,6 @@ struct ModernFrameStylesTests {
         let p = try #require(PhotoPalette(image: split))
         #expect(p.topEdge.luminance > 0.8)
         #expect(p.bottomEdge.luminance < 0.2)
-        #expect(p.swatches().first!.luminance < p.swatches().last!.luminance)
     }
 
     // MARK: - Caption

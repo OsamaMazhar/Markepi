@@ -105,4 +105,49 @@ struct LocationMetadataWriterTests {
         #expect(LocationMetadataWriter.hasCoordinate(in: once),
                 "the caller skips the library lookup entirely for this file")
     }
+
+    /// A JPEG carrying `properties`, the way a camera or an editing app writes one.
+    private func jpeg(_ properties: [CFString: Any]) -> Data {
+        let image = TestImageFactory.solidColorImage(
+            color: CGColor(red: 0.2, green: 0.4, blue: 0.6, alpha: 1), size: CGSize(width: 64, height: 48)).0
+        let out = NSMutableData()
+        let dest = CGImageDestinationCreateWithData(out, "public.jpeg" as CFString, 1, nil)!
+        CGImageDestinationAddImage(dest, image, properties as CFDictionary)
+        CGImageDestinationFinalize(dest)
+        return out as Data
+    }
+
+    private func properties(of data: Data) -> [CFString: Any] {
+        CGImageSourceCreateWithData(data as CFData, nil)
+            .flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [CFString: Any] } ?? [:]
+    }
+
+    @Test("An edit that lost its EXIF gets the camera back from the original")
+    func fillsCameraFromOriginal() throws {
+        // What Photos shows for an edited photo comes from the library; the
+        // picked copy of some apps' edits has none of it.
+        let original = jpeg([
+            kCGImagePropertyOrientation: 6,
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: "Apple", kCGImagePropertyTIFFModel: "iPhone XS"],
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifFNumber: 1.8, kCGImagePropertyExifISOSpeedRatings: [25]],
+        ])
+        let edit = jpeg([kCGImagePropertyOrientation: 1])
+        #expect(!LocationMetadataWriter.hasCameraInfo(in: edit))
+
+        let repaired = try #require(LocationMetadataWriter.data(edit, fillingMetadataFrom: original))
+        #expect(LocationMetadataWriter.hasCameraInfo(in: repaired))
+        let p = properties(of: repaired)
+        let tiff = try #require(p[kCGImagePropertyTIFFDictionary] as? [CFString: Any])
+        #expect(tiff[kCGImagePropertyTIFFModel] as? String == "iPhone XS")
+        let exif = try #require(p[kCGImagePropertyExifDictionary] as? [CFString: Any])
+        #expect(exif[kCGImagePropertyExifFNumber] as? Double == 1.8)
+        // The edit's own pixels decide which way up it is, never the original's.
+        #expect(p[kCGImagePropertyOrientation] as? Int == 1)
+    }
+
+    @Test("Nothing to fill leaves the caller's bytes alone")
+    func nothingToFill() {
+        let both = jpeg([kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFModel: "iPhone XS"]])
+        #expect(LocationMetadataWriter.data(both, fillingMetadataFrom: both) == nil)
+    }
 }

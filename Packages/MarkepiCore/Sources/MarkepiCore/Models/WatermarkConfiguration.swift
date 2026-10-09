@@ -83,9 +83,9 @@ public struct WatermarkConfiguration: Sendable, Codable {
     /// own settings, in each frame.
     public var frameStylePresets: [String: WhiteFrameConfig] = [:]
 
-    /// Whether editing a frame setting writes it to every style rather than
-    /// only the one on screen. Default: false.
-    public var applyFrameEditsToAllStyles: Bool = false
+    /// The colour look applied to the photo's own pixels (never the frame or
+    /// the watermarks). Default: Original, i.e. untouched.
+    public var photoLook: PhotoLookSettings = PhotoLookSettings()
 
     // MARK: CodingKeys
 
@@ -93,7 +93,8 @@ public struct WatermarkConfiguration: Sendable, Codable {
         case watermarks, padding, paddingMillimetres, whiteFrame, dateStamp, outputFormat, outputQuality
         case rightsMetadata, metadataPrivacyProfile, provenanceEnabled, includeC2PAManifest
         case sourceDeclaration, invisibleProtectionEnabled
-        case frameStylePresets, applyFrameEditsToAllStyles
+        case frameStylePresets
+        case photoLook
     }
 
     /// Creates a watermark configuration.
@@ -138,8 +139,7 @@ public struct WatermarkConfiguration: Sendable, Codable {
         self.invisibleProtectionEnabled = try container.decodeIfPresent(Bool.self, forKey: .invisibleProtectionEnabled) ?? false
         self.frameStylePresets = try container.decodeIfPresent(
             [String: WhiteFrameConfig].self, forKey: .frameStylePresets) ?? [:]
-        self.applyFrameEditsToAllStyles = try container.decodeIfPresent(
-            Bool.self, forKey: .applyFrameEditsToAllStyles) ?? false
+        self.photoLook = try container.decodeIfPresent(PhotoLookSettings.self, forKey: .photoLook) ?? PhotoLookSettings()
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -161,7 +161,7 @@ public struct WatermarkConfiguration: Sendable, Codable {
         if !frameStylePresets.isEmpty {
             try container.encode(frameStylePresets, forKey: .frameStylePresets)
         }
-        try container.encode(applyFrameEditsToAllStyles, forKey: .applyFrameEditsToAllStyles)
+        try container.encode(photoLook, forKey: .photoLook)
     }
 }
 

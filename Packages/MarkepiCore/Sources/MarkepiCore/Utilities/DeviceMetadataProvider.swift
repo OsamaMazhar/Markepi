@@ -153,7 +153,17 @@ public struct DeviceMetadataProvider {
         }
 
         // Render in canonical declaration order, not tick order, and de-dupe.
+        let shown = Set(fields)
         for field in CaptionField.allCases where fields.contains(field) {
+            // Landmark, city and country run together as one place fragment,
+            // emitted where the first of them falls.
+            if field.isPlace {
+                if field == CaptionField.placeFields.first(where: shown.contains),
+                   let place = EXIFTokenParser.placeText(metadata: metadata, fields: shown) {
+                    parts.append(place)
+                }
+                continue
+            }
             // The lens is the one entry whose text depends on its neighbours:
             // it repeats the device name, the focal length and the aperture,
             // all of which may be printed beside it.

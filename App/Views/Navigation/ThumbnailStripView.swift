@@ -444,6 +444,10 @@ struct FrameStyleStripView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .padding(3)
+                            // A re-render (new look or frame setting) crossfades
+                            // over the old thumbnail instead of popping.
+                            .id(ObjectIdentifier(image))
+                            .transition(.opacity)
                     } else {
                         ProgressView()
                     }

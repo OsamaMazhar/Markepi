@@ -108,12 +108,12 @@ extension WatermarkConfigurable {
 
     public func addLogoLayer(pngData: Data) {
         guard let _ = CIImage(data: pngData) else {
-            errorMessage = "The selected image is not a valid PNG file."
+            errorMessage = "The selected file isn't an image Markepi can read."
             showError = true
             return
         }
         guard let input = try? ImageWatermarkInput(pngData: pngData) else {
-            errorMessage = "The selected image is not a valid PNG file."
+            errorMessage = "The selected file isn't an image Markepi can read."
             showError = true
             return
         }

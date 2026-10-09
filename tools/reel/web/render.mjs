@@ -9,7 +9,8 @@ const mode = process.argv[2] || "preview";
 const lang = process.env.RL || "en";
 const only = process.argv[3] ? process.argv[3].split(",").map(Number) : null;
 const dir = path.dirname(new URL(import.meta.url).pathname);
-const out = path.join(dir, "out-" + mode + (mode === "reel" ? "-" + lang : ""));
+const isReel = mode.startsWith("reel");
+const out = path.join(dir, "out-" + mode + (isReel ? "-" + lang : ""));
 if (!only) rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
@@ -17,13 +18,14 @@ const browser = await chromium.launch({
   executablePath: "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
   args: ["--allow-file-access-from-files", "--font-render-hinting=none"],
 });
-const page = await browser.newPage({ viewport: { width: 886, height: 1920 }, deviceScaleFactor: 1 });
-await page.goto(`file://${dir}/${mode === "reel" ? "reel.html?lang=" + lang : "index.html?mode=" + mode}`);
+const ipad = mode.endsWith("-ipad");
+const page = await browser.newPage({ viewport: ipad ? { width: 1200, height: 1600 } : { width: 886, height: 1920 }, deviceScaleFactor: 1 });
+await page.goto(`file://${dir}/${isReel ? mode + ".html?lang=" + lang : "index.html?mode=" + mode}`);
 await page.waitForFunction(() => window.READY);
 const total = await page.evaluate(() => window.TOTAL_FRAMES);
 const frames = only || [...Array(total).keys()];
 const log = [];
-const dest = path.join(os.homedir(), "Desktop", mode === "reel" ? `Markepi-Reel.mp4` : `Markepi-${mode}.mp4`);
+const dest = path.join(os.homedir(), "Desktop", mode === "reel" ? `Markepi-Reel.mp4` : isReel ? `Markepi-${mode}.mp4` : `Markepi-${mode}.mp4`);
 const enc = only ? null : spawn("ffmpeg", ["-v", "error", "-y", "-f", "image2pipe", "-framerate", "30", "-i", "-",
   "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100", "-map", "0:v", "-map", "1:a", "-shortest",
   "-c:v", "libx264", "-preset", "slow", "-crf", "15", "-pix_fmt", "yuv420p", "-r", "30",

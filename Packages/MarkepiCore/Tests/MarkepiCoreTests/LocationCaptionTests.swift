@@ -167,18 +167,9 @@ struct LocationCaptionTests {
         case .print:
             caption = WhiteFrameRenderer.resolveCreditCaption(
                 config: config, metadata: metadata).details ?? ""
-        case .banner:
-            caption = WhiteFrameRenderer.resolveBannerCaption(
-                config: config, metadata: metadata).values ?? ""
-        case .gallery:
-            let resolved = WhiteFrameRenderer.resolveGalleryCaption(
-                config: config, metadata: metadata)
-            caption = [resolved.leftPrimary, resolved.leftSecondary,
-                       resolved.rightPrimary, resolved.rightSecondary]
-                .compactMap { $0 }.joined(separator: " ")
         default:
-            caption = WhiteFrameRenderer.resolveRowCaption(
-                config: config, metadata: metadata).place ?? ""
+            let row = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: metadata)
+            caption = [row.place, row.details].compactMap { $0 }.joined(separator: " ")
         }
         // Silence the unused-mutation warning while keeping `config` a var for
         // readability above.
@@ -188,27 +179,77 @@ struct LocationCaptionTests {
         #expect(caption.contains("🇫🇷"), "\(style.rawValue) caption: \(caption)")
     }
 
-    @Test("A gallery slot renders the location as a place")
+    @Test("A caption field renders the location as a place")
     func gallerySlotShowsPlace() throws {
-        let resolved = try #require(WhiteFrameRenderer.resolveSlot(
-            .field(.gps), metadata: gps(lat: 48.8566, lon: 2.3522)))
+        let resolved = try #require(WhiteFrameRenderer.resolveField(
+            .gps, metadata: gps(lat: 48.8566, lon: 2.3522)))
         #expect(resolved.hasPrefix("📍 "))
         #expect(resolved.hasSuffix("🇫🇷"))
     }
 
-    @Test("A gallery slot with an unresolvable location resolves to nothing")
+    @Test("A caption field with an unresolvable location resolves to nothing")
     func gallerySlotElidesMissingLocation() {
-        #expect(WhiteFrameRenderer.resolveSlot(.field(.gps), metadata: [:]) == nil)
-        #expect(WhiteFrameRenderer.resolveSlot(
-            .field(.gps), metadata: gps(lat: 0, lon: -140)) == nil)
+        #expect(WhiteFrameRenderer.resolveField(.gps, metadata: [:]) == nil)
+        #expect(WhiteFrameRenderer.resolveField(
+            .gps, metadata: gps(lat: 0, lon: -140)) == nil)
+    }
+
+    @Test("Landmark, city and country are each optional and run together as one place")
+    func placeFieldsCompose() {
+        var metadata = gps(lat: 52.36, lon: 4.885)
+        metadata[PlaceNameResolver.landmarkKey] = "Rijksmuseum"
+        metadata[PlaceNameResolver.cityKey] = "Amsterdam"
+        let country = CountryResolver.localizedName(for: "NL")
+        func place(_ fields: Set<CaptionField>) -> String? {
+            EXIFTokenParser.placeText(metadata: metadata, fields: fields)
+        }
+        #expect(place([.landmark, .city, .gps]) == "📍 Rijksmuseum, Amsterdam, \(country) 🇳🇱")
+        #expect(place([.city]) == "📍 Amsterdam", "no country, no flag")
+        #expect(place([.landmark, .gps]) == "📍 Rijksmuseum, \(country) 🇳🇱")
+        #expect(place([.gps]) == "📍 \(country) 🇳🇱")
+        #expect(place([.iso]) == nil)
+        // The classic line draws the group once, not once per field.
+        let line = DeviceMetadataProvider.caption(prefix: "", fields: [.landmark, .city, .gps],
+                                                  metadata: metadata)
+        #expect(line == "📍 Rijksmuseum, Amsterdam, \(country) 🇳🇱")
+    }
+
+    @Test("The place can move to a line of its own under the date")
+    func placeOnOwnLine() {
+        var config = WhiteFrameConfig(isEnabled: true, captionFields: [.cameraModel, .gps, .format],
+                                      style: .float)
+        var metadata = gps(lat: 52.36, lon: 4.885)
+        metadata["_SourceUTI"] = "public.jpeg"
+        let inline = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: metadata)
+        #expect(inline.place == nil)
+        #expect(inline.details?.hasPrefix("📍") == true)
+        config.placeOnOwnLine = true
+        let own = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: metadata)
+        #expect(own.place?.hasPrefix("📍") == true)
+        #expect(own.details == "JPEG")
+        config.style = .readout   // a one-line style keeps it inline
+        #expect(WhiteFrameRenderer.resolveRowCaption(config: config, metadata: metadata).place == nil)
+    }
+
+    @Test("Offline, a ticked city falls back to the country")
+    func cityFallsBackToCountry() {
+        let country = CountryResolver.localizedName(for: "NL")
+        #expect(EXIFTokenParser.placeText(metadata: gps(lat: 52.36, lon: 4.885), fields: [.city])
+                == "📍 \(country) 🇳🇱")
+    }
+
+    @Test("Only Landmark or City asks the geocoder")
+    func countryAloneSkipsLookup() async {
+        let frame = WhiteFrameConfig(isEnabled: true, captionFields: [.gps, .date])
+        #expect(await PlaceNameResolver.names(for: frame, at: (52.36, 4.885)) == nil)
     }
 
     @Test("The pin does not get mistaken for a missing-field placeholder")
     func placeSurvivesThePlaceholderFilter() throws {
-        // `resolveSlot` strips "--" words out of a line; a place fragment must
+        // `resolveField` strips "--" words out of a line; a place fragment must
         // pass through it whole, pin and flag included.
-        let resolved = try #require(WhiteFrameRenderer.resolveSlot(
-            .field(.gps), metadata: gps(lat: 43.7384, lon: 7.4246)))
+        let resolved = try #require(WhiteFrameRenderer.resolveField(
+            .gps, metadata: gps(lat: 43.7384, lon: 7.4246)))
         #expect(resolved == "📍 \(CountryResolver.localizedName(for: "MC")) 🇲🇨")
     }
 }

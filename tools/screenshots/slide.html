@@ -79,6 +79,15 @@ const SLIDES = {
   "05c": { ...P.teal, ...T.logo, cap: "05-logo", crop: "05c" },
   "06":  { ...P.alps, cap: "06-video", photo: "06", play: true, h: "Watermark<br>videos too", sub: "The same frames and marks<br>on every clip." },
   "07c": { ...P.pink, cap: "07b-share-editor", crop: "07c", h: "Share<br>instantly", sub: "Watermarked photos straight to any app.<br>No camera-roll clutter." },
+  // v2.0 set: new captures under cap/v2/<device>/, pop-outs rendered by the engine.
+  "v01": { ...P.blue, cap: "v2/iphone/01-hero-aura", pop: "cap/v2/iphone/01-hero-aura-pop.jpg", chip: "Photo & video watermark", h: "Frame &amp; mark<br>your photos", sub: "Frames, watermarks and looks,<br>then share in one tap." },
+  "v03": { ...P.dusk, cap: "v2/iphone/03-looks-film", crop: "v2/iphone/03-looks-film", chip: "New", h: "Film looks<br>&amp; moods", sub: "Moods, skin undertones and film stocks,<br>with your HDR kept intact." },
+  "v05": { ...P.teal, cap: "v2/iphone/02-frame-panel", crop: "v2/iphone/02-frame-panel", h: "Your frame,<br>your details", sub: "Camera, exposure, date, landmark,<br>city or country. Tap to add." },
+  "v06": { ...P.sky, ...T.text, cap: "v2/iphone/04-text", pop: "cap/v2/iphone/04-text-pop.jpg" },
+  "v07": { ...P.pink, ...T.logo, sub: "Transparent PNG logos and signatures,<br>placed exactly where you want.", cap: "v2/iphone/05-logo", pop: "cap/v2/iphone/05-logo-pop.jpg" },
+  "s1":  { ...P.gold, custom: "styles", chip: "16 frame styles", h: "Every frame,<br>one tap away", sub: "Gallery, banner, glow, aura and more,<br>each with your real camera details." },
+  "l1":  { ...P.dusk, custom: "looks", chip: "New · 22 photo looks", h: "A look for<br>every moment", sub: "Moods, skin undertones and film stocks,<br>made on device from your photo." },
+  "m1":  { ...P.sky, custom: "masks", chip: "New · Photo looks", h: "Looks that see<br>hair, skin &amp; sky", sub: "Each part of the photo is found on device,<br>so every look keeps faces natural." },
   "08c": { ...P.slate, cap: "08b-c2pa-signed", crop: "08c", h: "Protect photos<br>with C2PA", sub: "Creator and copyright sealed in<br>with Content Credentials." },
 };
 
@@ -89,10 +98,55 @@ const S = SLIDES[id];
 // Seeded RNG so a slide renders the same every time.
 let seed = parseInt(id) * 9301 + 49297 + id.length; const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
 
+const getCap = () => document.querySelector(".cap");
+
+// Slides without a phone: the engine's own renders laid out on the slide background.
+async function customSlide(S, st, W, H, cap) {
+  const BAND_TOP = 90, TOP = 770;
+  cap.style.top = `${BAND_TOP + (TOP - 40 - BAND_TOP - cap.offsetHeight) / 2}px`;
+  const label = (t, x, y, w) => `<div style="position:absolute;left:${x}px;top:${y}px;width:${w}px;text-align:center;color:#fff;font-size:40px;font-weight:700;letter-spacing:.02em;text-shadow:0 4px 18px rgba(0,0,0,.4)">${t}</div>`;
+  const shadow = "box-shadow:0 40px 80px rgba(0,0,0,.45),0 12px 24px rgba(0,0,0,.25);border-radius:8px";
+  if (S.custom === "styles" || S.custom === "looks") {
+    const looks = S.custom === "looks", dir = looks ? "looks" : "styles";
+    const names = (looks ? "original vibrant luminous dramatic cozy ethereal starkBW roseGold gold golden200 chrome100 velvet50 classicNeg tungsten800 silver400 faded"
+                         : "classic print gallery banner float tone swatch spine noir readout ambient aura blend emboss sunlight glow").split(" ");
+    const titles = { starkBW: "Stark B&amp;W", roseGold: "Rose Gold", golden200: "Golden 200", chrome100: "Chrome 100", velvet50: "Velvet 50",
+                     classicNeg: "Classic Neg", tungsten800: "Tungsten 800", silver400: "Silver 400" };
+    const cols = W > 1500 ? 6 : 4, rows = Math.ceil(names.length / cols), gap = 34, side = 70, cw = (W - side * 2 - gap * (cols - 1)) / cols, lh = 64;
+    const ch = (H - TOP - 60 - lh * rows - gap * (rows - 1)) / rows;
+    for (const [i, n] of names.entries()) {
+      const img = new Image(); img.src = `cap/v2/${dir}/${n}.jpg`; await img.decode();
+      const k = Math.min(cw / img.naturalWidth, ch / img.naturalHeight), w = img.naturalWidth * k, h = img.naturalHeight * k;
+      // A short last row is centred under the full ones.
+      const row = Math.floor(i / cols), inRow = Math.min(cols, names.length - row * cols);
+      const x = side + (cols - inRow) * (cw + gap) / 2 + (i % cols) * (cw + gap), y = TOP + row * (ch + lh + gap);
+      st.insertAdjacentHTML("beforeend", `<img src="${img.src}" style="position:absolute;left:${x + (cw - w) / 2}px;top:${y + (ch - h)}px;width:${w}px;height:${h}px;${shadow}">`
+        + label(titles[n] || n[0].toUpperCase() + n.slice(1), x, y + ch + 14, cw));
+    }
+  } else {
+    // The photo large, then what the look sees: hair, skin and sky.
+    const big = new Image(); big.src = "cap/v2/photo.jpg"; await big.decode();
+    const tilesH = 640, lh = 64, gap = 40, side = 80;
+    const bh = H - TOP - 80 - tilesH - lh - 70, bw = bh * big.naturalWidth / big.naturalHeight;
+    st.insertAdjacentHTML("beforeend", `<img src="${big.src}" style="position:absolute;left:${(W - bw) / 2}px;top:${TOP}px;width:${bw}px;height:${bh}px;${shadow};border-radius:24px">`);
+    const ar = big.naturalHeight / big.naturalWidth, tw = Math.min((W - side * 2 - gap * 2) / 3, tilesH / ar), th = tw * ar, ty = H - 80 - lh - th;
+    const tx0 = (W - tw * 3 - gap * 2) / 2;
+    for (const [i, [n, t]] of [["hair", "Hair"], ["skin", "Skin"], ["sky", "Sky"]].entries()) {
+      const x = tx0 + i * (tw + gap);
+      st.insertAdjacentHTML("beforeend", `<img src="cap/v2/mask_${n}.jpg" style="position:absolute;left:${x}px;top:${ty}px;width:${tw}px;height:${th}px;${shadow};border-radius:20px;border:3px solid rgba(255,255,255,.7)">`
+        + label(t, x, ty + th + 14, tw));
+    }
+    // Connectors from the photo down to each tile.
+    const yTop = TOP + bh + 12, yBot = ty - 12;
+    st.insertAdjacentHTML("beforeend", `<svg style="position:absolute;left:0;top:0" width="${W}" height="${H}">${[0, 1, 2].map(i => {
+      const x = tx0 + i * (tw + gap) + tw / 2; return `<path d="M${W / 2} ${yTop} C ${W / 2} ${(yTop + yBot) / 2}, ${x} ${(yTop + yBot) / 2}, ${x} ${yBot}" stroke="rgba(255,255,255,.75)" stroke-width="5" fill="none" stroke-dasharray="4 14" stroke-linecap="round"/>`; }).join("")}</svg>`);
+  }
+}
+
 async function main() {
   const phone = IPAD ? { phone: [1720, 2294], screen: [0, 0, 1720, 2294] } : await fetch("phone.json").then(r => r.json());
   const cap = S.cap;
-  const meta = S.crop ? await fetch(`${IPAD ? "capi" : "cap"}/${S.crop}-crop.json`).then(r => r.json()) : await fetch(`${IPAD ? "capi" : "cap"}/${cap}.json`).then(r => r.json());
+  const meta = S.custom ? null : S.crop ? await fetch(`${IPAD ? "capi" : "cap"}/${S.crop}-crop.json`).then(r => r.json()) : await fetch(`${IPAD ? "capi" : "cap"}/${cap}.json`).then(r => r.json());
   const st = document.getElementById("stage");
   const W = IPAD ? 2064 : 1320, H = IPAD ? 2752 : 2868;
   document.documentElement.style.setProperty("--W", W + "px");
@@ -110,6 +164,7 @@ async function main() {
 
   // Caption
   st.insertAdjacentHTML("beforeend", `<div class="cap">${S.chip ? `<div class="chip">${S.chip}</div>` : ""}<h1>${S.h}</h1><div class="sub">${S.sub}</div></div>`);
+  if (S.custom) { await customSlide(S, st, W, H, getCap()); await Promise.all([...document.images].map(i => i.decode().catch(() => {}))); window.DONE = true; return; }
   // Same phone position on every slide; the caption block is centred in the band above it.
   const capEl = st.querySelector(".cap"), BAND_TOP = 90, PHONE_TOP = IPAD ? 640 : 770;
   capEl.style.top = `${BAND_TOP + (PHONE_TOP - 40 - BAND_TOP - capEl.offsetHeight) / 2}px`;
@@ -125,7 +180,7 @@ async function main() {
     ${IPAD ? "" : '<img class="frame" src="frame.png">'};</div>`);
 
   // Pop-out: map its rect from capture pixels to canvas pixels, then lift it around its centre.
-  const pop = new Image(); pop.src = S.crop ? `${IPAD ? "capi" : "cap"}/${S.crop}-crop.png` : `pop/${S.photo}_web.jpg`; await pop.decode();
+  const pop = new Image(); pop.src = S.crop ? `${IPAD ? "capi" : "cap"}/${S.crop}-crop.png` : S.pop ? (IPAD ? S.pop.replace("/iphone/", "/ipad/") : S.pop) : `pop/${S.photo}_web.jpg`; await pop.decode();
   const cs = sw / (IPAD ? 2064 : 1320); // capture px -> canvas px
   let [rx, ry, rw, rh] = S.crop ? meta.crop : meta.preview;
   if (!S.crop) { // fit the render inside the preview rect, as the app does
@@ -137,7 +192,9 @@ async function main() {
   let pw, ph;
   if (S.crop) { pw = rw * cs * 1.2; ph = rh * cs * 1.2; }
   else if (IPAD) { pw = rw * cs * 1.08; ph = pw * rh / rw; if (ph > 1560) { ph = 1560; pw = ph * rw / rh; } }
-  else { pw = Math.max(rw * cs * 1.14, PW * 0.98); ph = pw * rh / rw; if (ph > 1350) { ph = 1350; pw = ph * rw / rh; } }
+  else { pw = Math.max(rw * cs * 1.14, PW * 0.98); ph = pw * rh / rw; if (ph > 1350) { ph = 1350; pw = ph * rw / rh; }
+         // Never smaller than the photo it lifts from, or the capture's own frame shows around it.
+         if (pw < rw * cs * 1.06) { pw = rw * cs * 1.06; ph = pw * rh / rw; } }
   const radius = S.crop ? 30 * cs * 3 * 1.2 : 10;
   st.insertAdjacentHTML("beforeend", `<div class="popwrap" style="left:${cx - pw / 2}px;top:${cy - ph / 2}px;width:${pw}px;height:${ph}px">
     <div class="pop"><img src="${pop.src}" style="border-radius:${radius}px"><div class="sheen" style="border-radius:${radius}px"></div>${S.play ? '<div class="play"></div>' : ""}</div></div>`);

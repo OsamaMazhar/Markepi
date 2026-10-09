@@ -4,8 +4,7 @@ import Testing
 @testable import MarkepiCore
 
 /// `banner` sets a full-bleed photo over a caption bar: no mat on three sides,
-/// the maker's mark and credit at the far left of the bar, the shooting values
-/// and the device at the far right.
+/// and the standard two-column caption in the bar beneath.
 ///
 /// The geometry half of this suite is the part worth pinning. Every other style
 /// surrounds the photo, and several places in the pipeline quietly assumed that
@@ -88,76 +87,56 @@ struct BannerStyleTests {
         #expect(config.keylineEnabled, "the stored preference survives")
     }
 
-    // MARK: - What the bar says
+    // MARK: - What the bar says (the standard row caption)
 
-    @Test("The left block credits the maker under a fixed lead-in")
-    func leftBlockCreditsTheMaker() {
-        let resolved = WhiteFrameRenderer.resolveBannerCaption(
-            config: config(), metadata: metadata())
-        #expect(resolved.maker == "Apple")
+    @Test("The brand is said once: the mark, then the model alone",
+          arguments: [FrameStyle.banner, .gallery, .noir])
+    func brandSaidOnce(style: FrameStyle) {
+        var config = config()
+        config.style = style
+        let resolved = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: metadata())
         #expect(resolved.mark != nil, "a recognised maker earns its mark")
+        #expect(resolved.model == "iPhone 16 Pro")
+        let text = [resolved.model, resolved.moment, resolved.valuesLine, resolved.details]
+            .compactMap { $0 }.joined(separator: " ")
+        #expect(!text.contains("Apple"), "the mark already says Apple: \(text)")
     }
 
-    @Test("An unrecognised maker costs the left block, not the bar")
-    func unknownMakerDropsTheCredit() {
-        let resolved = WhiteFrameRenderer.resolveBannerCaption(
+    @Test("Without the mark the maker leads the model, once")
+    func makerLeadsWithoutMark() {
+        var config = config()
+        config.logoEnabled = false
+        #expect(WhiteFrameRenderer.resolveRowCaption(config: config, metadata: metadata()).model
+                == "Apple iPhone 16 Pro")
+        #expect(WhiteFrameRenderer.resolveRowCaption(
+            config: config, metadata: metadata(make: "Canon", model: "Canon EOS R5")).model
+                == "Canon EOS R5", "a model that names its maker is not prefixed again")
+    }
+
+    @Test("An unrecognised maker costs the mark, not the bar")
+    func unknownMakerDropsTheMark() {
+        let resolved = WhiteFrameRenderer.resolveRowCaption(
             config: config(), metadata: metadata(make: "Acme Optical Co"))
-        #expect(resolved.maker == nil)
         #expect(resolved.mark == nil)
-        #expect(resolved.device != nil, "the right block still has the device")
+        #expect(resolved.model?.contains("iPhone 16 Pro") == true)
         #expect(!resolved.isEmpty)
     }
 
-    @Test("The device line names the model and its lens, never the model twice")
-    func deviceLineTrimsTheLens() {
-        // Apple writes the device name into the lens string, so an untrimmed
-        // line reads "iPhone 16 Pro • iPhone 16 Pro back camera 6.765mm f/1.78".
-        var config = config()
-        config.captionFields = [.cameraModel, .lens, .iso]
-        let device = WhiteFrameRenderer.resolveBannerCaption(
-            config: config, metadata: metadata()).device
-
-        #expect(device?.hasPrefix("iPhone 16 Pro • ") == true, "got: \(device ?? "nil")")
-        #expect(device?.dropFirst("iPhone 16 Pro • ".count).contains("iPhone 16 Pro") == false,
-                "the model is printed twice: \(device ?? "nil")")
-    }
-
-    @Test("The values line carries the exposure, never the equipment")
-    func valuesLineExcludesEquipment() {
+    @Test("Readings on the top right, equipment beneath, the lens never repeats the model")
+    func valuesAndDetailsSplit() {
         var config = config()
         config.captionFields = [.cameraModel, .lens, .iso, .aperture]
-        let resolved = WhiteFrameRenderer.resolveBannerCaption(
-            config: config, metadata: metadata())
-        let values = resolved.values ?? ""
-
+        let resolved = WhiteFrameRenderer.resolveRowCaption(config: config, metadata: metadata())
+        let values = resolved.valuesLine ?? ""
         #expect(values.contains("ISO"))
         #expect(values.contains("f/"))
         #expect(!values.contains("iPhone"), "the equipment belongs on the line below: \(values)")
-    }
-
-    @Test("Unticking the equipment fields empties the device line")
-    func deviceLineFollowsTheFieldChoice() {
-        var config = config()
-        config.captionFields = [.iso]
-        let resolved = WhiteFrameRenderer.resolveBannerCaption(
-            config: config, metadata: metadata())
-        #expect(resolved.device == nil)
-        #expect(resolved.values != nil, "the values line is still there")
-    }
-
-    @Test("Turning the mark off leaves the credit text")
-    func markCanBeTurnedOff() {
-        var config = config()
-        config.logoEnabled = false
-        let resolved = WhiteFrameRenderer.resolveBannerCaption(
-            config: config, metadata: metadata())
-        #expect(resolved.mark == nil)
-        #expect(resolved.maker == "Apple")
+        #expect(resolved.details?.isEmpty == false)
     }
 
     @Test("The caption off means no bar, whatever the metadata says")
     func captionOffCollapsesTheBar() {
-        #expect(WhiteFrameRenderer.resolveBannerCaption(
+        #expect(WhiteFrameRenderer.resolveRowCaption(
             config: config(captionEnabled: false), metadata: metadata()).isEmpty)
     }
 

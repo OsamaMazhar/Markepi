@@ -20,7 +20,17 @@ public enum CaptionField: String, Codable, CaseIterable, Sendable, Identifiable 
     case time
     case dimensions
     case format
+    /// The place group, in caption order: "📍 Rijksmuseum, Amsterdam,
+    /// Netherlands 🇳🇱". Each is optional; ticked ones run together as one
+    /// place fragment (`EXIFTokenParser.placeText`).
+    case landmark
+    case city
+    /// The country (kept as `gps` so saved configs keep their Location tick).
     case gps
+
+    /// Landmark, city and country: drawn together as one place fragment.
+    public static let placeFields: [CaptionField] = [.landmark, .city, .gps]
+    public var isPlace: Bool { Self.placeFields.contains(self) }
 
     public var id: String { rawValue }
 
@@ -38,6 +48,8 @@ public enum CaptionField: String, Codable, CaseIterable, Sendable, Identifiable 
         case .time:         return "{time}"
         case .dimensions:   return "{dimensions}"
         case .format:       return "{format}"
+        case .landmark:     return "{landmark}"
+        case .city:         return "{city}"
         case .gps:          return "{gps}"
         }
     }
@@ -46,7 +58,7 @@ public enum CaptionField: String, Codable, CaseIterable, Sendable, Identifiable 
     public var displayName: String {
         switch self {
         case .maker:        return "Brand"
-        case .cameraModel:  return "Camera / Device"
+        case .cameraModel:  return "Device"
         case .lens:         return "Lens"
         case .focalLength:  return "Focal length"
         case .aperture:     return "Aperture"
@@ -56,7 +68,9 @@ public enum CaptionField: String, Codable, CaseIterable, Sendable, Identifiable 
         case .time:         return "Time"
         case .dimensions:   return "Dimensions"
         case .format:       return "Format"
-        case .gps:          return "Location"
+        case .landmark:     return "Landmark"
+        case .city:         return "City"
+        case .gps:          return "Country"
         }
     }
 }
@@ -126,8 +140,8 @@ public enum FrameStyle: String, Codable, CaseIterable, Sendable, Identifiable {
         case .banner: return "A full-width photo over a caption bar"
         case .float: return "A rounded photo lifted off a warm white card"
         case .tone: return "A border in the photo's own deepest colour"
-        case .swatch: return "The photo's colours as a row of swatches"
-        case .spine: return "The caption on a slim rail beside the photo"
+        case .swatch: return "A colour card in the photo's own colour"
+        case .spine: return "A museum label beside the photo"
         case .noir: return "A black border with quiet white type"
         case .readout: return "One line of camera readings, like the viewfinder"
         case .ambient: return "The photo, blurred, as its own backdrop"
@@ -157,14 +171,6 @@ public enum FrameStyle: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    /// Whether this style lays its caption out as `gallery` does — two columns
-    /// with a brand mark between them.
-    ///
-    /// Asked rather than compared against a style name, so the caption,
-    /// geometry and mark decisions keep working if another style ever adopts
-    /// the same bar.
-    var usesGalleryCaption: Bool { self == .gallery }
-
     /// Whether this style offers the graduated-mat choice.
     ///
     /// Only `gallery`. It began as two styles — one graduated, one flat — but
@@ -180,9 +186,19 @@ public enum FrameStyle: String, Codable, CaseIterable, Sendable, Identifiable {
     ///
     /// `print` does. Its credit line is fixed wording — "Shot on" plus the
     /// model — so the way to sign a print is to wrap that line rather than to
-    /// replace it; the other styles either have one line only or already give
-    /// the user slots of their own to type into.
+    /// replace it; the other styles lead their device line with the caption
+    /// prefix instead.
     var offersCreditText: Bool { self == .print }
+
+    /// Whether the place can move to a third line under the date: the styles
+    /// that draw the standard two-column row (not classic/print, which centre
+    /// their lines, nor the one-line readout, swatch and spine).
+    var offersPlaceOnOwnLine: Bool {
+        switch self {
+        case .classic, .print, .readout, .swatch, .spine: return false
+        default: return true
+        }
+    }
 
     /// Whether this style draws the maker's brand mark in its caption.
     ///
@@ -222,60 +238,6 @@ public enum FrameStyle: String, Codable, CaseIterable, Sendable, Identifiable {
     public init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = FrameStyle(rawValue: raw) ?? .classic
-    }
-}
-
-/// What one line of the `gallery` caption says.
-///
-/// A slot is either a metadata field picked from `CaptionField`, free text the
-/// user typed, or nothing. Free text goes through `EXIFTokenParser`, so
-/// `"{lens} {focal_length}"` works there too — which is how a single line can
-/// carry several metadata values, as the reference layout's lens line does.
-public enum CaptionSlot: Sendable, Codable, Equatable {
-    case field(CaptionField)
-    case text(String)
-    case empty
-
-    /// True when this slot can never produce text, regardless of metadata.
-    public var isEmpty: Bool {
-        switch self {
-        case .empty: return true
-        case .text(let t): return t.trimmingCharacters(in: .whitespaces).isEmpty
-        case .field: return false
-        }
-    }
-
-    // MARK: Codable
-
-    // Encoded as one tagged string rather than a nested object, so a slot
-    // round-trips through a single value and stays readable in a saved template.
-    private static let fieldPrefix = "field:"
-    private static let textPrefix = "text:"
-
-    public init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        if raw.isEmpty {
-            self = .empty
-        } else if raw.hasPrefix(Self.fieldPrefix) {
-            let name = String(raw.dropFirst(Self.fieldPrefix.count))
-            // An unknown field name means a newer build wrote it; drop the slot
-            // rather than failing the whole config.
-            self = CaptionField(rawValue: name).map { .field($0) } ?? .empty
-        } else if raw.hasPrefix(Self.textPrefix) {
-            self = .text(String(raw.dropFirst(Self.textPrefix.count)))
-        } else {
-            // Untagged legacy value: treat it as what the user typed.
-            self = .text(raw)
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        switch self {
-        case .empty: try container.encode("")
-        case .field(let f): try container.encode(Self.fieldPrefix + f.rawValue)
-        case .text(let t): try container.encode(Self.textPrefix + t)
-        }
     }
 }
 
@@ -435,8 +397,12 @@ public struct WhiteFrameConfig: Sendable, Codable {
         case .print: return FrameMetrics.defaultPrintCaptionMillimetres
         // Banner's bar is proportioned like gallery's, so its text is too.
         case .gallery, .banner: return FrameMetrics.defaultCaptionMillimetres
-        // The modern caption is two lines in its own band, like gallery's.
-        default: return FrameMetrics.defaultCaptionMillimetres
+        // The modern caption is two lines in its own band. The tall-band
+        // styles (aura, ambient, glow… seven mats) scale it with the band, or
+        // their text sits tiny in a sea of surround.
+        default:
+            let band = ModernFrameLayout.of(style)?.band ?? 4.8
+            return FrameMetrics.defaultCaptionMillimetres * max(1, band / 4.8)
         }
     }
 
@@ -527,30 +493,16 @@ public struct WhiteFrameConfig: Sendable, Codable {
     /// `creditPrefixText`; both may be set, either alone, or neither.
     public var creditSuffixText: String
 
+    /// The place (landmark, city, country) on a third line under the date
+    /// instead of leading the right-hand details line. Default: false.
+    public var placeOnOwnLine: Bool = false
+
     /// Where `print` casts its shadow. Unread by every other style.
     ///
     /// Its depth is not configured: like the keyline, it is derived from the
     /// mat so it stays in proportion at any border setting or resolution.
     /// Default: `.bottom`
     public var shadow: FrameShadow
-
-    // The four `gallery` caption lines. Unused by `classic`, which renders the
-    // single centred caption built from `captionPrefix` + `captionFields`.
-
-    /// Upper-left caption line, drawn bold and dark. Default: camera model.
-    public var leftPrimary: CaptionSlot
-
-    /// Lower-left caption line, drawn lighter. Default: capture date.
-    public var leftSecondary: CaptionSlot
-
-    /// Upper-right caption line, drawn bold and dark. Default: empty free
-    /// text — this is where the photographer types their handle.
-    public var rightPrimary: CaptionSlot
-
-    /// Lower-right caption line, drawn lighter. Default: the lens, whose EXIF
-    /// string already carries focal length and aperture — composing it with
-    /// those fields as well would print both twice.
-    public var rightSecondary: CaptionSlot
 
     /// The default set of caption fields: camera, the common shooting details,
     /// and where the photo was taken.
@@ -566,20 +518,6 @@ public struct WhiteFrameConfig: Sendable, Codable {
     public static let defaultCaptionFields: [CaptionField] = [
         .maker, .cameraModel, .focalLength, .aperture, .shutterSpeed, .iso, .date, .time, .format, .gps,
     ]
-
-    /// The `gallery` caption defaults: the device heads the left column, and
-    /// every other line is left for the Include list to fill.
-    ///
-    /// Pinning entries here fought the list. A date pinned to a line showed
-    /// even when the exposure it was meant to stand in for was present, and a
-    /// place pinned to the right sat away from the device it belongs beside.
-    /// Unpinned, each entry lands in its own column by subject and obeys every
-    /// rule the other styles obey — and the four pickers become what they read
-    /// as: a way to override that, not the only way to say anything.
-    public static let defaultLeftPrimary: CaptionSlot = .field(.cameraModel)
-    public static let defaultLeftSecondary: CaptionSlot = .empty
-    public static let defaultRightPrimary: CaptionSlot = .empty
-    public static let defaultRightSecondary: CaptionSlot = .empty
 
     /// Creates a white frame configuration.
     ///
@@ -610,11 +548,7 @@ public struct WhiteFrameConfig: Sendable, Codable {
         gradientEnabled: Bool = false,
         shadow: FrameShadow = .bottom,
         creditPrefixText: String = "",
-        creditSuffixText: String = "",
-        leftPrimary: CaptionSlot = WhiteFrameConfig.defaultLeftPrimary,
-        leftSecondary: CaptionSlot = WhiteFrameConfig.defaultLeftSecondary,
-        rightPrimary: CaptionSlot = WhiteFrameConfig.defaultRightPrimary,
-        rightSecondary: CaptionSlot = WhiteFrameConfig.defaultRightSecondary
+        creditSuffixText: String = ""
     ) {
         self.isEnabled = isEnabled
         // Clamp to 0.03–0.05 per D-05 (warning-level tolerance, not a throw)
@@ -648,10 +582,6 @@ public struct WhiteFrameConfig: Sendable, Codable {
         self.shadow = shadow
         self.creditPrefixText = creditPrefixText
         self.creditSuffixText = creditSuffixText
-        self.leftPrimary = leftPrimary
-        self.leftSecondary = leftSecondary
-        self.rightPrimary = rightPrimary
-        self.rightSecondary = rightSecondary
     }
 
     // MARK: - Codable (CGColor)
@@ -663,8 +593,7 @@ public struct WhiteFrameConfig: Sendable, Codable {
         case style, borderMillimetres, captionTextMillimetres, logoHeightMillimetres
         case keylineEnabled, logoVariant, outputDPI, logoEnabled, shadow, gradientEnabled
         case captionMillimetresManual, logoMillimetresManual
-        case creditPrefixText, creditSuffixText
-        case leftPrimary, leftSecondary, rightPrimary, rightSecondary
+        case creditPrefixText, creditSuffixText, placeOnOwnLine
     }
 
     public init(from decoder: Decoder) throws {
@@ -716,17 +645,10 @@ public struct WhiteFrameConfig: Sendable, Codable {
         gradientEnabled = try container.decodeIfPresent(Bool.self, forKey: .gradientEnabled) ?? true
         creditPrefixText = try container.decodeIfPresent(String.self, forKey: .creditPrefixText) ?? ""
         creditSuffixText = try container.decodeIfPresent(String.self, forKey: .creditSuffixText) ?? ""
+        placeOnOwnLine = try container.decodeIfPresent(Bool.self, forKey: .placeOnOwnLine) ?? false
         outputDPI = try container.decodeIfPresent(CGFloat.self, forKey: .outputDPI)
             .map { min(2400, max(36, $0)) }
         logoEnabled = try container.decodeIfPresent(Bool.self, forKey: .logoEnabled) ?? true
-        leftPrimary = try container.decodeIfPresent(CaptionSlot.self, forKey: .leftPrimary)
-            ?? WhiteFrameConfig.defaultLeftPrimary
-        leftSecondary = try container.decodeIfPresent(CaptionSlot.self, forKey: .leftSecondary)
-            ?? WhiteFrameConfig.defaultLeftSecondary
-        rightPrimary = try container.decodeIfPresent(CaptionSlot.self, forKey: .rightPrimary)
-            ?? WhiteFrameConfig.defaultRightPrimary
-        rightSecondary = try container.decodeIfPresent(CaptionSlot.self, forKey: .rightSecondary)
-            ?? WhiteFrameConfig.defaultRightSecondary
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -763,10 +685,7 @@ public struct WhiteFrameConfig: Sendable, Codable {
         try container.encode(gradientEnabled, forKey: .gradientEnabled)
         try container.encode(creditPrefixText, forKey: .creditPrefixText)
         try container.encode(creditSuffixText, forKey: .creditSuffixText)
-        try container.encode(leftPrimary, forKey: .leftPrimary)
-        try container.encode(leftSecondary, forKey: .leftSecondary)
-        try container.encode(rightPrimary, forKey: .rightPrimary)
-        try container.encode(rightSecondary, forKey: .rightSecondary)
+        try container.encode(placeOnOwnLine, forKey: .placeOnOwnLine)
     }
 }
 
@@ -790,23 +709,12 @@ extension WhiteFrameConfig {
         + "|tc:\(Self.colorKey(textColor))"
         + "|st:\(style.rawValue)|kl:\(keylineEnabled ? 1 : 0)|lv:\(logoVariant.rawValue)"
         + "|sh:\(shadow.rawValue)|gr:\(gradientEnabled ? 1 : 0)"
-        + "|cpre:\(creditPrefixText)|csuf:\(creditSuffixText)"
+        + "|cpre:\(creditPrefixText)|csuf:\(creditSuffixText)|pol:\(placeOnOwnLine ? 1 : 0)"
         + "|bmm:\(String(format: "%.2f", borderMillimetres))"
         + "|cmm:\(String(format: "%.2f", captionTextMillimetres))"
         + "|lmm:\(String(format: "%.2f", logoHeightMillimetres))"
         + "|dpi:\(outputDPI.map { String(format: "%.0f", $0) } ?? "auto")"
         + "|le:\(logoEnabled ? 1 : 0)"
-        + "|lp:\(Self.slotKey(leftPrimary))|ls:\(Self.slotKey(leftSecondary))"
-        + "|rp:\(Self.slotKey(rightPrimary))|rs:\(Self.slotKey(rightSecondary))"
-    }
-
-    /// Compact, stable key for a caption slot.
-    static func slotKey(_ slot: CaptionSlot) -> String {
-        switch slot {
-        case .empty: return "none"
-        case .field(let field): return "f:\(field.rawValue)"
-        case .text(let text): return "t:\(text)"
-        }
     }
 
     /// Compact, stable key for a colour's components.

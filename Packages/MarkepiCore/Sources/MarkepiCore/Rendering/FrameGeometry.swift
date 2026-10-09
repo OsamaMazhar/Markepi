@@ -180,8 +180,10 @@ public struct FrameGeometry: Equatable, Sendable {
             if !hasCaptionContent {
                 band = side
             } else if config.style == .spine {
-                // The rail carries one rotated line and the mark above it.
-                band = max((mat * layout.band).rounded(), (fontSize * 3.2).rounded())
+                // The rail holds the museum label: short upright lines, about
+                // eight font sizes wide.
+                let rail: CGFloat = 8.5
+                band = max((mat * layout.band).rounded(), (fontSize * rail).rounded())
             } else {
                 // Tall enough for the two-line block with air around it, even
                 // when the caption is set larger than the default.
