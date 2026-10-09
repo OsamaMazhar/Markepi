@@ -1208,6 +1208,24 @@ struct SettingsView: View {
                     Text("Learn what C2PA Content Credentials prove, and when they're kept or removed as you share your image.")
                 }
 
+                Section("Contact") {
+                    linkRow("Email", "contact@orbitaar.com", "envelope", "mailto:contact@orbitaar.com")
+                    linkRow("X (Twitter)", "@Orbitaar", "at", "https://x.com/Orbitaar")
+                    linkRow("Reddit", "r/Markepi", "bubble.left.and.bubble.right", "https://www.reddit.com/r/Markepi/")
+                    linkRow("Website", "orbitaar.com", "globe", "https://www.orbitaar.com")
+                }
+
+                Section {
+                    followRow("TikTok", "@orbitaar", "music.note", "Follow", "https://www.tiktok.com/@orbitaar")
+                    followRow("Instagram", "@orbitaar__", "camera", "Follow", "https://www.instagram.com/orbitaar__/")
+                    // sub_confirmation=1 opens YouTube's subscribe prompt directly.
+                    followRow("YouTube", "@orbitaar", "play.rectangle", "Subscribe", "https://www.youtube.com/@orbitaar?sub_confirmation=1")
+                } header: {
+                    Text("Follow Us")
+                } footer: {
+                    Text("Enjoying Markepi? Follow us on TikTok and Instagram and subscribe on YouTube for tips, new frame styles and updates.")
+                }
+
                 Section("About") {
                     LabeledContent("Developer", value: "Orbitaar")
                     LabeledContent("Version", value: Self.appVersionString)
@@ -1225,6 +1243,40 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+        }
+    }
+
+    /// A tappable row: title + icon on the left, the address/handle on the right.
+    private func linkRow(_ title: String, _ value: String, _ icon: String, _ url: String) -> some View {
+        Link(destination: URL(string: url)!) {
+            LabeledContent {
+                Text(value)
+            } label: {
+                Label(title, systemImage: icon)
+            }
+        }
+    }
+
+    /// A social row whose trailing pill names the action (Follow / Subscribe).
+    private func followRow(_ title: String, _ handle: String, _ icon: String, _ action: String, _ url: String) -> some View {
+        Link(destination: URL(string: url)!) {
+            HStack {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                        Text(handle).markepiTypography(.metadata)
+                    }
+                } icon: {
+                    Image(systemName: icon)
+                }
+                Spacer()
+                Text(action)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.accentColor))
             }
         }
     }
