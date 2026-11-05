@@ -1,0 +1,38 @@
+[
+ {
+  "label": "24MP (6048x4032)",
+  "encode_s": 1.0,
+  "decode_s": 0.4,
+  "rss_before": 638.5,
+  "rss_after_encode": 1802.2,
+  "rss_peak": 1802.2,
+  "stego_jpg_mb": 11.7,
+  "wa_kb": 414,
+  "decoded": "MKP7F3A",
+  "match": true
+ },
+ {
+  "label": "48MP (8064x6048)",
+  "encode_s": 2.2,
+  "decode_s": 0.6,
+  "rss_before": 1802.2,
+  "rss_after_encode": 2733.2,
+  "rss_peak": 2733.2,
+  "stego_jpg_mb": 18.8,
+  "wa_kb": 467,
+  "decoded": "",
+  "match": false
+ },
+ {
+  "label": "100MP (12288x8192)",
+  "encode_s": 4.6,
+  "decode_s": 1.2,
+  "rss_before": 2733.2,
+  "rss_after_encode": 3791.4,
+  "rss_peak": 3791.4,
+  "stego_jpg_mb": 30.9,
+  "wa_kb": 414,
+  "decoded": "MKP7F3A",
+  "match": true
+ }
+]

@@ -1,0 +1,148 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+<style>
+  /* In-app event media: ?e=<id>&s=card (1920x1080) | detail (1080x1920). The iPhone 17 Pro model shows real app
+     screens (cap/v2), real exports sit beside it as prints. The store lays its badge, name and short text over the
+     bottom left of the card and the bottom third of the detail, and its app icon top right of the card
+     (asc-event-guide.md), so headline, phone and prints stay clear of those. */
+  * { margin: 0; box-sizing: border-box; }
+  html, body { overflow: hidden; background: #05070f; }
+  body { font-family: "SF Pro Display", system-ui, sans-serif; -webkit-font-smoothing: antialiased; color: #fff; }
+  #stage { position: relative; overflow: hidden; }
+  .abs { position: absolute; }
+  canvas#gl { position: absolute; inset: 0; z-index: 3; filter: drop-shadow(0 50px 70px rgba(0,0,0,.55)); }
+  .kicker { font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+  .head { font-weight: 800; letter-spacing: -.035em; line-height: 1.02; text-shadow: 0 10px 50px rgba(0,0,0,.45); }
+  .sub { font-weight: 500; opacity: .86; line-height: 1.3; }
+  .pill { position: absolute; left: 50%; transform: translateX(-50%); padding: .3em .9em; border-radius: 999px; font-weight: 700; white-space: nowrap;
+          background: rgba(20,20,24,.82); border: 1px solid rgba(255,255,255,.25); box-shadow: 0 14px 30px rgba(0,0,0,.4); }
+</style></head>
+<body><div id="stage"><canvas id="gl"></canvas></div>
+<script type="module">
+import * as THREE from 'three'; import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js'; import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+const q = new URLSearchParams(location.search), id = q.get("e") || "looks", P = q.get("s") === "detail";
+const W = P ? 1080 : 1920, H = P ? 1920 : 1080, SRC = "src/";
+const st = document.getElementById("stage");
+for (const e of [st, document.body]) { e.style.width = W + "px"; e.style.height = H + "px"; }
+const add = html => st.insertAdjacentHTML("beforeend", html);
+let seed = 11; const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+const pick = a => a[Math.floor(rnd() * a.length)];
+// Decor keeps off the headline, the store text (card bottom left) and the store's app icon (card top right).
+const KEEP_OFF = P ? [[40, 60, 1040, 560]] : [[170, 80, 980, 600], [0, 600, 1050, 1080], [1540, 20, 1820, 300]];
+const free = (x, y) => KEEP_OFF.every(([x0, y0, x1, y1]) => x < x0 - 30 || x > x1 + 30 || y < y0 - 30 || y > y1 + 30);
+function spot(maxY = H * .85) { for (;;) { const x = rnd() * W, y = rnd() * maxY; if (free(x, y)) return [x, y]; } }
+
+// ---------- 3D phone ----------
+// The model holds two phones; the one whose screen faces the camera is kept and centred.
+const R = new THREE.WebGLRenderer({canvas: document.getElementById("gl"), antialias: true, alpha: true, preserveDrawingBuffer: true});
+R.setPixelRatio(2); R.setSize(W, H, false); R.domElement.style.width = W + "px"; R.domElement.style.height = H + "px";
+R.toneMapping = THREE.ACESFilmicToneMapping; R.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(R).fromScene(new RoomEnvironment(), .04).texture;
+const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(-1, 1.5, 2); scene.add(key);
+const FOV = 18, cam = new THREE.PerspectiveCamera(FOV, W / H, .01, 20); cam.position.set(0, 0, 1); cam.lookAt(0, 0, 0);
+const K = 2 * Math.tan(FOV / 2 * Math.PI / 180) / H;      // world units per pixel at z = 0
+let model, modelH;
+async function loadPhone() {
+  const g = await new GLTFLoader().loadAsync("models/iphone-17-pro.glb");
+  let screenMesh;
+  g.scene.traverse(o => { if (o.isMesh && o.material.emissiveMap && !o.name.endsWith("001")) screenMesh = o; });
+  let keep = screenMesh;
+  while (keep.parent && keep.parent !== g.scene) {
+    let screens = 0; keep.parent.traverse(o => { if (o.isMesh && o.material.emissiveMap) screens++; });
+    if (screens > 1) break; keep = keep.parent;
+  }
+  g.scene.updateMatrixWorld(true);
+  const one = keep.clone(true); one.matrixAutoUpdate = true;
+  one.applyMatrix4(keep.parent.matrixWorld);
+  const holder = new THREE.Group(); holder.add(one);
+  const box = new THREE.Box3().setFromObject(holder), c = box.getCenter(new THREE.Vector3());
+  one.position.sub(c);
+  holder.rotation.y = Math.PI;                               // its screen faces -z; turn it to the camera
+  model = new THREE.Group(); model.add(holder); modelH = box.max.y - box.min.y;
+}
+const texLoader = new THREE.TextureLoader();
+// One phone: app screen `shot` (1320×2868 from cap/v2/iphone), centre (px), height (px), turned ry/rx/rz degrees.
+async function phone(shot, x, y, h, ry = -18, rx = 4, rz = 0) {
+  const tex = await texLoader.loadAsync(`${SRC}iphone/${shot}.png`); tex.colorSpace = THREE.SRGBColorSpace; tex.flipY = false; tex.anisotropy = 8;
+  const p = model.clone(true);
+  p.traverse(o => { if (o.isMesh && o.material.emissiveMap) o.material = new THREE.MeshBasicMaterial({map: tex, toneMapped: false}); });
+  p.scale.setScalar(h * K / modelH);
+  p.rotation.set(rx * Math.PI / 180, ry * Math.PI / 180, rz * Math.PI / 180);
+  p.position.set((x - W / 2) * K, (H / 2 - y) * K, 0);
+  scene.add(p);
+}
+
+// ---------- prints: real exports as photos lying beside the phone, with a label pill under them ----------
+function print(src, cx, cy, w, rot, label, z = 6) {
+  add(`<div class="abs" style="left:${cx - w / 2}px;top:${cy}px;width:${w}px;z-index:${z};transform:translateY(-50%) rotate(${rot}deg)">
+    <img src="${SRC}${src}" style="display:block;width:100%;border-radius:${w * .02}px;box-shadow:0 40px 80px rgba(0,0,0,.6),0 0 0 2px rgba(255,255,255,.18)">
+    ${label ? `<div class="pill" style="font-size:${w * .1}px;bottom:${-w * .07}px">${label}</div>` : ""}</div>`);
+}
+
+// ---------- decor ----------
+const svg = (x, y, s, z, body, extra = "") => add(`<svg class="abs" style="left:${x - s / 2}px;top:${y - s / 2}px;width:${s}px;height:${s}px;z-index:${z};overflow:visible;${extra}" viewBox="-50 -50 100 100">${body}</svg>`);
+const sparklePath = "M0-50C4-6 6-4 50 0C6 4 4 6 0 50C-4 6-6 4-50 0C-6-4-4-6 0-50Z";
+function sparkles(n, colors, sMin, sMax) {
+  for (let i = 0; i < n; i++) { const s = sMin + rnd() * (sMax - sMin), c = pick(colors);
+    svg(...spot(), s, 1, `<path d="${sparklePath}" fill="${c}"/>`, `filter:drop-shadow(0 0 ${s * .25}px ${c});opacity:${.6 + .4 * rnd()};transform:rotate(${rnd() * 30 - 15}deg)`); }
+}
+// Warm bokeh: soft out-of-focus lights.
+function bokeh(n, colors) {
+  for (let i = 0; i < n; i++) { const r = 20 + rnd() * 60, [x, y] = spot(), c = pick(colors);
+    add(`<div class="abs" style="left:${x - r}px;top:${y - r}px;width:${2 * r}px;height:${2 * r}px;border-radius:50%;background:${c};opacity:${.15 + .3 * rnd()};filter:blur(${r * .25}px);z-index:1"></div>`); }
+}
+// A blurred, darkened photo as the background.
+const backdrop = (src, b = .35) => add(`<img class="abs" src="${SRC}${src}" style="left:-10%;top:-20%;width:120%;height:140%;object-fit:cover;filter:blur(50px) brightness(${b}) saturate(1.4);z-index:0">`);
+// Keeps the store's text readable over the bottom.
+const floor = () => add(`<div class="abs" style="left:0;right:0;bottom:0;height:${P ? 36 : 32}%;background:linear-gradient(180deg,transparent,rgba(0,0,0,.8));z-index:8"></div>`);
+
+// Headline: kicker, head, sub. Card: top left. Detail: top, centred.
+function headline(kicker, kColor, head, sub) {
+  add(`<div class="abs" style="z-index:7;${P ? "left:60px;right:60px;top:100px;text-align:center" : "left:200px;top:100px;width:760px"}">
+    <div class="kicker" style="font-size:${P ? 34 : 36}px;color:${kColor};margin-bottom:22px">${kicker}</div>
+    <div class="head" style="font-size:${P ? 104 : 112}px">${head}</div>
+    <div class="sub" style="font-size:${P ? 40 : 46}px;margin-top:26px">${sub}</div></div>`);
+}
+const film = t => `<span style="background:linear-gradient(90deg,#ffd36b,#ff9f5a 50%,#ff6f7d);-webkit-background-clip:text;color:transparent">${t}</span>`;
+
+// Card: phone centre x 1290 (top ≈ 170, right edge ≈ 1480) left of the app icon; prints x 1560–1800 below it (y > 300).
+const scenes = {
+  async looks() {
+    backdrop("looks/golden200.jpg");
+    sparkles(16, ["#ffd36b", "#fff2c4"], 14, 40);
+    headline("New in Markepi", "#ffd36b", `Film looks.<br>${film("One tap.")}`, "Golden 200, Chrome 100, Stark B&W and more.");
+    if (P) { print("looks/chrome100.jpg", 190, 1000, 300, -8, "Chrome 100"); print("looks/starkBW.jpg", 900, 1060, 300, 7, "Stark B&W");
+             await phone("03-looks-film", 545, 1190, 980, -14, 4); }
+    else { await phone("03-looks-film", 1290, 600, 860, -18, 4);
+           print("looks/chrome100.jpg", 1655, 520, 220, 6, "Chrome 100"); print("looks/starkBW.jpg", 1610, 820, 220, -5, "Stark B&W", 7); }
+  },
+  async frames() {
+    backdrop("creative/c_lake_aura.jpg", .3);
+    bokeh(26, ["#ffcf5c", "#ff8a5c", "#fff2c4"]); sparkles(12, ["#ffd36b", "#fff"], 14, 36);
+    headline("Holiday photos", "#ffcf5c", "Frame the<br>moment.", "Camera, lens and place, in a clean frame.");
+    if (P) { print("creative/c_neon_noir.jpg", 200, 1000, 300, -8, "Noir"); print("creative/c_sky_gallery.jpg", 890, 1060, 300, 7, "Gallery");
+             await phone("01-hero-aura", 545, 1190, 980, -14, 4); }
+    else { await phone("01-hero-aura", 1290, 600, 860, -18, 4);
+           print("creative/c_neon_noir.jpg", 1655, 520, 220, 6, "Noir"); print("creative/c_sky_gallery.jpg", 1610, 820, 220, -5, "Gallery", 7); }
+  },
+  async share() {
+    backdrop("creative/c_street_float.jpg", .3);
+    sparkles(16, ["#5ab8ff", "#fff"], 14, 40);
+    headline("Watermark and share", "#7cc4ff", "Your mark.<br>No clutter.", "Name, logo or signature, shared straight from the editor.");
+    if (P) { await phone("05-logo", 320, 1180, 960, 14, 4); await phone("04-text", 760, 1160, 1040, -16, 4); }
+    else { await phone("05-logo", 1615, 720, 640, -22, 4); await phone("04-text", 1270, 600, 860, -16, 4); }
+  },
+};
+
+try {
+  await loadPhone();
+  await scenes[id]();
+  R.render(scene, cam);
+  floor();
+  await document.fonts.ready;
+  await Promise.all([...document.images].map(i => i.decode().catch(() => {})));
+} catch (e) { document.title = "ERR " + e; }
+window.DONE = true;
+</script></body></html>
